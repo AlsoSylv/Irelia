@@ -1,0 +1,15 @@
+[package]
+name = "samira"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_json = { version = "1.0" }
+serde = { version = "1.0", features = ["derive"] }
+sysinfo = "0.27.7"
+regex = "1.7"
+hyper-tls = "0.5.0"
+hyper = { version = "0.14.23", features = ["client", "http1"]}
+tokio-native-tls = "0.3.0"
