@@ -14,6 +14,6 @@ pub enum Errors {
 pub enum ProcessInfoErrors {
     LCUProcessNotRunning,
     PortNotFound,
-    FailedParsePort,
+    CannotLaunchTerminal,
     AuthTokenNotFound,
 }
