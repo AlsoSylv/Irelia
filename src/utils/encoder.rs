@@ -69,11 +69,7 @@ fn encode_chunk(chunk: Vec<u8>) -> Vec<char> {
 }
 
 pub(super) fn encode(input: String) -> String {
-    let encoded = input
-        .as_bytes()
-        .chunks(3)
-        .map(split)
-        .flat_map(encode_chunk);
+    let encoded = input.as_bytes().chunks(3).map(split).flat_map(encode_chunk);
 
     String::from_iter(encoded)
 }

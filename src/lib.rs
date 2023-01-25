@@ -1,5 +1,7 @@
 pub mod rest;
 mod utils;
+#[cfg(feature = "ws")]
+pub mod ws;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Errors {
