@@ -10,21 +10,21 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 
 use crate::{
-    utils::{process_info::get_port_and_auth, request::setup_tls_connector},
-    Errors,
+    utils::{process_info::get_port_and_auth, setup_tls::setup_tls_connector},
+    Error,
 };
 
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(u8, String)>,
     handle: JoinHandle<()>,
-    pub client_reciver: UnboundedReceiver<Result<Value, Errors>>,
+    pub client_reciver: UnboundedReceiver<Result<Value, Error>>,
 }
 
 impl LCUWebSocket {
-    pub async fn new() -> Result<Self, Errors> {
+    pub async fn new() -> Result<Self, Error> {
         let tls = setup_tls_connector();
         let connector = Connector::NativeTls(tls);
-        let port_pass = get_port_and_auth().map_err(Errors::ProcessInfoError)?;
+        let port_pass = get_port_and_auth()?;
         let mut url = format!("wss://127.0.0.1:{}", port_pass.0)
             .into_client_request()
             .unwrap();
@@ -33,11 +33,11 @@ impl LCUWebSocket {
             HeaderValue::from_str(&format!("Basic {}", port_pass.1)).unwrap(),
         );
         let Ok((stream, _)) = connect_async_tls_with_config(url, None, Some(connector)).await else {
-            return Err(Errors::LCUStoppedRunning);
+            return Err(Error::LCUStoppedRunning);
         };
         let (mut write, mut read) = stream.split();
         let (ws_sender, mut ws_reciver) = mpsc::unbounded_channel::<(u8, String)>();
-        let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Errors>>();
+        let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Error>>();
 
         let handle: JoinHandle<()> = spawn(async move {
             let mut active_commands: HashSet<String> = HashSet::new();
@@ -51,7 +51,7 @@ impl LCUWebSocket {
 
                     let command = format!("[{}, \"{}\"]", code, endpoint);
                     if write.send(command.into()).await.is_err() {
-                        client_sender.send(Err(Errors::LCUStoppedRunning)).unwrap();
+                        client_sender.send(Err(Error::LCUStoppedRunning)).unwrap();
                     };
                 };
                 if let Some(Ok(data)) = read.next().await {

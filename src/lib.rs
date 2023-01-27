@@ -7,18 +7,13 @@ mod utils;
 pub mod ws;
 
 #[derive(Debug, Clone, Copy)]
-pub enum Errors {
+pub enum Error {
     FailedParseJson,
     LCUStoppedRunning,
     #[cfg(feature = "in_game")]
     LeagueStoppedRunning,
     InvalidRequest,
     InvalidBody,
-    ProcessInfoError(ProcessInfoErrors),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ProcessInfoErrors {
     LCUProcessNotRunning,
     PortNotFound,
     CannotLaunchTerminal,
