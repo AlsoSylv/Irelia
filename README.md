@@ -1,6 +1,6 @@
-## Samira
+## Irelia
 ---
-Samira is a set of bindings to native LoL APIs built on top of Hyper.
+Irelia is a set of bindings to native LoL APIs built on top of Hyper.
 This crate provides support for Windows, and Linux, with untested MacOS support.
 
 ---
@@ -17,7 +17,7 @@ This crate is designed with modularity in mind, and as such API support has been
 
 ### Examples
 ```rust
-use samira::rest::LCUClient;
+use irelia::rest::LCUClient;
 use serde_json::Value;
 
 async fn get_summoner() {
