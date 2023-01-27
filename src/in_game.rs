@@ -1,12 +1,15 @@
 use hyper::{client::HttpConnector, Request};
 use hyper_tls::HttpsConnector;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 
 use crate::{
     utils::request::{request_template, setup_hyper_client, uri_builder},
     Error,
 };
+
+use self::types::{AllGameData, ActivePlayer, Abilities, FullRunes, AllPlayer, Scores, SummonerSpells, Runes, Item, Events, GameData};
+
+pub mod types;
 
 pub struct InGameClient {
     client: hyper::Client<HttpsConnector<HttpConnector>>,
@@ -32,18 +35,18 @@ impl InGameClient {
     ///
     /// ```rust
     /// async fn all_game_data() {
-    ///     use samira::in_game::InGameClient;
+    ///     use irelia::in_game::InGameClient;
     ///     
     ///     let client = InGameClient::new().unwrap();
     ///     let all_game_data = client.all_game_data().await.unwrap();
     ///     println!("{:?}", all_game_data);
     /// }
     /// ```
-    pub async fn all_game_data(&self) -> Result<Value, Error> {
+    pub async fn all_game_data(&self) -> Result<AllGameData, Error> {
         self.live_client("allgamedata").await
     }
 
-    pub async fn active_player(&self) -> Result<Value, Error> {
+    pub async fn active_player(&self) -> Result<ActivePlayer, Error> {
         self.live_client("activeplayer").await
     }
 
@@ -51,15 +54,15 @@ impl InGameClient {
         self.live_client("activeplayername").await
     }
 
-    pub async fn active_player_abilities(&self) -> Result<Value, Error> {
+    pub async fn active_player_abilities(&self) -> Result<Abilities, Error> {
         self.live_client("activeplayerabilities").await
     }
 
-    pub async fn active_player_runes(&self) -> Result<Value, Error> {
+    pub async fn active_player_runes(&self) -> Result<FullRunes, Error> {
         self.live_client("activeplayerrunes").await
     }
 
-    pub async fn player_list(&self, team: Option<TeamID>) -> Result<Value, Error> {
+    pub async fn player_list(&self, team: Option<TeamID>) -> Result<Vec<AllPlayer>, Error> {
         let team = match team {
             Some(team) => match team {
                 TeamID::ALL => "?teamID=ALL",
@@ -74,27 +77,27 @@ impl InGameClient {
         self.live_client(&endpoint).await
     }
 
-    pub async fn player_scores(&self, summoner: &str) -> Result<Value, Error> {
+    pub async fn player_scores(&self, summoner: &str) -> Result<Scores, Error> {
         self.live_client_with_summoner("playerscores", summoner)
             .await
     }
 
-    pub async fn player_summoner_spells(&self, summoner: &str) -> Result<Value, Error> {
+    pub async fn player_summoner_spells(&self, summoner: &str) -> Result<SummonerSpells, Error> {
         self.live_client_with_summoner("playersummonerspells", summoner)
             .await
     }
 
-    pub async fn player_main_runes(&self, summoner: &str) -> Result<Value, Error> {
+    pub async fn player_main_runes(&self, summoner: &str) -> Result<Runes, Error> {
         self.live_client_with_summoner("playermainrunes", summoner)
             .await
     }
 
-    pub async fn player_items(&self, summoner: &str) -> Result<Value, Error> {
+    pub async fn player_items(&self, summoner: &str) -> Result<Vec<Item>, Error> {
         self.live_client_with_summoner("playeritems", summoner)
             .await
     }
 
-    pub async fn event_data(&self, event_id: Option<i32>) -> Result<Value, Error> {
+    pub async fn event_data(&self, event_id: Option<i32>) -> Result<Events, Error> {
         let event_id = match event_id {
             Some(id) => format!("?eventID={}", id),
             None => "".to_owned(),
@@ -103,7 +106,7 @@ impl InGameClient {
         self.live_client(&endpoint).await
     }
 
-    pub async fn game_stats(&self) -> Result<Value, Error> {
+    pub async fn game_stats(&self) -> Result<GameData, Error> {
         self.live_client("gamestats").await
     }
 

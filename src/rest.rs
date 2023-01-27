@@ -30,7 +30,7 @@ impl LCUClient {
     /// Function to get a response from a specified endpoint
     ///
     /// ```rust
-    /// use samira::rest::LCUClient;
+    /// use irelia::rest::LCUClient;
     /// use serde_json::Value;
     ///
     /// async fn get_summoner() {
