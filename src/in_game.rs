@@ -1,3 +1,5 @@
+//! The methods and types in this crate all line up with the ones in Riots documentation, and should be straight forward to use
+
 use hyper::{client::HttpConnector, Request};
 use hyper_tls::HttpsConnector;
 use serde::de::DeserializeOwned;
@@ -25,6 +27,7 @@ pub enum TeamID {
 }
 
 impl InGameClient {
+    /// Make a connect to the in game API, does not check if the game is running when connecting
     pub fn new() -> Result<Self, Error> {
         let client = setup_hyper_client().unwrap();
         let url = "127.0.0.1:2999".to_owned();

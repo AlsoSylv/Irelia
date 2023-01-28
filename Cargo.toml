@@ -30,3 +30,6 @@ full = ["rest", "in_game", "ws"]
 rest = ["dep:serde", "dep:hyper", "dep:hyper-tls"]
 in_game = ["dep:serde", "dep:hyper", "dep:hyper-tls", "dep:serde_derive"]
 ws = ["dep:tokio-tungstenite", "dep:tokio", "dep:futures-util"]
+
+[package.metadata.docs.rs]
+all-features = true

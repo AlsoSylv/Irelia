@@ -17,6 +17,7 @@ pub struct LCUClient {
 }
 
 impl LCUClient {
+    /// Makes a connection to the LCU, errors if it is not found or not running
     pub fn new() -> Result<Self, Error> {
         let port_pass = get_port_and_auth()?;
         let client = setup_hyper_client().unwrap();
@@ -27,8 +28,9 @@ impl LCUClient {
         })
     }
 
-    /// Function to get a response from a specified endpoint
-    ///
+    /// Make a get request to the LCU
+    /// 
+    /// # Example: 
     /// ```rust
     /// use irelia::rest::LCUClient;
     /// use serde_json::Value;
@@ -42,6 +44,7 @@ impl LCUClient {
         self.lcu_template::<(), R>(endpoint, "GET", None).await
     }
 
+    /// Make a post request to the LCU, with any body that implements serde::Serialize
     pub async fn post<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: &str,
@@ -50,6 +53,7 @@ impl LCUClient {
         self.lcu_template(endpoint, "POST", Some(body)).await
     }
 
+    /// Make a put request to the LCU, with any body that implements serde::Serialize
     pub async fn put<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: &str,
@@ -58,14 +62,17 @@ impl LCUClient {
         self.lcu_template(endpoint, "PUT", Some(body)).await
     }
 
+    /// Make a delete request to the LCU
     pub async fn delete<R: DeserializeOwned>(&self, endpoint: &str) -> Result<Option<R>, Error> {
         self.lcu_template::<(), R>(endpoint, "DELETE", None).await
     }
 
+    /// Make a head request to the LCU
     pub async fn head<R: DeserializeOwned>(&self, endpoint: &str) -> Result<Option<R>, Error> {
         self.lcu_template::<(), R>(endpoint, "HEAD", None).await
     }
 
+    /// Make a patch request to the LCU, with any body that implements serde::Serialize
     pub async fn patch<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: &str,

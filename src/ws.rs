@@ -14,13 +14,25 @@ use crate::{
     Error,
 };
 
+/// ```rs
+/// async fn web_socket() {
+///     use irelia::ws::LCUWebSocket;
+/// 
+///     let ws = LCUWebSocket::new().unwrap();
+///     ws.subscribe("OnJsonApiEvent");
+///     loop {
+///         let data = ws.client_reciver.unwrap();
+///     }
+/// }
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(u8, String)>,
     handle: JoinHandle<()>,
+    /// Sends data recived from the client to Rust
     pub client_reciver: UnboundedReceiver<Result<Value, Error>>,
 }
 
 impl LCUWebSocket {
+    /// Connect to the LCU Web Socket, Error if it fails or the client is not running
     pub async fn new() -> Result<Self, Error> {
         let tls = setup_tls_connector();
         let connector = Connector::NativeTls(tls);
@@ -71,14 +83,17 @@ impl LCUWebSocket {
         })
     }
 
+    /// Subscribe to a new API event
     pub fn subscribe(&mut self, endpoint: &str) {
         self.generic_request(5, endpoint);
     }
 
+    /// Unsubscribe to a new API event
     pub fn unsubscribe(&mut self, endpoint: &str) {
         self.generic_request(6, endpoint);
     }
 
+    /// Terminate the event loop
     pub fn terminate(&self) {
         self.handle.abort();
     }
