@@ -1,20 +1,21 @@
 use futures_util::StreamExt;
 use hyper::{client::HttpConnector, header::AUTHORIZATION, Request};
 use hyper_tls::HttpsConnector;
+use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 
 use crate::{
     utils::{
         process_info::get_port_and_auth,
-        request::{request_template, setup_hyper_client, uri_builder},
+        request::{request_template, uri_builder, HYPER_CLIENT},
     },
     Error,
 };
 
-pub struct LCUClient {
+pub struct LCUClient<'a> {
     url: String,
-    client: hyper::Client<HttpsConnector<HttpConnector>>,
+    client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
     auth_header: String,
 }
 
@@ -26,14 +27,13 @@ pub enum RequestType {
     Head,
 }
 
-impl LCUClient {
+impl LCUClient<'_> {
     /// Makes a connection to the LCU, errors if it is not found or not running
-    pub fn new() -> Result<Self, Error> {
+    pub fn new<'a>() -> Result<LCUClient<'a>, Error> {
         let port_pass = get_port_and_auth()?;
-        let client = setup_hyper_client().unwrap();
-        Ok(Self {
+        Ok(LCUClient {
             url: format!("127.0.0.1:{}", port_pass.0),
-            client,
+            client: &HYPER_CLIENT,
             auth_header: format!("Basic {}", port_pass.1),
         })
     }
@@ -150,7 +150,7 @@ impl LCUClient {
             .header(AUTHORIZATION, &self.auth_header)
             .body(body);
 
-        request_template::<Option<R>>(Error::LCUProcessNotRunning, req, &self.client, |bytes| {
+        request_template::<Option<R>>(Error::LCUProcessNotRunning, req, self.client, |bytes| {
             if bytes.is_empty() {
                 Ok(None)
             } else {

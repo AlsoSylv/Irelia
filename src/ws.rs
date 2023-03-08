@@ -9,10 +9,8 @@ use tokio_tungstenite::connect_async_tls_with_config;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 
-use crate::{
-    utils::{process_info::get_port_and_auth, setup_tls::setup_tls_connector},
-    Error,
-};
+use crate::utils::setup_tls::TLS_CONNECTOR;
+use crate::{utils::process_info::get_port_and_auth, Error};
 
 /// ```rs
 /// async fn web_socket() {
@@ -24,6 +22,7 @@ use crate::{
 ///         let data = ws.client_reciver.unwrap();
 ///     }
 /// }
+/// ```
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(u8, String)>,
     handle: JoinHandle<()>,
@@ -33,7 +32,7 @@ pub struct LCUWebSocket {
 impl LCUWebSocket {
     /// Connect to the LCU Web Socket, Error if it fails or the client is not running
     pub async fn new() -> Result<Self, Error> {
-        let tls = setup_tls_connector();
+        let tls = TLS_CONNECTOR.clone();
         let connector = Connector::NativeTls(tls);
         let port_pass = get_port_and_auth()?;
         let mut url = format!("wss://127.0.0.1:{}", port_pass.0)

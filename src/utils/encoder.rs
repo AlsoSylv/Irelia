@@ -30,18 +30,17 @@ fn split(chunk: &[u8]) -> Vec<u8> {
 fn encode_chunk(chunk: Vec<u8>) -> Vec<char> {
     let mut out = vec!['=', '=', '=', '='];
 
-    for i in 0..chunk.len() {
-        let index = chunk[i];
+    chunk.iter().enumerate().for_each(|(i, index)| {
         out[i] = match index {
-            0..=25 => (index + UPPERCASEOFFSET) as char,
-            26..=51 => (index + LOWERCASEOFFSET) as char,
-            52..=61 => (index - DIGITOFFSET) as char,
+            0..=25 => (*index + UPPERCASEOFFSET) as char,
+            26..=51 => (*index + LOWERCASEOFFSET) as char,
+            52..=61 => (*index - DIGITOFFSET) as char,
             62 => 43 as char,
             63 => 47 as char,
 
             _ => '=',
         };
-    }
+    });
 
     out
 }

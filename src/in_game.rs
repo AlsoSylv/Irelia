@@ -2,10 +2,11 @@
 
 use hyper::{client::HttpConnector, Request};
 use hyper_tls::HttpsConnector;
+use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    utils::request::{request_template, setup_hyper_client, uri_builder},
+    utils::request::{request_template, uri_builder, HYPER_CLIENT},
     Error,
 };
 
@@ -16,9 +17,9 @@ use self::types::{
 
 pub mod types;
 
-pub struct InGameClient {
-    client: hyper::Client<HttpsConnector<HttpConnector>>,
-    url: String,
+pub struct InGameClient<'a> {
+    client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
+    url: &'a str,
 }
 
 pub enum TeamID {
@@ -29,12 +30,12 @@ pub enum TeamID {
     NEUTRAL,
 }
 
-impl InGameClient {
+impl InGameClient<'_> {
     /// Make a connect to the in game API, does not check if the game is running when connecting
-    pub fn new() -> Result<Self, Error> {
-        let client = setup_hyper_client().unwrap();
-        let url = "127.0.0.1:2999".to_owned();
-        Ok(Self { client, url })
+    pub fn new<'a>() -> Result<InGameClient<'a>, Error> {
+        let client = &HYPER_CLIENT;
+        let url = "127.0.0.1:2999";
+        Ok(InGameClient { client, url })
     }
 
     /// Gets data from the "liveclientdata/allgamedata" endpoint of the ingame api
@@ -131,14 +132,14 @@ impl InGameClient {
     }
 
     async fn in_game_tempalte<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, Error> {
-        let uri = uri_builder(&self.url, endpoint)?;
+        let uri = uri_builder(self.url, endpoint)?;
 
         let req = Request::builder()
             .method("GET")
             .uri(uri)
             .body(hyper::Body::empty());
 
-        request_template::<R>(Error::LeagueStoppedRunning, req, &self.client, |bytes| {
+        request_template::<R>(Error::LeagueStoppedRunning, req, self.client, |bytes| {
             serde_json::from_slice::<R>(&bytes)
                 .map_or(Err(Error::FailedParseJson), |value| Ok(value))
         })
