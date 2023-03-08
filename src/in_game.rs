@@ -9,7 +9,10 @@ use crate::{
     Error,
 };
 
-use self::types::{AllGameData, ActivePlayer, Abilities, FullRunes, AllPlayer, Scores, SummonerSpells, Runes, Item, Events, GameData};
+use self::types::{
+    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
+    Scores, SummonerSpells,
+};
 
 pub mod types;
 

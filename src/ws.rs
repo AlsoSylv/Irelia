@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, Stream, StreamExt};
 use serde_json::Value;
 use tokio::spawn;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -17,7 +17,7 @@ use crate::{
 /// ```rs
 /// async fn web_socket() {
 ///     use irelia::ws::LCUWebSocket;
-/// 
+///
 ///     let ws = LCUWebSocket::new().unwrap();
 ///     ws.subscribe("OnJsonApiEvent");
 ///     loop {
@@ -27,8 +27,7 @@ use crate::{
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(u8, String)>,
     handle: JoinHandle<()>,
-    /// Sends data recived from the client to Rust
-    pub client_reciver: UnboundedReceiver<Result<Value, Error>>,
+    client_reciver: UnboundedReceiver<Result<Value, Error>>,
 }
 
 impl LCUWebSocket {
@@ -100,5 +99,16 @@ impl LCUWebSocket {
 
     fn generic_request(&mut self, code: u8, endpoint: &str) {
         let _ = &self.ws_sender.send((code, endpoint.to_owned()));
+    }
+}
+
+impl Stream for LCUWebSocket {
+    type Item = Result<Value, Error>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.client_reciver.poll_recv(cx)
     }
 }
