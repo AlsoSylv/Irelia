@@ -27,8 +27,8 @@ fn split(chunk: &[u8]) -> Vec<u8> {
     }
 }
 
-fn encode_chunk(chunk: Vec<u8>) -> Vec<char> {
-    let mut out = vec!['=', '=', '=', '='];
+fn encode_chunk(chunk: Vec<u8>) -> [char; 4] {
+    let mut out = ['=', '=', '=', '='];
 
     chunk.iter().enumerate().for_each(|(i, index)| {
         out[i] = match index {
@@ -38,13 +38,13 @@ fn encode_chunk(chunk: Vec<u8>) -> Vec<char> {
             62 => 43 as char,
             63 => 47 as char,
 
-            _ => '=',
+            _ => unreachable!(),
         };
     });
 
     out
 }
 
-pub(super) fn encode(input: String) -> String {
+pub(crate) fn encode(input: String) -> String {
     String::from_iter(input.as_bytes().chunks(3).map(split).flat_map(encode_chunk))
 }

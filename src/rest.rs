@@ -27,6 +27,12 @@ pub enum RequestType {
     Head,
 }
 
+pub struct BatchRequests<'a> {
+    pub request_type: RequestType,
+    pub endpoint: &'a str,
+    pub body: Option<Value>,
+}
+
 impl LCUClient<'_> {
     /// Makes a connection to the LCU, errors if it is not found or not running
     pub fn new<'a>() -> Result<LCUClient<'a>, Error> {
@@ -102,24 +108,27 @@ impl LCUClient<'_> {
 
     pub async fn batched(
         &self,
-        requests: &[(RequestType, &str, Option<Value>)],
+        requests: &[BatchRequests<'_>],
         buffer_size: usize,
     ) -> Vec<Result<Option<Value>, Error>> {
-        let returns = futures_util::stream::iter(requests.iter().map(
-            |(request_type, endpoint, body)| async move {
-                match request_type {
-                    RequestType::Get => self.get(endpoint).await,
-                    RequestType::Post => self.post(endpoint, body.as_ref().unwrap()).await,
-                    RequestType::Put => self.put(endpoint, body.as_ref().unwrap()).await,
-                    RequestType::Delete => self.delete(endpoint).await,
-                    RequestType::Head => self.head(endpoint).await,
+        futures_util::stream::iter(requests.iter().map(|request| async move {
+            match request.request_type {
+                RequestType::Get => self.get(request.endpoint).await,
+                RequestType::Post => {
+                    self.post(request.endpoint, request.body.as_ref().unwrap())
+                        .await
                 }
-            },
-        ))
+                RequestType::Put => {
+                    self.put(request.endpoint, request.body.as_ref().unwrap())
+                        .await
+                }
+                RequestType::Delete => self.delete(request.endpoint).await,
+                RequestType::Head => self.head(request.endpoint).await,
+            }
+        }))
         .buffered(buffer_size)
-        .collect();
-
-        returns.await
+        .collect()
+        .await
     }
 
     async fn lcu_template<T, R>(
@@ -134,15 +143,11 @@ impl LCUClient<'_> {
     {
         let uri = uri_builder(&self.url, endpoint)?;
 
-        let body = match body {
-            Some(body) => {
-                let Ok(json) = serde_json::value::to_value(body) else {
-                    return Err(Error::InvalidBody);
-                };
-                hyper::Body::from(json.to_string())
-            }
-            None => hyper::Body::empty(),
-        };
+        let body = body.map_or(Ok(hyper::Body::empty()), |body| {
+            serde_json::value::to_value(body).map_or(Err(Error::InvalidBody), |json| {
+                Ok(hyper::Body::from(json.to_string()))
+            })
+        })?;
 
         let req = Request::builder()
             .method(method)
@@ -150,11 +155,11 @@ impl LCUClient<'_> {
             .header(AUTHORIZATION, &self.auth_header)
             .body(body);
 
-        request_template::<Option<R>>(Error::LCUProcessNotRunning, req, self.client, |bytes| {
+        request_template(Error::LCUProcessNotRunning, req, self.client, |bytes| {
             if bytes.is_empty() {
                 Ok(None)
             } else {
-                serde_json::from_slice::<R>(&bytes)
+                serde_json::from_slice(&bytes)
                     .map_or(Err(Error::FailedParseJson), |value| Ok(Some(value)))
             }
         })

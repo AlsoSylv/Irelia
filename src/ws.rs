@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 
 use futures_util::{SinkExt, Stream, StreamExt};
 use serde_json::Value;
@@ -24,9 +25,41 @@ use crate::{utils::process_info::get_port_and_auth, Error};
 /// }
 /// ```
 pub struct LCUWebSocket {
-    ws_sender: UnboundedSender<(u8, String)>,
+    ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
     client_reciver: UnboundedReceiver<Result<Value, Error>>,
+}
+
+pub enum RequestType {
+    Welcome = 0,
+    Prefix = 1,
+    Call = 2,
+    CallResult = 3,
+    CallError = 4,
+    Subscribe = 5,
+    Unsubscribe = 6,
+    Publish = 7,
+    Event = 8,
+}
+
+#[derive(Eq, Hash, PartialEq, Clone)]
+pub enum EventType {
+    OnJsonApiEvent,
+    OnLcdEvent,
+    Callback(String),
+}
+
+impl Display for EventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EventType::OnJsonApiEvent => f.write_str("OnJsonApiEvent"),
+            EventType::OnLcdEvent => f.write_str("OnLcdEvent"),
+            EventType::Callback(callback) => {
+                let callback = format!(" \"\" {callback}");
+                f.write_str(&callback)
+            }
+        }
+    }
 }
 
 impl LCUWebSocket {
@@ -46,13 +79,14 @@ impl LCUWebSocket {
             return Err(Error::LCUStoppedRunning);
         };
         let (mut write, mut read) = stream.split();
-        let (ws_sender, mut ws_reciver) = mpsc::unbounded_channel::<(u8, String)>();
+        let (ws_sender, mut ws_reciver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
         let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Error>>();
 
         let handle: JoinHandle<()> = spawn(async move {
-            let mut active_commands: HashSet<String> = HashSet::new();
+            let mut active_commands: HashSet<EventType> = HashSet::new();
             loop {
                 if let Ok((code, endpoint)) = ws_reciver.try_recv() {
+                    let code = code as u8;
                     if code == 5 {
                         active_commands.insert(endpoint.clone());
                     } else if code == 6 {
@@ -65,9 +99,12 @@ impl LCUWebSocket {
                     };
                 };
                 if let Some(Ok(data)) = read.next().await {
-                    if let Ok(json) = serde_json::from_slice::<Value>(&data.into_data()) {
-                        if active_commands.contains(json[1].as_str().unwrap()) {
-                            client_sender.send(Ok(json)).unwrap();
+                    if let Ok(json) = &serde_json::from_slice::<Value>(&data.into_data()) {
+                        for command in &active_commands {
+                            let command = format!("{}", command);
+                            if command == json[1].as_str().unwrap() {
+                                client_sender.send(Ok(json.to_owned())).unwrap();
+                            }
                         }
                     };
                 };
@@ -82,13 +119,13 @@ impl LCUWebSocket {
     }
 
     /// Subscribe to a new API event
-    pub fn subscribe(&mut self, endpoint: &str) {
-        self.generic_request(5, endpoint);
+    pub fn subscribe(&mut self, endpoint: EventType) {
+        self.request(RequestType::Subscribe, endpoint);
     }
 
     /// Unsubscribe to a new API event
-    pub fn unsubscribe(&mut self, endpoint: &str) {
-        self.generic_request(6, endpoint);
+    pub fn unsubscribe(&mut self, endpoint: EventType) {
+        self.request(RequestType::Unsubscribe, endpoint);
     }
 
     /// Terminate the event loop
@@ -96,8 +133,8 @@ impl LCUWebSocket {
         self.handle.abort();
     }
 
-    fn generic_request(&mut self, code: u8, endpoint: &str) {
-        let _ = &self.ws_sender.send((code, endpoint.to_owned()));
+    pub fn request(&mut self, code: RequestType, endpoint: EventType) {
+        let _ = &self.ws_sender.send((code, endpoint));
     }
 }
 

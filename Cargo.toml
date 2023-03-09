@@ -25,6 +25,10 @@ tokio-tungstenite = { version = "0.18", features = ["native-tls"], optional = tr
 futures-util = { version = "0.3.25", optional = true, default-features = false, features = ["std", "sink"] }
 tokio = { version = "1.24.2", features = ["sync", "rt"], optional = true }
 
+[dev-dependencies]
+rand = "0.8.5"
+base64 = "0.21.0"
+
 [features]
 default = [
     "rest",

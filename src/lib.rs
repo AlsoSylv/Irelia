@@ -18,6 +18,9 @@ mod utils;
 /// Methods to subscribe, unsubscribe, and terminate the event loop are provided
 pub mod ws;
 
+#[cfg(test)]
+mod tests;
+
 /// Custom errors for the LCU
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
