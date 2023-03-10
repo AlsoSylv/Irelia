@@ -31,9 +31,7 @@ base64 = "0.21.0"
 
 [features]
 default = [
-    "rest",
-    "ws",
-    "in_game"
+    "rest"
     ]
 full = [
     "rest", 

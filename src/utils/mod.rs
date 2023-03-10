@@ -1,5 +1,5 @@
 #[cfg(any(feature = "ws", feature = "rest"))]
-pub(crate) mod encoder;
+mod encoder;
 #[cfg(any(feature = "ws", feature = "rest"))]
 pub(crate) mod process_info;
 #[cfg(any(feature = "in_game", feature = "rest"))]

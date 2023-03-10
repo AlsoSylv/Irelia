@@ -50,23 +50,23 @@ impl InGameClient<'_> {
     /// }
     /// ```
     pub async fn all_game_data(&self) -> Result<AllGameData, Error> {
-        self.live_client("allgamedata").await
+        self.live_client("allgamedata", None).await
     }
 
     pub async fn active_player(&self) -> Result<ActivePlayer, Error> {
-        self.live_client("activeplayer").await
+        self.live_client("activeplayer", None).await
     }
 
     pub async fn active_player_name(&self) -> Result<String, Error> {
-        self.live_client("activeplayername").await
+        self.live_client("activeplayername", None).await
     }
 
     pub async fn active_player_abilities(&self) -> Result<Abilities, Error> {
-        self.live_client("activeplayerabilities").await
+        self.live_client("activeplayerabilities", None).await
     }
 
     pub async fn active_player_runes(&self) -> Result<FullRunes, Error> {
-        self.live_client("activeplayerrunes").await
+        self.live_client("activeplayerrunes", None).await
     }
 
     pub async fn player_list(&self, team: Option<TeamID>) -> Result<Vec<AllPlayer>, Error> {
@@ -81,27 +81,24 @@ impl InGameClient<'_> {
             None => "",
         };
         let endpoint = format!("playerlist{}", team);
-        self.live_client(&endpoint).await
+        self.live_client(&endpoint, None).await
     }
 
     pub async fn player_scores(&self, summoner: &str) -> Result<Scores, Error> {
-        self.live_client_with_summoner("playerscores", summoner)
-            .await
+        self.live_client("playerscores", Some(summoner)).await
     }
 
     pub async fn player_summoner_spells(&self, summoner: &str) -> Result<SummonerSpells, Error> {
-        self.live_client_with_summoner("playersummonerspells", summoner)
+        self.live_client("playersummonerspells", Some(summoner))
             .await
     }
 
     pub async fn player_main_runes(&self, summoner: &str) -> Result<Runes, Error> {
-        self.live_client_with_summoner("playermainrunes", summoner)
-            .await
+        self.live_client("playermainrunes", Some(summoner)).await
     }
 
     pub async fn player_items(&self, summoner: &str) -> Result<Vec<Item>, Error> {
-        self.live_client_with_summoner("playeritems", summoner)
-            .await
+        self.live_client("playeritems", Some(summoner)).await
     }
 
     pub async fn event_data(&self, event_id: Option<i32>) -> Result<Events, Error> {
@@ -110,24 +107,22 @@ impl InGameClient<'_> {
             None => "".to_owned(),
         };
         let endpoint = format!("eventdata{}", event_id);
-        self.live_client(&endpoint).await
+        self.live_client(&endpoint, None).await
     }
 
     pub async fn game_stats(&self) -> Result<GameData, Error> {
-        self.live_client("gamestats").await
+        self.live_client("gamestats", None).await
     }
 
-    async fn live_client<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, Error> {
-        let endpoint = format!("/liveclientdata/{}", endpoint);
-        self.in_game_tempalte(&endpoint).await
-    }
-
-    async fn live_client_with_summoner<R: DeserializeOwned>(
+    async fn live_client<R: DeserializeOwned>(
         &self,
         endpoint: &str,
-        summoner: &str,
+        summoner: Option<&str>,
     ) -> Result<R, Error> {
-        let endpoint = format!("/liveclientdata/{}?summonerName={}", endpoint, summoner);
+        let endpoint = summoner.map_or_else(
+            || format!("/liveclientdata/{}", endpoint),
+            |summoner| format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
+        );
         self.in_game_tempalte(&endpoint).await
     }
 
@@ -139,9 +134,8 @@ impl InGameClient<'_> {
             .uri(uri)
             .body(hyper::Body::empty());
 
-        request_template::<R>(Error::LeagueStoppedRunning, req, self.client, |bytes| {
-            serde_json::from_slice::<R>(&bytes)
-                .map_or(Err(Error::FailedParseJson), |value| Ok(value))
+        request_template(Error::LeagueStoppedRunning, req, self.client, |bytes| {
+            serde_json::from_slice(&bytes).map_or(Err(Error::FailedParseJson), Ok)
         })
         .await
     }
