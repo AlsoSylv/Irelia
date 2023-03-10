@@ -247,7 +247,6 @@ pub struct Item {
     pub slot: i64,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Events {

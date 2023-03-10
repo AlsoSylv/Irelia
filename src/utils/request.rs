@@ -1,24 +1,24 @@
-use super::setup_tls::setup_tls_connector;
+use super::setup_tls::TLS_CONNECTOR;
 use hyper::body::Bytes;
 use hyper::http::uri;
 use hyper::{client::HttpConnector, Request};
 use hyper::{Client, Uri};
 use hyper_tls::HttpsConnector;
+use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 
 use crate::Error;
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
 /// Sets up a hyper client with a TLS connector and riots pem certificate
-pub(crate) fn setup_hyper_client() -> Result<Client<HttpsConnector<HttpConnector>>, ()> {
-    let tls = setup_tls_connector();
+pub static HYPER_CLIENT: Lazy<Client<HttpsConnector<HttpConnector>>> = Lazy::new(|| {
+    let tls = TLS_CONNECTOR.clone();
     let tokio_tls = tokio_native_tls::TlsConnector::from(tls);
     let mut http = HttpConnector::new();
     http.enforce_http(false);
     let https = HttpsConnector::from((http, tokio_tls));
-    let client = hyper::Client::builder().build::<_, hyper::Body>(https);
-    Ok(client)
-}
+    hyper::Client::builder().build::<_, hyper::Body>(https)
+});
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
 pub(crate) async fn request_template<Return: DeserializeOwned>(
