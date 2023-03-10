@@ -55,7 +55,7 @@ impl Display for EventType {
             EventType::OnJsonApiEvent => f.write_str("OnJsonApiEvent"),
             EventType::OnLcdEvent => f.write_str("OnLcdEvent"),
             EventType::Callback(callback) => {
-                let callback = format!(" \"\" {callback}");
+                let callback = format!(" \"\", {callback}");
                 f.write_str(&callback)
             }
         }
