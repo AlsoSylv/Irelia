@@ -46,7 +46,8 @@ pub enum RequestType {
 pub enum EventType {
     OnJsonApiEvent,
     OnLcdEvent,
-    Callback(String),
+    OnJsonApiEventCallback(String),
+    OnLcdEventCallback(String),
 }
 
 impl Display for EventType {
@@ -54,9 +55,13 @@ impl Display for EventType {
         match self {
             EventType::OnJsonApiEvent => f.write_str("OnJsonApiEvent"),
             EventType::OnLcdEvent => f.write_str("OnLcdEvent"),
-            EventType::Callback(callback) => {
-                let callback = format!(" \"\", {callback}");
-                f.write_str(&callback)
+            EventType::OnJsonApiEventCallback(callback) => {
+                let endpoint = format!("OnJsonApiEvent{}", callback.replace("/", "_"));
+                f.write_str(&endpoint)
+            },
+            EventType::OnLcdEventCallback(callback) => {
+                let endpoint = format!("OnLcdEvent{}", callback.replace("/", "_"));
+                f.write_str(&endpoint)
             }
         }
     }
@@ -83,28 +88,40 @@ impl LCUWebSocket {
         let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Error>>();
 
         let handle: JoinHandle<()> = spawn(async move {
-            let mut active_commands: HashSet<EventType> = HashSet::new();
+            let mut active_commands: HashSet<String> = HashSet::new();
             loop {
                 if let Ok((code, endpoint)) = ws_reciver.try_recv() {
                     let code = code as u8;
+
+                    let command = format!("[{code}, \"{endpoint}\"]");
+
+                    println!("{}", command);
+                    
+                    let endpoint  = format!("{}", endpoint);
+
                     if code == 5 {
                         active_commands.insert(endpoint.clone());
                     } else if code == 6 {
                         active_commands.remove(&endpoint);
                     };
 
-                    let command = format!("[{}, \"{}\"]", code, endpoint);
                     if write.send(command.into()).await.is_err() {
                         client_sender.send(Err(Error::LCUStoppedRunning)).unwrap();
                     };
+
+                    println!("{:?}", active_commands);
                 };
                 if let Some(Ok(data)) = read.next().await {
                     if let Ok(json) = &serde_json::from_slice::<Value>(&data.into_data()) {
-                        for command in &active_commands {
-                            let command = format!("{}", command);
-                            if command == json[1].as_str().unwrap() {
-                                client_sender.send(Ok(json.to_owned())).unwrap();
+                        if let Some(endpoint) = json[1].as_str() {
+                            for command in active_commands.iter() {
+                                println!("{:?}", endpoint);
+                                if command == endpoint {
+                                    client_sender.send(Ok(json.to_owned())).unwrap();
+                                }
                             }
+                        } else {
+                            client_sender.send(Ok(json.to_owned())).unwrap();
                         }
                     };
                 };
@@ -133,7 +150,7 @@ impl LCUWebSocket {
         self.handle.abort();
     }
 
-    pub fn request(&mut self, code: RequestType, endpoint: EventType) {
+    fn request(&mut self, code: RequestType, endpoint: EventType) {
         let _ = &self.ws_sender.send((code, endpoint));
     }
 }
