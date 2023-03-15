@@ -1,3 +1,9 @@
+//! This module is full of auto generated JSON
+//! for in game events, if anything fails to
+//! serialize this module probably needs to
+//! be updated to a newer version of the
+//! in-game API.
+
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 

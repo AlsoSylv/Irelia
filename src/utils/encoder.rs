@@ -1,6 +1,6 @@
-// This decoder is largely taking from this article. https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1
-// It goes into detail about the entire thing, and why it works the way it does, and I hightly reccomend reading it
-// Very big thanks to Tiemen for writing it!
+//! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
+//! It goes into detail about the entire thing, and why it works the way it does, and I hightly reccomend reading it
+//! Very big thanks to Tiemen for writing it!
 
 const UPPERCASEOFFSET: u8 = 65;
 const LOWERCASEOFFSET: u8 = 71;

@@ -18,17 +18,26 @@ mod utils;
 /// Methods to subscribe, unsubscribe, and terminate the event loop are provided
 pub mod ws;
 
-/// Custom errors for the LCU
 #[derive(Debug, Clone, Copy)]
+/// Custom errors for the LCU
 pub enum Error {
+    /// Expected or input type are incorrect
     FailedParseJson,
+    /// The LCU stopped running
     LCUStoppedRunning,
     #[cfg(feature = "in_game")]
+    /// The game stopped running
     LeagueStoppedRunning,
+    /// The following request is invalid
     InvalidRequest,
+    /// The request body is invalid
     InvalidBody,
+    /// The LCU was never running
     LCUProcessNotRunning,
+    /// Could not locate port for the LCU
     PortNotFound,
+    /// The sub process could not be spawned
     CannotLaunchTerminal,
+    /// Auth token for the LCU could not be found
     AuthTokenNotFound,
 }

@@ -1,3 +1,9 @@
+//! This module uses sub-processes that are OS specific to get info
+//! from the League of Legneds client well it is running, or error
+//! if it is not. These sub-processes are derived from those found
+//! on Hextech docs here, as well as personal testing on Linux.
+//! <https://hextechdocs.dev/getting-started-with-the-lcu-websocket/>
+
 use crate::Error;
 
 use super::encoder::encode;
@@ -32,7 +38,7 @@ pub(crate) fn get_running_client() -> Result<String, Error> {
         })
 }
 
-/// Runes a PS command on a POSIX complient shell to get the info on the running
+/// Runs a PS command on a POSIX complient shell to get the info on the running
 /// Client for that platform, assuming one exists, and that platform is supported
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn get_running_client() -> Result<String, Error> {
@@ -70,11 +76,12 @@ pub(crate) fn get_port_and_auth() -> Result<(String, String), Error> {
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn get_port_and_auth() -> Result<(String, String), Error> {
     let process = get_running_client()?;
-    let Some(port) = process.split_whitespace().find_map(|s| s.strip_prefix("--app-port=")) else {
-      return Err(Error::PortNotFound);
+
+    let Some(port) = process.split_whitespace().clone().find_map(|s| s.strip_prefix("--app-port=")) else {
+        return Err(Error::PortNotFound);
     };
     let Some(auth) = process.split_whitespace().find_map(|s| s.strip_prefix("--remoting-auth-token=")) else {
-      return Err(Error::AuthTokenNotFound);
+        return Err(Error::AuthTokenNotFound);
     };
     Ok((port.to_owned(), encode(format!("riot:{}", auth))))
 }

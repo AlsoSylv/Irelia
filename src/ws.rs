@@ -1,17 +1,19 @@
 use std::collections::HashSet;
-use std::fmt::Display;
 
 use futures_util::{SinkExt, Stream, StreamExt};
 use serde_json::Value;
-use tokio::spawn;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
-use tokio_tungstenite::connect_async_tls_with_config;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
+use tokio_tungstenite::{
+    connect_async_tls_with_config,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue},
+    Connector,
+};
 
-use crate::utils::setup_tls::TLS_CONNECTOR;
-use crate::{utils::process_info::get_port_and_auth, Error};
+use crate::{
+    utils::{process_info::get_port_and_auth, setup_tls::TLS_CONNECTOR},
+    Error,
+};
 
 /// ```rs
 /// async fn web_socket() {
@@ -30,6 +32,7 @@ pub struct LCUWebSocket {
     client_reciver: UnboundedReceiver<Result<Value, Error>>,
 }
 
+#[derive(PartialEq, Clone)]
 pub enum RequestType {
     Welcome = 0,
     Prefix = 1,
@@ -43,6 +46,8 @@ pub enum RequestType {
 }
 
 #[derive(Eq, Hash, PartialEq, Clone)]
+/// Different event types that can be passed to the
+/// subscribe and unsubscribe methods.
 pub enum EventType {
     OnJsonApiEvent,
     OnLcdEvent,
@@ -50,25 +55,25 @@ pub enum EventType {
     OnLcdEventCallback(String),
 }
 
-impl Display for EventType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EventType::OnJsonApiEvent => f.write_str("OnJsonApiEvent"),
-            EventType::OnLcdEvent => f.write_str("OnLcdEvent"),
-            EventType::OnJsonApiEventCallback(callback) => {
-                let endpoint = format!("OnJsonApiEvent{}", callback.replace("/", "_"));
-                f.write_str(&endpoint)
-            },
-            EventType::OnLcdEventCallback(callback) => {
-                let endpoint = format!("OnLcdEvent{}", callback.replace("/", "_"));
-                f.write_str(&endpoint)
-            }
-        }
-    }
-}
-
 impl LCUWebSocket {
     /// Connect to the LCU Web Socket, Error if it fails or the client is not running
+    ///
+    /// ## Example:
+    /// ```rs
+    /// fn main() {
+    ///     let mut websocket = ws::LCUWebSocket::new().await.unwrap();
+    ///
+    ///     websocket.subscribe(ws::EventType::OnJsonApiEventCallback(String::from(
+    ///         "/lol-champ-select/v1/current-champion",
+    ///     )));
+    ///
+    ///     loop {
+    ///         if let Some(event) = websocket.next().await {
+    ///             println!("{:?}", event);
+    ///         }
+    ///     }
+    /// }```
+    ///
     pub async fn new() -> Result<Self, Error> {
         let tls = TLS_CONNECTOR.clone();
         let connector = Connector::NativeTls(tls);
@@ -87,38 +92,39 @@ impl LCUWebSocket {
         let (ws_sender, mut ws_reciver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
         let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Error>>();
 
-        let handle: JoinHandle<()> = spawn(async move {
+        let handle: JoinHandle<()> = tokio::spawn(async move {
             let mut active_commands: HashSet<String> = HashSet::new();
             loop {
                 if let Ok((code, endpoint)) = ws_reciver.try_recv() {
-                    let code = code as u8;
+                    let endpoint = match endpoint {
+                        EventType::OnJsonApiEvent => String::from("OnJsonApiEvent"),
+                        EventType::OnLcdEvent => String::from("OnLcdEvent"),
+                        EventType::OnJsonApiEventCallback(callback) => {
+                            format!("OnJsonApiEvent{}", callback.replace('/', "_"))
+                        }
+                        EventType::OnLcdEventCallback(callback) => {
+                            format!("OnLcdEvent{}", callback.replace('/', "_"))
+                        }
+                    };
 
-                    let command = format!("[{code}, \"{endpoint}\"]");
+                    let command = format!("[{}, \"{endpoint}\"]", code.clone() as u8);
 
-                    println!("{}", command);
-                    
-                    let endpoint  = format!("{}", endpoint);
-
-                    if code == 5 {
+                    if code == RequestType::Subscribe {
                         active_commands.insert(endpoint.clone());
-                    } else if code == 6 {
+                    } else if code == RequestType::Unsubscribe {
                         active_commands.remove(&endpoint);
                     };
 
                     if write.send(command.into()).await.is_err() {
                         client_sender.send(Err(Error::LCUStoppedRunning)).unwrap();
                     };
-
-                    println!("{:?}", active_commands);
                 };
+
                 if let Some(Ok(data)) = read.next().await {
                     if let Ok(json) = &serde_json::from_slice::<Value>(&data.into_data()) {
                         if let Some(endpoint) = json[1].as_str() {
-                            for command in active_commands.iter() {
-                                println!("{:?}", endpoint);
-                                if command == endpoint {
-                                    client_sender.send(Ok(json.to_owned())).unwrap();
-                                }
+                            if active_commands.contains(endpoint) {
+                                client_sender.send(Ok(json.to_owned())).unwrap();
                             }
                         } else {
                             client_sender.send(Ok(json.to_owned())).unwrap();
@@ -150,7 +156,9 @@ impl LCUWebSocket {
         self.handle.abort();
     }
 
-    fn request(&mut self, code: RequestType, endpoint: EventType) {
+    /// Allows you to make a gneric
+    /// request to the websocket socket
+    pub fn request(&mut self, code: RequestType, endpoint: EventType) {
         let _ = &self.ws_sender.send((code, endpoint));
     }
 }

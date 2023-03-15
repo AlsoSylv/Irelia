@@ -11,7 +11,7 @@ use crate::Error;
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
 /// Sets up a hyper client with a TLS connector and riots pem certificate
-pub static HYPER_CLIENT: Lazy<Client<HttpsConnector<HttpConnector>>> = Lazy::new(|| {
+pub(crate) static HYPER_CLIENT: Lazy<Client<HttpsConnector<HttpConnector>>> = Lazy::new(|| {
     let tls = TLS_CONNECTOR.clone();
     let tokio_tls = tokio_native_tls::TlsConnector::from(tls);
     let mut http = HttpConnector::new();
@@ -21,6 +21,7 @@ pub static HYPER_CLIENT: Lazy<Client<HttpsConnector<HttpConnector>>> = Lazy::new
 });
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
+/// Request template that is used in the in_game and rest modules
 pub(crate) async fn request_template<Return: DeserializeOwned>(
     running_error: Error,
     request: Result<Request<hyper::Body>, hyper::http::Error>,
@@ -34,8 +35,7 @@ pub(crate) async fn request_template<Return: DeserializeOwned>(
     match client.request(req).await {
         Ok(mut res) => {
             let body = res.body_mut();
-            let bytes = hyper::body::to_bytes(body).await;
-            match bytes {
+            match hyper::body::to_bytes(body).await {
                 Ok(bytes) => return_logic(bytes),
                 Err(err) => panic!("{}", err),
             }

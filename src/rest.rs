@@ -13,12 +13,15 @@ use crate::{
     Error,
 };
 
+/// Struct with methods that handles connections to the LCU
 pub struct LCUClient<'a> {
     url: String,
     client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
     auth_header: String,
 }
 
+/// Different request types that can be used
+/// with the batching system.
 pub enum RequestType {
     Get,
     Post,
@@ -27,6 +30,9 @@ pub enum RequestType {
     Head,
 }
 
+/// Struct to send a batch request to the given endpoint, with
+/// None being provided if it is get/delete/head, and Some()
+/// being passed if it is a put/Post request.
 pub struct BatchRequests<'a> {
     pub request_type: RequestType,
     pub endpoint: &'a str,
@@ -106,6 +112,9 @@ impl LCUClient<'_> {
         self.lcu_template(endpoint, "PATCH", Some(body)).await
     }
 
+    /// Uses a futures_util stream in order to make cocurrent requests with
+    /// An ordered buffer, so the return order is known and expected to be
+    /// the same as the input order.
     pub async fn batched(
         &self,
         requests: &[BatchRequests<'_>],

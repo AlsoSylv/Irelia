@@ -1,4 +1,7 @@
-//! The methods and types in this crate all line up with the ones in Riots documentation, and should be straight forward to use
+//! The methods and types in this crate all line up with the ones
+//! in Riots documentation, and should be straight forward to use
+//! this module is templated in a way that adding or removing
+//! methods should be simple and easy
 
 use hyper::{client::HttpConnector, Request};
 use hyper_tls::HttpsConnector;
@@ -17,11 +20,14 @@ use self::types::{
 
 pub mod types;
 
+/// Struct that handles connections to the in-game API
+/// holding a refernce to the hyper client and url
 pub struct InGameClient<'a> {
     client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
     url: &'a str,
 }
 
+/// Enum representation of different team IDs
 pub enum TeamID {
     ALL,
     UNKNOWN,
@@ -70,16 +76,17 @@ impl InGameClient<'_> {
     }
 
     pub async fn player_list(&self, team: Option<TeamID>) -> Result<Vec<AllPlayer>, Error> {
-        let team = match team {
-            Some(team) => match team {
+        let team = team.map_or_else(
+            || "",
+            |team| match team {
                 TeamID::ALL => "?teamID=ALL",
                 TeamID::UNKNOWN => "?teamID=UNKNOWN",
                 TeamID::ORDER => "?teamID=ORDER",
                 TeamID::CHAOS => "?teamID=CHAOS",
                 TeamID::NEUTRAL => "?teamID=NEUTRAL",
             },
-            None => "",
-        };
+        );
+
         let endpoint = format!("playerlist{}", team);
         self.live_client(&endpoint, None).await
     }
@@ -123,11 +130,7 @@ impl InGameClient<'_> {
             || format!("/liveclientdata/{}", endpoint),
             |summoner| format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
         );
-        self.in_game_tempalte(&endpoint).await
-    }
-
-    async fn in_game_tempalte<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, Error> {
-        let uri = uri_builder(self.url, endpoint)?;
+        let uri = uri_builder(self.url, &endpoint)?;
 
         let req = Request::builder()
             .method("GET")
