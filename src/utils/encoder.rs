@@ -1,6 +1,6 @@
-// This decoder is largely taking from this article. https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1
-// It goes into detail about the entire thing, and why it works the way it does, and I hightly reccomend reading it
-// Very big thanks to Tiemen for writing it!
+//! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
+//! It goes into detail about the entire thing, and why it works the way it does, and I hightly reccomend reading it
+//! Very big thanks to Tiemen for writing it!
 
 const UPPERCASEOFFSET: u8 = 65;
 const LOWERCASEOFFSET: u8 = 71;
@@ -27,25 +27,49 @@ fn split(chunk: &[u8]) -> Vec<u8> {
     }
 }
 
-fn encode_chunk(chunk: Vec<u8>) -> Vec<char> {
-    let mut out = vec!['=', '=', '=', '='];
+fn encode_chunk(chunk: Vec<u8>) -> [char; 4] {
+    let mut out = ['=', '=', '=', '='];
 
-    for i in 0..chunk.len() {
-        let index = chunk[i];
+    chunk.iter().enumerate().for_each(|(i, index)| {
         out[i] = match index {
-            0..=25 => (index + UPPERCASEOFFSET) as char,
-            26..=51 => (index + LOWERCASEOFFSET) as char,
-            52..=61 => (index - DIGITOFFSET) as char,
+            0..=25 => (*index + UPPERCASEOFFSET) as char,
+            26..=51 => (*index + LOWERCASEOFFSET) as char,
+            52..=61 => (*index - DIGITOFFSET) as char,
             62 => 43 as char,
             63 => 47 as char,
 
-            _ => '=',
+            _ => unreachable!(),
         };
-    }
+    });
 
     out
 }
 
 pub(super) fn encode(input: String) -> String {
     String::from_iter(input.as_bytes().chunks(3).map(split).flat_map(encode_chunk))
+}
+
+#[cfg(test)]
+mod test {
+    use base64::{self, engine::general_purpose, Engine};
+    use rand::{
+        distributions::{Alphanumeric, DistString},
+        thread_rng,
+    };
+
+    use super::encode;
+
+    #[test]
+    fn b64() {
+        for _ in 0..100000 {
+            let mut rng = thread_rng();
+            let string = Alphanumeric.sample_string(&mut rng, 20);
+            let b64_encoded = general_purpose::STANDARD.encode(string.clone());
+            let my_encoded = encode(string);
+
+            if !my_encoded.eq(&b64_encoded) {
+                panic!("{my_encoded:?} != {b64_encoded:?}")
+            }
+        }
+    }
 }
