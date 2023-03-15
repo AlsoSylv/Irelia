@@ -77,7 +77,7 @@ pub(crate) fn get_port_and_auth() -> Result<(String, String), Error> {
 pub(crate) fn get_port_and_auth() -> Result<(String, String), Error> {
     let process = get_running_client()?;
 
-    let Some(port) = process.split_whitespace().clone().find_map(|s| s.strip_prefix("--app-port=")) else {
+    let Some(port) = process.split_whitespace().find_map(|s| s.strip_prefix("--app-port=")) else {
         return Err(Error::PortNotFound);
     };
     let Some(auth) = process.split_whitespace().find_map(|s| s.strip_prefix("--remoting-auth-token=")) else {
