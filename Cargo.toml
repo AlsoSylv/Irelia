@@ -46,9 +46,13 @@ optional = true
 rand = "0.8.5"
 base64 = "0.21.0"
 
+[build-dependencies]
+cbindgen = "0.24.3"
+
 [features]
 default = [
-    "rest"
+    "rest",
+    "c"
     ]
 full = [
     "rest", 
@@ -75,6 +79,10 @@ ws = [
     "dep:tokio", 
     "dep:futures-util"
     ]
+
+c = [
+    "dep:tokio"
+]
 
 [package.metadata.docs.rs]
 all-features = true
