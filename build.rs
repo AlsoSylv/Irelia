@@ -6,10 +6,17 @@ fn main() {
 
     cbindgen::Builder::new()
         .with_language(cbindgen::Language::C)
-        .with_crate(crate_dir)
+        .with_crate(&crate_dir)
         .generate()
         .expect("Unable to generate bindings")
-        .write_to_file("bindings.h");
+        .write_to_file("irelia.h");
+
+    cbindgen::Builder::new()
+        .with_language(cbindgen::Language::Cxx)
+        .with_crate(&crate_dir)
+        .generate()
+        .expect("Unable to generate bindings")
+        .write_to_file("irelia.hpp");
 }
 
 #[cfg(not(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws")))]

@@ -102,3 +102,6 @@ c_full = [
 
 [package.metadata.docs.rs]
 all-features = true
+
+[lib]
+crate-type = ["cdylib"]
