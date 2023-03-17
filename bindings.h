@@ -12,7 +12,7 @@ struct NewLCU {
 };
 
 struct LcuResponse {
-  const char *json;
+  char *json;
   int error;
 };
 

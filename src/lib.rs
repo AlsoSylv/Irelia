@@ -48,13 +48,15 @@ mod c_lcu {
     use std::ffi::{c_char, c_int, CStr, CString};
 
     use futures_util::Future;
+    use serde_json::Value;
     use tokio::runtime::Runtime;
 
     use crate::{rest::LCUClient, Error};
 
+    #[derive(Debug)]
     #[repr(C)]
     pub struct LcuResponse {
-        pub json: *const c_char,
+        pub json: *mut c_char,
         pub error: c_int,
     }
 
@@ -91,24 +93,30 @@ mod c_lcu {
     }
 
     fn lcu_generic(
-        fut: impl Future<Output = Result<Option<CString>, Error>>,
+        fut: impl Future<Output = Result<Option<Value>, Error>>,
         rt: &Runtime,
     ) -> LcuResponse {
         let result = rt.block_on(fut);
 
         match result {
             Ok(result) => match result {
-                Some(c_string) => LcuResponse {
-                    json: c_string.as_ptr(),
-                    error: 0,
+                Some(json) => {
+                    let json_string = json.to_string();
+                    println!("{}", json_string);
+                    let json_c_string = CString::new(json_string).unwrap();
+                    println!("{:?}", json_c_string);
+                    LcuResponse {
+                        json: json_c_string.into_raw(),
+                        error: 0,
+                    }
                 },
                 None => LcuResponse {
-                    json: std::ptr::null(),
+                    json: std::ptr::null_mut(),
                     error: 0,
                 },
             },
             Err(err) => LcuResponse {
-                json: std::ptr::null(),
+                json: std::ptr::null_mut(),
                 error: err as c_int,
             },
         }
@@ -123,7 +131,7 @@ mod c_lcu {
     pub unsafe extern "C" fn lcu_get<'a>(client: *mut LCU, endpoint: *const c_char) -> LcuResponse {
         let client = &*client;
         let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
-        let fut = client.client.get::<CString>(&endpoint);
+        let fut = client.client.get::<Value>(&endpoint);
         lcu_generic(fut, &client.rt)
     }
 
@@ -136,7 +144,7 @@ mod c_lcu {
         let client = &*client;
         let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
         let body = CStr::from_ptr(body).to_string_lossy();
-        let fut = client.client.post::<_, CString>(&endpoint, &body);
+        let fut = client.client.post::<_, Value>(&endpoint, &body);
         lcu_generic(fut, &client.rt)
     }
 
@@ -149,23 +157,29 @@ mod c_lcu {
         let client = &*client;
         let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
         let body = CStr::from_ptr(body).to_string_lossy();
-        let fut = client.client.put::<_, CString>(&endpoint, &body);
+        let fut = client.client.put::<_, Value>(&endpoint, &body);
         lcu_generic(fut, &client.rt)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn lcu_delete<'a>(client: *mut LCU, endpoint: *const c_char) -> LcuResponse {
+    pub unsafe extern "C" fn lcu_delete<'a>(
+        client: *mut LCU,
+        endpoint: *const c_char,
+    ) -> LcuResponse {
         let client = &*client;
         let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
-        let fut = client.client.delete::<CString>(&endpoint);
+        let fut = client.client.delete::<Value>(&endpoint);
         lcu_generic(fut, &client.rt)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn lcu_head<'a>(client: *mut LCU, endpoint: *const c_char) -> LcuResponse {
+    pub unsafe extern "C" fn lcu_head<'a>(
+        client: *mut LCU,
+        endpoint: *const c_char,
+    ) -> LcuResponse {
         let client = &*client;
         let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
-        let fut = client.client.head::<CString>(&endpoint);
+        let fut = client.client.head::<Value>(&endpoint);
         lcu_generic(fut, &client.rt)
     }
 
@@ -173,5 +187,26 @@ mod c_lcu {
     pub extern "C" fn lcu_drop<'a>(client: *mut LCU) {
         let client = unsafe { Box::from_raw(client) };
         drop(client)
+    }
+
+    mod tests {
+        #[test]
+        fn new_test() {
+            use std::ffi::{CStr, CString};
+
+            use crate::c_lcu::{lcu_get, lcu_new};
+
+            unsafe {
+                let endpoint = CString::new("/lol-champ-select/v1/current-champion").unwrap();
+                let lcu_handle = lcu_new();
+                let get = lcu_get(lcu_handle.client, endpoint.as_ptr());
+                println!("{:?}", get.json);
+                if get.error > 0 {
+                    panic!("{}", get.error)
+                } else {
+                    println!("{}", CStr::from_ptr(get.json).to_string_lossy());
+                }
+            }
+        }
     }
 }
