@@ -27,6 +27,7 @@ pub struct InGameClient<'a> {
     url: &'a str,
 }
 
+#[repr(C)]
 /// Enum representation of different team IDs
 pub enum TeamID {
     ALL,
@@ -121,7 +122,7 @@ impl InGameClient<'_> {
         self.live_client("gamestats", None).await
     }
 
-    async fn live_client<R: DeserializeOwned>(
+    pub(crate) async fn live_client<R: DeserializeOwned>(
         &self,
         endpoint: &str,
         summoner: Option<&str>,

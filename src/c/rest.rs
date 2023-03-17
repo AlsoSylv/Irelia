@@ -115,10 +115,7 @@ pub unsafe extern "C" fn lcu_put(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn lcu_delete(
-    client: *mut Lcu,
-    endpoint: *const c_char,
-) -> LcuResponse {
+pub unsafe extern "C" fn lcu_delete(client: *mut Lcu, endpoint: *const c_char) -> LcuResponse {
     let client = &*client;
     let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
     let fut = client.client.delete::<Value>(&endpoint);
@@ -126,10 +123,7 @@ pub unsafe extern "C" fn lcu_delete(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn lcu_head(
-    client: *mut Lcu,
-    endpoint: *const c_char,
-) -> LcuResponse {
+pub unsafe extern "C" fn lcu_head(client: *mut Lcu, endpoint: *const c_char) -> LcuResponse {
     let client = &*client;
     let endpoint = CStr::from_ptr(endpoint).to_string_lossy();
     let fut = client.client.head::<Value>(&endpoint);
