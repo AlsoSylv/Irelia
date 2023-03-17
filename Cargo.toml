@@ -53,7 +53,8 @@ cbindgen = "0.24.3"
 default = [
     "rest",
     "c",
-    "in_game"
+    "in_game",
+    "ws"
     ]
 full = [
     "rest", 

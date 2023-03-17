@@ -1,5 +1,5 @@
 use serde_json::Value;
-use std::ffi::{c_char, c_int, CString, CStr};
+use std::ffi::{c_char, c_int, CStr, CString};
 use tokio::runtime::Runtime;
 
 use crate::in_game::{InGameClient, TeamID};
@@ -91,25 +91,37 @@ pub unsafe extern "C" fn player_list(client: *mut InGame, team: *const TeamID) -
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn player_scores(client: *mut InGame, summoner: *const c_char) -> InGameResponse {
+pub unsafe extern "C" fn player_scores(
+    client: *mut InGame,
+    summoner: *const c_char,
+) -> InGameResponse {
     let summoner = CStr::from_ptr(summoner).to_string_lossy();
     in_game_live_client(client, "playerscores", Some(&summoner))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn player_summoner_spells(client: *mut InGame, summoner: *const c_char) -> InGameResponse {
+pub unsafe extern "C" fn player_summoner_spells(
+    client: *mut InGame,
+    summoner: *const c_char,
+) -> InGameResponse {
     let summoner = CStr::from_ptr(summoner).to_string_lossy();
     in_game_live_client(client, "playersummonerspells", Some(&summoner))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn player_main_runes(client: *mut InGame, summoner: *const c_char) -> InGameResponse {
+pub unsafe extern "C" fn player_main_runes(
+    client: *mut InGame,
+    summoner: *const c_char,
+) -> InGameResponse {
     let summoner = CStr::from_ptr(summoner).to_string_lossy();
     in_game_live_client(client, "playermainrunes", Some(&summoner))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn player_items(client: *mut InGame, summoner: *const c_char) -> InGameResponse {
+pub unsafe extern "C" fn player_items(
+    client: *mut InGame,
+    summoner: *const c_char,
+) -> InGameResponse {
     let summoner = CStr::from_ptr(summoner).to_string_lossy();
     in_game_live_client(client, "playeritems", Some(&summoner))
 }
@@ -131,14 +143,13 @@ pub unsafe extern "C" fn game_stats(client: *mut InGame) -> InGameResponse {
 }
 
 #[no_mangle]
-pub extern "C" fn in_game_drop(game: *mut InGame) {
-    let client = unsafe { Box::from_raw(game) };
-    drop(client)
+pub unsafe extern "C" fn in_game_drop(game: *mut InGame) {
+    drop(Box::from_raw(game))
 }
 
 #[no_mangle]
-pub extern "C" fn in_game_drop_res(res: InGameResponse) {
-    unsafe { CString::from_raw(res.json) };
+pub unsafe extern "C" fn in_game_drop_res(res: InGameResponse) {
+    drop(CString::from_raw(res.json));
 }
 
 unsafe fn in_game_live_client(
@@ -148,7 +159,7 @@ unsafe fn in_game_live_client(
 ) -> InGameResponse {
     let client = &*client;
 
-    let fut = client.client.live_client::<Value>(&endpoint, summoner);
+    let fut = client.client.live_client::<Value>(endpoint, summoner);
 
     let res = client.rt.block_on(fut);
     match res {

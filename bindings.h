@@ -3,6 +3,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum EventTypeC {
+  OnJsonApiEvent,
+  OnLcdEvent,
+  OnJsonApiEventCallback,
+  OnLcdEventCallback,
+} EventTypeC;
+
 /**
  * Enum representation of different team IDs
  */
@@ -17,6 +24,8 @@ typedef enum TeamID {
 typedef struct InGame InGame;
 
 typedef struct Lcu Lcu;
+
+typedef struct LcuWS LcuWS;
 
 typedef struct NewInGame {
   struct InGame *client;
@@ -37,6 +46,21 @@ typedef struct LcuResponse {
   char *json;
   int error;
 } LcuResponse;
+
+typedef struct NewWS {
+  struct LcuWS *client;
+  int error;
+} NewWS;
+
+typedef struct Event {
+  enum EventTypeC event;
+  const char *endpoint;
+} Event;
+
+typedef struct LcuWsRes {
+  char *json;
+  int error;
+} LcuWsRes;
 
 struct NewInGame new_in_game(void);
 
@@ -83,3 +107,15 @@ struct LcuResponse lcu_head(struct Lcu *client, const char *endpoint);
 void lcu_drop(struct Lcu *client);
 
 void lcu_drop_res(struct LcuResponse res);
+
+struct NewWS new_ws(void);
+
+void subscribe(struct LcuWS *client, struct Event event);
+
+void unsubscribe(struct LcuWS *client, struct Event event);
+
+struct LcuWsRes next(struct LcuWS *client);
+
+void drop_ws(struct LcuWS *client);
+
+void drop_ws_res(struct LcuWsRes res);
