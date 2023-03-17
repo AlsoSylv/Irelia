@@ -51,10 +51,7 @@ cbindgen = "0.24.3"
 
 [features]
 default = [
-    "rest",
-    "c",
-    "in_game",
-    "ws"
+    "rest"
     ]
 full = [
     "rest", 
@@ -82,8 +79,25 @@ ws = [
     "dep:futures-util"
     ]
 
-c = [
-    "dep:tokio"
+c_rest = [
+    "dep:tokio",
+    "rest",
+]
+
+c_in_game = [
+    "dep:tokio",
+    "in_game",
+]
+
+c_ws = [
+    "dep:tokio",
+    "ws",
+]
+c_full = [
+    "dep:tokio",
+    "c_rest",
+    "c_in_game",
+    "c_ws",
 ]
 
 [package.metadata.docs.rs]

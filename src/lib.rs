@@ -1,6 +1,9 @@
 //! Irelia is a wrapper around the LoL native APIs, with a focus on modularity and compile size
 //! This crate has support for Windows, Linux, and MacOS, all of which have been tested to varying degrees
 
+#[cfg(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws"))]
+/// Functions for using Irelia in a C program
+pub mod c;
 #[cfg(feature = "in_game")]
 /// The in_game module has support for LoLs in game API, and returns all data as structs that much the
 /// Current spec release by Riot, more info can be found here: <https://developer.riotgames.com/docs/lol#game-client-api>
@@ -17,8 +20,6 @@ mod utils;
 /// This is a high level implementation of the LCU websocket, which managesthe event loop itself
 /// Methods to subscribe, unsubscribe, and terminate the event loop are provided
 pub mod ws;
-
-pub mod c;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]

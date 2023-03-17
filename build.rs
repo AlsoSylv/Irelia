@@ -1,4 +1,4 @@
-#[cfg(feature = "c")]
+#[cfg(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws"))]
 fn main() {
     use std::env;
 
@@ -12,5 +12,5 @@ fn main() {
         .write_to_file("bindings.h");
 }
 
-#[cfg(not(feature = "c"))]
+#[cfg(not(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws")))]
 fn main() {}

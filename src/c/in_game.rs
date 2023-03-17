@@ -6,17 +6,23 @@ use crate::in_game::{InGameClient, TeamID};
 
 #[derive(Debug)]
 #[repr(C)]
+/// Stores a response from the in game API
+/// JSON should only be null if it errors
 pub struct InGameResponse {
     pub json: *mut c_char,
     pub error: c_int,
 }
 
 #[repr(C)]
+/// Stores a handle to the in game API, if
+/// error != 0 then this handle is invalid
+/// and cannot be used
 pub struct NewInGame<'a> {
     pub client: *mut InGame<'a>,
     pub error: c_int,
 }
 
+/// Opaque type for storing the Rust client
 pub struct InGame<'a> {
     client: InGameClient<'a>,
     rt: Runtime,
@@ -142,11 +148,13 @@ pub unsafe extern "C" fn game_stats(client: *mut InGame) -> InGameResponse {
     in_game_live_client(client, "gamestats", None)
 }
 
+/// Drops in game handle
 #[no_mangle]
-pub unsafe extern "C" fn in_game_drop(game: *mut InGame) {
-    drop(Box::from_raw(game))
+pub unsafe extern "C" fn in_game_drop(game: NewInGame) {
+    drop(Box::from_raw(game.client))
 }
 
+/// Drops the game response
 #[no_mangle]
 pub unsafe extern "C" fn in_game_drop_res(res: InGameResponse) {
     drop(CString::from_raw(res.json));
@@ -175,5 +183,30 @@ unsafe fn in_game_live_client(
             json: std::ptr::null_mut(),
             error: err as c_int,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn in_game_test() {
+        use super::{active_player, in_game_drop, in_game_drop_res, new_in_game};
+        use std::ffi::CStr;
+
+        unsafe {
+            let client = new_in_game();
+            if client.error > 0 {
+                panic!()
+            } else {
+                let json = active_player(client.client);
+                if json.error > 0 {
+                    panic!("{}", json.error)
+                } else {
+                    println!("{}", CStr::from_ptr(json.json).to_string_lossy());
+                    in_game_drop_res(json);
+                    in_game_drop(client);
+                }
+            }
+        }
     }
 }
