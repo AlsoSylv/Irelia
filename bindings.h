@@ -1,35 +1,32 @@
-#include <cstdarg>
-#include <cstdint>
-#include <cstdlib>
-#include <ostream>
-#include <new>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
-struct LCU;
+typedef struct Lcu Lcu;
 
-struct NewLCU {
-  LCU *client;
+typedef struct NewLCU {
+  struct Lcu *client;
   int error;
-};
+} NewLCU;
 
-struct LcuResponse {
+typedef struct LcuResponse {
   char *json;
   int error;
-};
+} LcuResponse;
 
-extern "C" {
+struct NewLCU lcu_new(void);
 
-NewLCU lcu_new();
+struct LcuResponse lcu_get(struct Lcu *client, const char *endpoint);
 
-LcuResponse lcu_get(LCU *client, const char *endpoint);
+struct LcuResponse lcu_post(struct Lcu *client, const char *endpoint, const char *body);
 
-LcuResponse lcu_post(LCU *client, const char *endpoint, const char *body);
+struct LcuResponse lcu_put(struct Lcu *client, const char *endpoint, const char *body);
 
-LcuResponse lcu_put(LCU *client, const char *endpoint, const char *body);
+struct LcuResponse lcu_delete(struct Lcu *client, const char *endpoint);
 
-LcuResponse lcu_delete(LCU *client, const char *endpoint);
+struct LcuResponse lcu_head(struct Lcu *client, const char *endpoint);
 
-LcuResponse lcu_head(LCU *client, const char *endpoint);
+void lcu_drop(struct Lcu *client);
 
-void lcu_drop(LCU *client);
-
-} // extern "C"
+void lcu_drop_res(struct LcuResponse res);
