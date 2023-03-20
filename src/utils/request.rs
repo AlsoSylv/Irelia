@@ -7,7 +7,7 @@ use hyper_tls::HttpsConnector;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 
-use crate::Error;
+use crate::LcuResponse;
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
 /// Sets up a hyper client with a TLS connector and riots pem certificate
@@ -23,13 +23,13 @@ pub(crate) static HYPER_CLIENT: Lazy<Client<HttpsConnector<HttpConnector>>> = La
 #[cfg(any(feature = "in_game", feature = "rest"))]
 /// Request template that is used in the in_game and rest modules
 pub(crate) async fn request_template<Return: DeserializeOwned>(
-    running_error: Error,
+    running_error: LcuResponse,
     request: Result<Request<hyper::Body>, hyper::http::Error>,
     client: &hyper::Client<HttpsConnector<HttpConnector>>,
-    return_logic: fn(bytes: Bytes) -> Result<Return, Error>,
-) -> Result<Return, Error> {
+    return_logic: fn(bytes: Bytes) -> Result<Return, LcuResponse>,
+) -> Result<Return, LcuResponse> {
     let Ok(req) = request else {
-        return Err(Error::InvalidRequest);
+        return Err(LcuResponse::InvalidRequest);
     };
 
     match client.request(req).await {
@@ -51,11 +51,11 @@ pub(crate) async fn request_template<Return: DeserializeOwned>(
 }
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
-pub(crate) fn uri_builder(url: &str, endpoint: &str) -> Result<Uri, Error> {
+pub(crate) fn uri_builder(url: &str, endpoint: &str) -> Result<Uri, LcuResponse> {
     uri::Builder::new()
         .scheme("https")
         .authority(url.as_bytes())
         .path_and_query(endpoint)
         .build()
-        .map_or(Err(Error::InvalidRequest), Ok)
+        .map_or(Err(LcuResponse::InvalidRequest), Ok)
 }

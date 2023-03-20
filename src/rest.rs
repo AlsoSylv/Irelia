@@ -10,14 +10,15 @@ use crate::{
         process_info::get_port_and_auth,
         request::{request_template, uri_builder, HYPER_CLIENT},
     },
-    Error,
+    LcuResponse,
 };
 
 /// Struct with methods that handles connections to the LCU
+#[derive(Debug)]
 pub struct LCUClient<'a> {
-    url: String,
-    client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
-    auth_header: String,
+    pub(crate) url: String,
+    pub(crate) client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
+    pub(crate) auth_header: String,
 }
 
 /// Different request types that can be used
@@ -41,7 +42,7 @@ pub struct BatchRequests<'a> {
 
 impl LCUClient<'_> {
     /// Makes a connection to the LCU, errors if it is not found or not running
-    pub fn new<'a>() -> Result<LCUClient<'a>, Error> {
+    pub fn new<'a>() -> Result<LCUClient<'a>, LcuResponse> {
         let port_pass = get_port_and_auth()?;
         Ok(LCUClient {
             url: format!("127.0.0.1:{}", port_pass.0),
@@ -62,7 +63,7 @@ impl LCUClient<'_> {
     ///     let summoner: Option<Value> = client.get("/lol-summoner/v1/current-summoner").await.unwrap();
     /// }
     /// ```
-    pub async fn get<R>(&self, endpoint: &str) -> Result<Option<R>, Error>
+    pub async fn get<R>(&self, endpoint: &str) -> Result<Option<R>, LcuResponse>
     where
         R: DeserializeOwned,
     {
@@ -70,7 +71,7 @@ impl LCUClient<'_> {
     }
 
     /// Make a post request to the LCU, with any body that implements serde::Serialize
-    pub async fn post<T, R>(&self, endpoint: &str, body: T) -> Result<Option<R>, Error>
+    pub async fn post<T, R>(&self, endpoint: &str, body: T) -> Result<Option<R>, LcuResponse>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -79,7 +80,7 @@ impl LCUClient<'_> {
     }
 
     /// Make a put request to the LCU, with any body that implements serde::Serialize
-    pub async fn put<T, R>(&self, endpoint: &str, body: T) -> Result<Option<R>, Error>
+    pub async fn put<T, R>(&self, endpoint: &str, body: T) -> Result<Option<R>, LcuResponse>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -88,7 +89,7 @@ impl LCUClient<'_> {
     }
 
     /// Make a delete request to the LCU
-    pub async fn delete<R>(&self, endpoint: &str) -> Result<Option<R>, Error>
+    pub async fn delete<R>(&self, endpoint: &str) -> Result<Option<R>, LcuResponse>
     where
         R: DeserializeOwned,
     {
@@ -96,7 +97,7 @@ impl LCUClient<'_> {
     }
 
     /// Make a head request to the LCU
-    pub async fn head<R>(&self, endpoint: &str) -> Result<Option<R>, Error>
+    pub async fn head<R>(&self, endpoint: &str) -> Result<Option<R>, LcuResponse>
     where
         R: DeserializeOwned,
     {
@@ -104,7 +105,7 @@ impl LCUClient<'_> {
     }
 
     /// Make a patch request to the LCU, with any body that implements serde::Serialize
-    pub async fn patch<T, R>(&self, endpoint: &str, body: T) -> Result<Option<R>, Error>
+    pub async fn patch<T, R>(&self, endpoint: &str, body: T) -> Result<Option<R>, LcuResponse>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -119,7 +120,7 @@ impl LCUClient<'_> {
         &self,
         requests: &[BatchRequests<'_>],
         buffer_size: usize,
-    ) -> Vec<Result<Option<Value>, Error>> {
+    ) -> Vec<Result<Option<Value>, LcuResponse>> {
         futures_util::stream::iter(requests.iter().map(|request| async move {
             match request.request_type {
                 RequestType::Get => self.get(request.endpoint).await,
@@ -145,7 +146,7 @@ impl LCUClient<'_> {
         endpoint: &str,
         method: &str,
         body: Option<T>,
-    ) -> Result<Option<R>, Error>
+    ) -> Result<Option<R>, LcuResponse>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -153,7 +154,7 @@ impl LCUClient<'_> {
         let uri = uri_builder(&self.url, endpoint)?;
 
         let body = body.map_or(Ok(hyper::Body::empty()), |body| {
-            serde_json::value::to_value(body).map_or(Err(Error::InvalidBody), |json| {
+            serde_json::value::to_value(body).map_or(Err(LcuResponse::InvalidBody), |json| {
                 Ok(hyper::Body::from(json.to_string()))
             })
         })?;
@@ -164,14 +165,19 @@ impl LCUClient<'_> {
             .header(AUTHORIZATION, &self.auth_header)
             .body(body);
 
-        request_template(Error::LCUProcessNotRunning, req, self.client, |bytes| {
-            if bytes.is_empty() {
-                Ok(None)
-            } else {
-                serde_json::from_slice(&bytes)
-                    .map_or(Err(Error::FailedParseJson), |value| Ok(Some(value)))
-            }
-        })
+        request_template(
+            LcuResponse::LCUProcessNotRunning,
+            req,
+            self.client,
+            |bytes| {
+                if bytes.is_empty() {
+                    Ok(None)
+                } else {
+                    serde_json::from_slice(&bytes)
+                        .map_or(Err(LcuResponse::FailedParseJson), |value| Ok(Some(value)))
+                }
+            },
+        )
         .await
     }
 }

@@ -1,33 +1,16 @@
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::{
+    ffi::{c_char, CStr, CString},
+    ptr::NonNull,
+};
 
 use futures_util::StreamExt;
-use tokio::runtime::Runtime;
 
-use crate::ws::{EventType, LCUWebSocket};
+use crate::{
+    ws::{EventType, LCUWebSocket},
+    LcuResponse,
+};
 
-#[derive(Debug)]
-#[repr(C)]
-/// Holds JSON from the response, error can
-/// be 0 and json can be null if no event
-/// has been sent back
-pub struct LcuWsRes {
-    pub json: *mut c_char,
-    pub error: c_int,
-}
-
-#[repr(C)]
-/// Handle to the LCU websocket
-pub struct NewWS {
-    pub client: *mut LcuWS,
-    pub error: c_int,
-}
-
-/// Opaque type that stores the client
-/// and the tokio runtime
-pub struct LcuWS {
-    client: LCUWebSocket,
-    rt: Runtime,
-}
+use super::runtime::RT;
 
 #[repr(C)]
 #[allow(dead_code)]
@@ -69,82 +52,72 @@ impl Event {
     }
 }
 
-impl NewWS {
-    fn new() -> Self {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("PAIN");
-        let client = rt.block_on(LCUWebSocket::new());
-        match client {
-            Ok(client) => Self {
-                client: Box::into_raw(Box::new(LcuWS { client, rt })),
-                error: 0,
-            },
-            Err(err) => Self {
-                client: std::ptr::null_mut(),
-                error: err as c_int,
-            },
-        }
-    }
-}
-
 /// Creates a new handle for the web socket
 #[no_mangle]
-pub unsafe extern "C" fn new_ws() -> NewWS {
-    NewWS::new()
+pub unsafe extern "C" fn new_ws(
+    client: *mut *mut LCUWebSocket,
+    rt: Option<NonNull<RT>>,
+) -> LcuResponse {
+    let ws_client = rt.unwrap().as_ref().rt.block_on(LCUWebSocket::new());
+    match ws_client {
+        Ok(ws_client) => {
+            *client = Box::into_raw(Box::new(ws_client));
+            LcuResponse::Success
+        }
+        Err(err) => err,
+    }
 }
 
 /// Subscribes to a new web socket event
 #[no_mangle]
-pub unsafe extern "C" fn subscribe(client: *mut LcuWS, event: Event) {
-    let client = &mut *client;
-    client.client.subscribe(event.real_event_type());
+pub unsafe extern "C" fn subscribe(client: Option<NonNull<LCUWebSocket>>, event: Event) {
+    client.unwrap().as_mut().subscribe(event.real_event_type());
 }
 
 /// Unsubscribes from a web socket event
 #[no_mangle]
-pub unsafe extern "C" fn unsubscribe(client: *mut LcuWS, event: Event) {
-    let client = &mut *client;
-    client.client.unsubscribe(event.real_event_type());
+pub unsafe extern "C" fn unsubscribe(client: Option<NonNull<LCUWebSocket>>, event: Event) {
+    client
+        .unwrap()
+        .as_mut()
+        .unsubscribe(event.real_event_type());
 }
 
 /// Requests to the event sent by the websocket, returns null
 /// if there is no event or if there is an error
 #[no_mangle]
-pub unsafe extern "C" fn next(client: *mut LcuWS) -> LcuWsRes {
-    let client = &mut *client;
-    let val = client.rt.block_on(client.client.next());
+pub unsafe extern "C" fn next(
+    client: Option<NonNull<LCUWebSocket>>,
+    rt: Option<NonNull<RT>>,
+    json: Option<NonNull<*mut c_char>>,
+) -> LcuResponse {
+    let client = client.unwrap().as_mut();
+    let val = rt.unwrap().as_ref().rt.block_on(client.next());
     match val {
         Some(val) => match val {
             Ok(val) => {
                 let str = val.to_string();
                 let c_str = CString::new(str).unwrap();
-                LcuWsRes {
-                    json: c_str.into_raw(),
-                    error: 0,
-                }
+                *json.unwrap().as_ptr() = c_str.into_raw();
+                LcuResponse::Success
             }
-            Err(err) => LcuWsRes {
-                json: std::ptr::null_mut(),
-                error: err as c_int,
-            },
+            Err(err) => err,
         },
-        None => LcuWsRes {
-            json: std::ptr::null_mut(),
-            error: 0,
-        },
+        None => {
+            *json.unwrap().as_ptr() = std::ptr::null_mut();
+            LcuResponse::Success
+        }
     }
 }
 
 /// Drops the web socket handle
 #[no_mangle]
-pub unsafe extern "C" fn drop_ws(client: NewWS) {
-    drop(Box::from_raw(client.client))
+pub unsafe extern "C" fn drop_ws(client: *mut *mut LCUWebSocket) {
+    drop(Box::from_raw(*client))
 }
 
 /// Drops the web socket response
 #[no_mangle]
-pub unsafe extern "C" fn drop_ws_res(res: LcuWsRes) {
-    drop(Box::from_raw(res.json));
+pub unsafe extern "C" fn drop_ws_res(res: *mut *mut c_char) {
+    drop(CString::from_raw(*res));
 }

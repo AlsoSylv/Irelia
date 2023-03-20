@@ -12,7 +12,7 @@ use tokio_tungstenite::{
 
 use crate::{
     utils::{process_info::get_port_and_auth, setup_tls::TLS_CONNECTOR},
-    Error,
+    LcuResponse,
 };
 
 /// ```rs
@@ -29,7 +29,7 @@ use crate::{
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
-    client_reciver: UnboundedReceiver<Result<Value, Error>>,
+    client_reciver: UnboundedReceiver<Result<Value, LcuResponse>>,
 }
 
 #[derive(PartialEq, Clone)]
@@ -74,7 +74,7 @@ impl LCUWebSocket {
     ///     }
     /// }```
     ///
-    pub async fn new() -> Result<Self, Error> {
+    pub async fn new() -> Result<Self, LcuResponse> {
         let tls = TLS_CONNECTOR.clone();
         let connector = Connector::NativeTls(tls);
         let port_pass = get_port_and_auth()?;
@@ -86,11 +86,12 @@ impl LCUWebSocket {
             HeaderValue::from_str(&format!("Basic {}", port_pass.1)).unwrap(),
         );
         let Ok((stream, _)) = connect_async_tls_with_config(url, None, Some(connector)).await else {
-            return Err(Error::LCUStoppedRunning);
+            return Err(LcuResponse::LCUStoppedRunning);
         };
         let (mut write, mut read) = stream.split();
         let (ws_sender, mut ws_reciver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
-        let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Error>>();
+        let (client_sender, client_reciver) =
+            mpsc::unbounded_channel::<Result<Value, LcuResponse>>();
 
         let handle: JoinHandle<()> = tokio::spawn(async move {
             let mut active_commands: HashSet<String> = HashSet::new();
@@ -116,7 +117,9 @@ impl LCUWebSocket {
                     };
 
                     if write.send(command.into()).await.is_err() {
-                        client_sender.send(Err(Error::LCUStoppedRunning)).unwrap();
+                        client_sender
+                            .send(Err(LcuResponse::LCUStoppedRunning))
+                            .unwrap();
                     };
                 };
 
@@ -164,7 +167,7 @@ impl LCUWebSocket {
 }
 
 impl Stream for LCUWebSocket {
-    type Item = Result<Value, Error>;
+    type Item = Result<Value, LcuResponse>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

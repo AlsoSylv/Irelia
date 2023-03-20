@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     utils::request::{request_template, uri_builder, HYPER_CLIENT},
-    Error,
+    LcuResponse,
 };
 
 use self::types::{
@@ -39,7 +39,7 @@ pub enum TeamID {
 
 impl InGameClient<'_> {
     /// Make a connect to the in game API, does not check if the game is running when connecting
-    pub fn new<'a>() -> Result<InGameClient<'a>, Error> {
+    pub fn new<'a>() -> Result<InGameClient<'a>, LcuResponse> {
         let client = &HYPER_CLIENT;
         let url = "127.0.0.1:2999";
         Ok(InGameClient { client, url })
@@ -56,27 +56,27 @@ impl InGameClient<'_> {
     ///     println!("{:?}", all_game_data);
     /// }
     /// ```
-    pub async fn all_game_data(&self) -> Result<AllGameData, Error> {
+    pub async fn all_game_data(&self) -> Result<AllGameData, LcuResponse> {
         self.live_client("allgamedata", None).await
     }
 
-    pub async fn active_player(&self) -> Result<ActivePlayer, Error> {
+    pub async fn active_player(&self) -> Result<ActivePlayer, LcuResponse> {
         self.live_client("activeplayer", None).await
     }
 
-    pub async fn active_player_name(&self) -> Result<String, Error> {
+    pub async fn active_player_name(&self) -> Result<String, LcuResponse> {
         self.live_client("activeplayername", None).await
     }
 
-    pub async fn active_player_abilities(&self) -> Result<Abilities, Error> {
+    pub async fn active_player_abilities(&self) -> Result<Abilities, LcuResponse> {
         self.live_client("activeplayerabilities", None).await
     }
 
-    pub async fn active_player_runes(&self) -> Result<FullRunes, Error> {
+    pub async fn active_player_runes(&self) -> Result<FullRunes, LcuResponse> {
         self.live_client("activeplayerrunes", None).await
     }
 
-    pub async fn player_list(&self, team: Option<TeamID>) -> Result<Vec<AllPlayer>, Error> {
+    pub async fn player_list(&self, team: Option<TeamID>) -> Result<Vec<AllPlayer>, LcuResponse> {
         let team = team.map_or_else(
             || "",
             |team| match team {
@@ -88,37 +88,40 @@ impl InGameClient<'_> {
             },
         );
 
-        let endpoint = format!("playerlist{}", team);
+        let endpoint = format!("playerlist{team}");
         self.live_client(&endpoint, None).await
     }
 
-    pub async fn player_scores(&self, summoner: &str) -> Result<Scores, Error> {
+    pub async fn player_scores(&self, summoner: &str) -> Result<Scores, LcuResponse> {
         self.live_client("playerscores", Some(summoner)).await
     }
 
-    pub async fn player_summoner_spells(&self, summoner: &str) -> Result<SummonerSpells, Error> {
+    pub async fn player_summoner_spells(
+        &self,
+        summoner: &str,
+    ) -> Result<SummonerSpells, LcuResponse> {
         self.live_client("playersummonerspells", Some(summoner))
             .await
     }
 
-    pub async fn player_main_runes(&self, summoner: &str) -> Result<Runes, Error> {
+    pub async fn player_main_runes(&self, summoner: &str) -> Result<Runes, LcuResponse> {
         self.live_client("playermainrunes", Some(summoner)).await
     }
 
-    pub async fn player_items(&self, summoner: &str) -> Result<Vec<Item>, Error> {
+    pub async fn player_items(&self, summoner: &str) -> Result<Vec<Item>, LcuResponse> {
         self.live_client("playeritems", Some(summoner)).await
     }
 
-    pub async fn event_data(&self, event_id: Option<i32>) -> Result<Events, Error> {
+    pub async fn event_data(&self, event_id: Option<i32>) -> Result<Events, LcuResponse> {
         let event_id = match event_id {
-            Some(id) => format!("?eventID={}", id),
+            Some(id) => format!("?eventID={id}"),
             None => "".to_owned(),
         };
-        let endpoint = format!("eventdata{}", event_id);
+        let endpoint = format!("eventdata{event_id}");
         self.live_client(&endpoint, None).await
     }
 
-    pub async fn game_stats(&self) -> Result<GameData, Error> {
+    pub async fn game_stats(&self) -> Result<GameData, LcuResponse> {
         self.live_client("gamestats", None).await
     }
 
@@ -126,10 +129,10 @@ impl InGameClient<'_> {
         &self,
         endpoint: &str,
         summoner: Option<&str>,
-    ) -> Result<R, Error> {
+    ) -> Result<R, LcuResponse> {
         let endpoint = summoner.map_or_else(
-            || format!("/liveclientdata/{}", endpoint),
-            |summoner| format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
+            || format!("/liveclientdata/{endpoint}"),
+            |summoner| format!("/liveclientdata/{endpoint}?summonerName={summoner}"),
         );
         let uri = uri_builder(self.url, &endpoint)?;
 
@@ -138,9 +141,12 @@ impl InGameClient<'_> {
             .uri(uri)
             .body(hyper::Body::empty());
 
-        request_template(Error::LeagueStoppedRunning, req, self.client, |bytes| {
-            serde_json::from_slice(&bytes).map_or(Err(Error::FailedParseJson), Ok)
-        })
+        request_template(
+            LcuResponse::LeagueStoppedRunning,
+            req,
+            self.client,
+            |bytes| serde_json::from_slice(&bytes).map_or(Err(LcuResponse::FailedParseJson), Ok),
+        )
         .await
     }
 }

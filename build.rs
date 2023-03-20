@@ -1,4 +1,4 @@
-#[cfg(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws"))]
+#[cfg(feature = "C")]
 fn main() {
     use std::env;
 
@@ -19,5 +19,5 @@ fn main() {
         .write_to_file("irelia.hpp");
 }
 
-#[cfg(not(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws")))]
+#[cfg(not(feature = "C"))]
 fn main() {}

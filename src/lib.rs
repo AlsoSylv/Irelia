@@ -1,7 +1,7 @@
 //! Irelia is a wrapper around the LoL native APIs, with a focus on modularity and compile size
 //! This crate has support for Windows, Linux, and MacOS, all of which have been tested to varying degrees
 
-#[cfg(any(feature = "c_rest", feature = "c_in_game", feature = "c_ws"))]
+#[cfg(feature = "C")]
 /// Functions for using Irelia in a C program
 pub mod c;
 #[cfg(feature = "in_game")]
@@ -24,7 +24,10 @@ pub mod ws;
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 /// Custom errors for the LCU
-pub enum Error {
+pub enum LcuResponse {
+    #[cfg(feature = "C")]
+    /// Things went as expected
+    Success = 0,
     /// Expected or input type are incorrect
     FailedParseJson = 10,
     /// The LCU stopped running

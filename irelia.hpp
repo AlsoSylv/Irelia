@@ -12,6 +12,30 @@ enum class EventTypeC {
   LcdEventCallback,
 };
 
+/// Custom errors for the LCU
+enum class LcuResponse {
+  /// Things went as expected
+  Success = 0,
+  /// Expected or input type are incorrect
+  FailedParseJson = 10,
+  /// The LCU stopped running
+  LCUStoppedRunning = 11,
+  /// The game stopped running
+  LeagueStoppedRunning = 12,
+  /// The following request is invalid
+  InvalidRequest = 13,
+  /// The request body is invalid
+  InvalidBody = 14,
+  /// The LCU was never running
+  LCUProcessNotRunning = 15,
+  /// Could not locate port for the LCU
+  PortNotFound = 16,
+  /// The sub process could not be spawned
+  CannotLaunchTerminal = 17,
+  /// Auth token for the LCU could not be found
+  AuthTokenNotFound = 18,
+};
+
 /// Enum representation of different team IDs
 enum class TeamID {
   ALL,
@@ -21,51 +45,30 @@ enum class TeamID {
   NEUTRAL,
 };
 
-/// Opaque type for storing the Rust client
-struct InGame;
+/// Struct that handles connections to the in-game API
+/// holding a refernce to the hyper client and url
+struct InGameClient;
 
-/// Opaque pointer to the client and tokio runtime
-struct Lcu;
+/// Struct with methods that handles connections to the LCU
+struct LCUClient;
 
-/// Opaque type that stores the client
-/// and the tokio runtime
-struct LcuWS;
+/// ```rs
+/// async fn web_socket() {
+///     use irelia::ws::LCUWebSocket;
+///
+///     let ws = LCUWebSocket::new().unwrap();
+///     ws.subscribe("OnJsonApiEvent");
+///     loop {
+///         let data = ws.client_reciver.unwrap();
+///     }
+/// }
+/// ```
+struct LCUWebSocket;
 
-/// Stores a handle to the in game API, if
-/// error != 0 then this handle is invalid
-/// and cannot be used
-struct NewInGame {
-  InGame *client;
-  int error;
-};
+template<typename T = void>
+struct ManuallyDrop;
 
-/// Stores a response from the in game API
-/// JSON should only be null if it errors
-struct InGameResponse {
-  char *json;
-  int error;
-};
-
-/// Creates a handle to a client connection
-/// if error != 0, then it did not connection
-/// and client is  invalid
-struct NewLCU {
-  Lcu *client;
-  int error;
-};
-
-/// Reponse from LCU endpoint, json can be null without
-/// error, because some endpoints do not respond
-struct LcuResponse {
-  char *json;
-  int error;
-};
-
-/// Handle to the LCU websocket
-struct NewWS {
-  LcuWS *client;
-  int error;
-};
+struct RT;
 
 /// Event to send to the socket, endpoint is ignored
 /// if you send JsonApiEvent and LcdEvent, and cannot
@@ -75,93 +78,89 @@ struct Event {
   const char *endpoint;
 };
 
-/// Holds JSON from the response, error can
-/// be 0 and json can be null if no event
-/// has been sent back
-struct LcuWsRes {
-  char *json;
-  int error;
-};
-
 extern "C" {
 
-NewInGame new_in_game();
+LcuResponse new_in_game(ManuallyDrop<InGameClient> *client);
 
-InGameResponse all_game_data(InGame *client);
+LcuResponse all_game_data(InGameClient *client, RT *rt, char **json);
 
-InGameResponse active_player(InGame *client);
+LcuResponse active_player(InGameClient *client, RT *rt, char **json);
 
-InGameResponse active_player_name(InGame *client);
+LcuResponse active_player_name(InGameClient *client, RT *rt, char **json);
 
-InGameResponse active_player_abilities(InGame *client);
+LcuResponse active_player_abilities(InGameClient *client, RT *rt, char **json);
 
-InGameResponse active_player_runes(InGame *client);
+LcuResponse active_player_runes(InGameClient *client, RT *rt, char **json);
 
-InGameResponse player_list(InGame *client, const TeamID *team);
+LcuResponse player_list(InGameClient *client, RT *rt, char **json, const TeamID *team);
 
-InGameResponse player_scores(InGame *client, const char *summoner);
+LcuResponse player_scores(InGameClient *client, RT *rt, char **json, const char *summoner);
 
-InGameResponse player_summoner_spells(InGame *client, const char *summoner);
+LcuResponse player_summoner_spells(InGameClient *client, RT *rt, char **json, const char *summoner);
 
-InGameResponse player_main_runes(InGame *client, const char *summoner);
+LcuResponse player_main_runes(InGameClient *client, RT *rt, char **json, const char *summoner);
 
-InGameResponse player_items(InGame *client, const char *summoner);
+LcuResponse player_items(InGameClient *client, RT *rt, char **json, const char *summoner);
 
-InGameResponse event_data(InGame *client, const int *event_id);
+LcuResponse event_data(InGameClient *client, RT *rt, char **json, const int *event_id);
 
-InGameResponse game_stats(InGame *client);
+LcuResponse game_stats(InGameClient *client, RT *rt, char **json);
 
 /// Drops in game handle
-void in_game_drop(NewInGame game);
+void in_game_drop(ManuallyDrop<InGameClient> *game);
 
 /// Drops the game response
-void in_game_drop_res(InGameResponse res);
+void in_game_drop_res(char **res);
 
 /// Creates a new LCU handle
-NewLCU lcu_new();
+LcuResponse lcu_new(LCUClient **client);
 
 /// Makes a get request to the LCU
-LcuResponse lcu_get(Lcu *client, const char *endpoint);
+LcuResponse lcu_get(LCUClient *client, RT *rt, char *endpoint, char **c_json);
 
 /// Makes a post request to the LCU
 /// takes a string as a body that
 /// must be json, else it will panic
-LcuResponse lcu_post(Lcu *client, const char *endpoint, const char *body);
+LcuResponse lcu_post(LCUClient *client, RT *rt, char *endpoint, char *body, char **c_json);
 
 /// Makes a put request to the LCU
 /// takes a string as a body that
 /// must be json, else it will panic
-LcuResponse lcu_put(Lcu *client, const char *endpoint, const char *body);
+LcuResponse lcu_put(LCUClient *client, RT *rt, char *endpoint, char *body, char **c_json);
 
 /// Makes a delete request to the LCU
-LcuResponse lcu_delete(Lcu *client, const char *endpoint);
+LcuResponse lcu_delete(LCUClient *client, RT *rt, char *endpoint, char **c_json);
 
 /// Makes a head request to the LCU
-LcuResponse lcu_head(Lcu *client, const char *endpoint);
+LcuResponse lcu_head(LCUClient *client, RT *rt, char *endpoint, char **c_json);
 
 /// Drops the client handle
-void lcu_drop(NewLCU client);
+void lcu_drop(LCUClient **client);
 
 /// Drops the client response
-void lcu_drop_res(LcuResponse res);
+void lcu_drop_res(char **res);
+
+RT *new_rt();
+
+void drop_rt(RT *rt);
 
 /// Creates a new handle for the web socket
-NewWS new_ws();
+LcuResponse new_ws(LCUWebSocket **client, RT *rt);
 
 /// Subscribes to a new web socket event
-void subscribe(LcuWS *client, Event event);
+void subscribe(LCUWebSocket *client, Event event);
 
 /// Unsubscribes from a web socket event
-void unsubscribe(LcuWS *client, Event event);
+void unsubscribe(LCUWebSocket *client, Event event);
 
 /// Requests to the event sent by the websocket, returns null
 /// if there is no event or if there is an error
-LcuWsRes next(LcuWS *client);
+LcuResponse next(LCUWebSocket *client, RT *rt, char **json);
 
 /// Drops the web socket handle
-void drop_ws(NewWS client);
+void drop_ws(LCUWebSocket **client);
 
 /// Drops the web socket response
-void drop_ws_res(LcuWsRes res);
+void drop_ws_res(char **res);
 
 } // extern "C"
