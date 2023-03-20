@@ -7,6 +7,7 @@ fn main() {
     cbindgen::Builder::new()
         .with_language(cbindgen::Language::C)
         .with_crate(&crate_dir)
+        .with_no_includes()
         .generate()
         .expect("Unable to generate bindings")
         .write_to_file("irelia.h");
@@ -14,6 +15,7 @@ fn main() {
     cbindgen::Builder::new()
         .with_language(cbindgen::Language::Cxx)
         .with_crate(&crate_dir)
+        .with_no_includes()
         .generate()
         .expect("Unable to generate bindings")
         .write_to_file("irelia.hpp");

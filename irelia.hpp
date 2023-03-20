@@ -1,9 +1,3 @@
-#include <cstdarg>
-#include <cstdint>
-#include <cstdlib>
-#include <ostream>
-#include <new>
-
 /// Event type you're requesting from the socket
 enum class EventTypeC {
   JsonApiEvent,
@@ -65,9 +59,6 @@ struct LCUClient;
 /// ```
 struct LCUWebSocket;
 
-template<typename T = void>
-struct ManuallyDrop;
-
 struct RT;
 
 /// Event to send to the socket, endpoint is ignored
@@ -80,7 +71,7 @@ struct Event {
 
 extern "C" {
 
-LcuResponse new_in_game(ManuallyDrop<InGameClient> *client);
+LcuResponse new_in_game(InGameClient **client);
 
 LcuResponse all_game_data(InGameClient *client, RT *rt, char **json);
 
@@ -107,7 +98,7 @@ LcuResponse event_data(InGameClient *client, RT *rt, char **json, const int *eve
 LcuResponse game_stats(InGameClient *client, RT *rt, char **json);
 
 /// Drops in game handle
-void in_game_drop(ManuallyDrop<InGameClient> *game);
+void in_game_drop(InGameClient **game);
 
 /// Drops the game response
 void in_game_drop_res(char **res);

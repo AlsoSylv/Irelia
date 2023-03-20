@@ -1,4 +1,5 @@
 #include "../irelia.hpp"
+#include "iostream"
 
 int main(void) {
 
@@ -14,7 +15,7 @@ int main(void) {
         return -1;
     }
 
-    printf("%s", json);
+    std::cout << json;
 
     drop_rt(rt);
     lcu_drop(&client);

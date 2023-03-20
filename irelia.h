@@ -1,8 +1,3 @@
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-
 /**
  * Event type you're requesting from the socket
  */
@@ -108,7 +103,7 @@ typedef struct Event {
   const char *endpoint;
 } Event;
 
-enum LcuResponse new_in_game(struct InGameClient *client);
+enum LcuResponse new_in_game(struct InGameClient **client);
 
 enum LcuResponse all_game_data(struct InGameClient *client, struct RT *rt, char **json);
 
@@ -155,7 +150,7 @@ enum LcuResponse game_stats(struct InGameClient *client, struct RT *rt, char **j
 /**
  * Drops in game handle
  */
-void in_game_drop(struct InGameClient *game);
+void in_game_drop(struct InGameClient **game);
 
 /**
  * Drops the game response

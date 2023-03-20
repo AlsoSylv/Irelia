@@ -1,7 +1,6 @@
 use serde_json::Value;
 use std::{
     ffi::{c_char, c_int, CStr, CString},
-    mem::ManuallyDrop,
     ptr::NonNull,
 };
 
@@ -13,10 +12,10 @@ use crate::{
 use super::runtime::RT;
 
 #[no_mangle]
-pub unsafe extern "C" fn new_in_game(client: *mut ManuallyDrop<InGameClient>) -> LcuResponse {
+pub unsafe extern "C" fn new_in_game(client: Option<NonNull<*mut InGameClient>>) -> LcuResponse {
     match InGameClient::new() {
         Ok(in_game_client) => {
-            *client = ManuallyDrop::new(in_game_client);
+            *client.unwrap().as_ptr() = Box::into_raw(Box::new(in_game_client));
             LcuResponse::Success
         }
         Err(err) => err,
@@ -161,8 +160,8 @@ pub unsafe extern "C" fn game_stats(
 
 /// Drops in game handle
 #[no_mangle]
-pub unsafe extern "C" fn in_game_drop(game: &mut ManuallyDrop<InGameClient>) {
-    ManuallyDrop::drop(game)
+pub unsafe extern "C" fn in_game_drop(game: *mut *mut InGameClient) {
+    drop(Box::from_raw(*game))
 }
 
 /// Drops the game response
