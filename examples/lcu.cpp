@@ -1,5 +1,3 @@
-#define REST 0;
-
 #include "../irelia.h" 
 #include "iostream"
 

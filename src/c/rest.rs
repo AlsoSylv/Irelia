@@ -178,12 +178,14 @@ fn generic_request(
 }
 
 /// Drops the client handle
+/// SAFETY: DO not pass null pointers
 #[no_mangle]
 pub unsafe extern "C" fn lcu_drop(client: *mut *mut LCUClient) {
     drop(Box::from_raw(*client))
 }
 
 /// Drops the client response
+/// SAFETY: Do not pass null pointers
 #[no_mangle]
 pub unsafe extern "C" fn lcu_drop_res(res: *mut *mut c_char) {
     drop(CString::from_raw(*res));

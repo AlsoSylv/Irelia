@@ -6,9 +6,3 @@ cpp_compat = true
 
 [export.rename]
 "CFuture" = "Future"
-
-[defines]
-"feature = rest" = "REST"
-"feature = in_game" = "IN_GAME"
-"feature = ws" = "WS"
-"feautre = C" = "C"

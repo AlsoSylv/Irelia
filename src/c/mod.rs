@@ -1,3 +1,5 @@
+//! Docs here should closely match the docs
+//! of their Rust counterparts
 #[cfg(feature = "in_game")]
 mod in_game;
 #[cfg(feature = "rest")]

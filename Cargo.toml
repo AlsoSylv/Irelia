@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
@@ -51,9 +51,7 @@ cbindgen = "0.24.3"
 
 [features]
 default = [
-    "C",
-    "rest",
-    "in_game"
+    "rest"
     ]
 full = [
     "rest", 
