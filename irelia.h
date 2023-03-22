@@ -148,69 +148,81 @@ enum LcuResponse new_in_game(struct InGameClient **client);
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse all_game_data(struct InGameClient *client, struct RT *rt, char **json);
-#endif
-
-#if defined(IN_GAME)
-enum LcuResponse active_player(struct InGameClient *client, struct RT *rt, char **json);
-#endif
-
-#if defined(IN_GAME)
-enum LcuResponse active_player_name(struct InGameClient *client, struct RT *rt, char **json);
-#endif
-
-#if defined(IN_GAME)
-enum LcuResponse active_player_abilities(struct InGameClient *client, struct RT *rt, char **json);
-#endif
-
-#if defined(IN_GAME)
-enum LcuResponse active_player_runes(struct InGameClient *client, struct RT *rt, char **json);
-#endif
-
-#if defined(IN_GAME)
-enum LcuResponse player_list(struct InGameClient *client,
+struct Future *all_game_data(struct InGameClient *client,
                              struct RT *rt,
-                             char **json,
-                             const enum TeamID *team);
+                             void (*func)(char*, enum LcuResponse));
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse player_scores(struct InGameClient *client,
-                               struct RT *rt,
-                               char **json,
-                               const char *summoner);
+struct Future *active_player(struct InGameClient *client,
+                             struct RT *rt,
+                             void (*func)(char*, enum LcuResponse));
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse player_summoner_spells(struct InGameClient *client,
-                                        struct RT *rt,
-                                        char **json,
-                                        const char *summoner);
+struct Future *active_player_name(struct InGameClient *client,
+                                  struct RT *rt,
+                                  void (*func)(char*, enum LcuResponse));
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse player_main_runes(struct InGameClient *client,
+struct Future *active_player_abilities(struct InGameClient *client,
+                                       struct RT *rt,
+                                       void (*func)(char*, enum LcuResponse));
+#endif
+
+#if defined(IN_GAME)
+struct Future *active_player_runes(struct InGameClient *client,
                                    struct RT *rt,
-                                   char **json,
-                                   const char *summoner);
+                                   void (*func)(char*, enum LcuResponse));
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse player_items(struct InGameClient *client,
-                              struct RT *rt,
-                              char **json,
-                              const char *summoner);
+struct Future *player_list(struct InGameClient *client,
+                           struct RT *rt,
+                           void (*func)(char*, enum LcuResponse),
+                           const enum TeamID *team);
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse event_data(struct InGameClient *client,
+struct Future *player_scores(struct InGameClient *client,
+                             struct RT *rt,
+                             void (*func)(char*, enum LcuResponse),
+                             char *summoner);
+#endif
+
+#if defined(IN_GAME)
+struct Future *player_summoner_spells(struct InGameClient *client,
+                                      struct RT *rt,
+                                      void (*func)(char*, enum LcuResponse),
+                                      char *summoner);
+#endif
+
+#if defined(IN_GAME)
+struct Future *player_main_runes(struct InGameClient *client,
+                                 struct RT *rt,
+                                 void (*func)(char*, enum LcuResponse),
+                                 char *summoner);
+#endif
+
+#if defined(IN_GAME)
+struct Future *player_items(struct InGameClient *client,
                             struct RT *rt,
-                            char **json,
-                            const int *event_id);
+                            void (*func)(char*, enum LcuResponse),
+                            char *summoner);
 #endif
 
 #if defined(IN_GAME)
-enum LcuResponse game_stats(struct InGameClient *client, struct RT *rt, char **json);
+struct Future *event_data(struct InGameClient *client,
+                          struct RT *rt,
+                          void (*func)(char*, enum LcuResponse),
+                          const int *event_id);
+#endif
+
+#if defined(IN_GAME)
+struct Future *game_stats(struct InGameClient *client,
+                          struct RT *rt,
+                          void (*func)(char*, enum LcuResponse));
 #endif
 
 #if defined(IN_GAME)

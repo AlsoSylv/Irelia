@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use crate::{rest::LCUClient, LcuResponse};
 
-use super::runtime::RT;
+use super::{runtime::RT, utils::json_to_cstring};
 
 pub struct CFuture {
     pub fut: JoinHandle<()>,
@@ -175,12 +175,6 @@ fn generic_request(
             };
         }),
     }))
-}
-
-fn json_to_cstring(json: Value) -> *mut i8 {
-    let json_string = json.to_string();
-    let json_c_string = CString::new(json_string).unwrap();
-    json_c_string.into_raw()
 }
 
 /// Drops the client handle
