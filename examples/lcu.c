@@ -1,24 +1,28 @@
+#define REST 0;
+
 #include "../irelia.h"
 #include <stdio.h>
+#include <stdbool.h>
+
+void printer(char* string, LcuResponse num) {
+    printf("%s", string);
+    printf("%d", num);
+}
 
 int main(void) {
-
-    LCUClient* client;
-    if (lcu_new(&client)) {
-        return -1;
-    }
-
     RT* rt = new_rt();
-
-    char* json;
-    if (lcu_get(client, rt, "/lol-champ-select/v1/current-champion", &json)) {
+    LCUClient* client;
+    LcuResponse error = lcu_new(&client);
+    if (!error) {
         return -1;
     }
 
-    printf("%s", json);
+    Future* future = lcu_get(client, rt, "/lol-champ-select/v1/current-champion", *printer);
 
-    drop_rt(rt);
-    lcu_drop(&client);
-
-    return 0;
+    while (true)
+        if (is_finished(future))
+            break;
+    
+    await_future(future, rt);
+    drop_future(&future);
 }

@@ -6,10 +6,7 @@ pub struct RT {
 
 impl RT {
     fn new() -> Self {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("PAIN");
+        let rt = Runtime::new().expect("pain");
         RT { rt }
     }
 }
