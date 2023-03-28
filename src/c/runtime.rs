@@ -17,7 +17,6 @@ pub extern "C" fn new_rt() -> *mut RT {
     Box::into_raw(Box::new(RT::new()))
 }
 
-
 /// Drops the tokio runtime, do not pass null
 #[no_mangle]
 pub unsafe extern "C" fn drop_rt(rt: *mut RT) {

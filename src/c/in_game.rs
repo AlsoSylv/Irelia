@@ -207,7 +207,7 @@ pub unsafe extern "C" fn in_game_drop_res(res: *mut *mut c_char) {
 }
 
 /// SAFETY: This function assumes that no pointers are null
-/// and that the client will not be dropped before futures 
+/// and that the client will not be dropped before futures
 /// are all completed
 unsafe fn in_game_live_client(
     client: Option<NonNull<InGameClient<'static>>>,
