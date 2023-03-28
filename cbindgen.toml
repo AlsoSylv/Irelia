@@ -1,0 +1,8 @@
+language = "C"
+
+no_includes = true
+
+cpp_compat = true
+
+[export.rename]
+"CFuture" = "Future"

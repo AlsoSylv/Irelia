@@ -1,3 +1,7 @@
+## Irelia 0.3.0
+- Change name "Errors" to LCUResponses
+- Expose an async C API
+
 ## Irelia 0.2.0
 
 - Updated Websocket System

@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
@@ -29,7 +29,7 @@ default-features = false
 
 [dependencies.tokio]
 version = "1.24"
-features = ["sync", "rt"]
+features = ["sync", "rt", "rt-multi-thread"]
 optional = true
 
 [dependencies.tokio-tungstenite]
@@ -45,6 +45,9 @@ optional = true
 [dev-dependencies]
 rand = "0.8.5"
 base64 = "0.21.0"
+
+[build-dependencies]
+cbindgen = "0.24.3"
 
 [features]
 default = [
@@ -75,6 +78,12 @@ ws = [
     "dep:tokio", 
     "dep:futures-util"
     ]
+C = [
+    "dep:tokio",
+]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[lib]
+crate-type = ["cdylib"]
