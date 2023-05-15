@@ -1,37 +1,21 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use futures_util::{SinkExt, Stream, StreamExt};
 use serde_json::Value;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
 use tokio_tungstenite::{
-    connect_async_tls_with_config,
-    tungstenite::{client::IntoClientRequest, http::HeaderValue},
-    Connector,
+    connect_async_tls_with_config, tungstenite::{client::IntoClientRequest, http::HeaderValue}, Connector,
 };
 
 use crate::{
-    utils::{process_info::get_port_and_auth, setup_tls::TLS_CONNECTOR},
+    utils::{process_info::get_running_client, setup_tls::TLS_CONFIG},
     Error,
 };
 
-/// ```rs
-/// async fn web_socket() {
-///     use irelia::ws::LCUWebSocket;
-///
-///     let ws = LCUWebSocket::new().unwrap();
-///     ws.subscribe("OnJsonApiEvent");
-///     loop {
-///         let data = ws.client_reciver.unwrap();
-///     }
-/// }
-/// ```
-pub struct LCUWebSocket {
-    ws_sender: UnboundedSender<(RequestType, EventType)>,
-    handle: JoinHandle<()>,
-    client_reciver: UnboundedReceiver<Result<Value, Error>>,
-}
-
+/// Different LCU WebSocket request types
 #[derive(PartialEq, Clone)]
 pub enum RequestType {
     Welcome = 0,
@@ -55,47 +39,34 @@ pub enum EventType {
     OnLcdEventCallback(String),
 }
 
-impl LCUWebSocket {
-    /// Connect to the LCU Web Socket, Error if it fails or the client is not running
-    ///
-    /// ## Example:
-    /// ```rs
-    /// fn main() {
-    ///     let mut websocket = ws::LCUWebSocket::new().await.unwrap();
-    ///
-    ///     websocket.subscribe(ws::EventType::OnJsonApiEventCallback(String::from(
-    ///         "/lol-champ-select/v1/current-champion",
-    ///     )));
-    ///
-    ///     loop {
-    ///         if let Some(event) = websocket.next().await {
-    ///             println!("{:?}", event);
-    ///         }
-    ///     }
-    /// }```
-    ///
-    pub async fn new() -> Result<Self, Error> {
-        let tls = TLS_CONNECTOR.clone();
-        let connector = Connector::NativeTls(tls);
-        let port_pass = get_port_and_auth()?;
-        let mut url = format!("wss://127.0.0.1:{}", port_pass.0)
-            .into_client_request()
-            .unwrap();
-        url.headers_mut().insert(
-            "Authorization",
-            HeaderValue::from_str(&format!("Basic {}", port_pass.1)).unwrap(),
-        );
-        let Ok((stream, _)) = connect_async_tls_with_config(url, None, Some(connector)).await else {
-            return Err(Error::LCUStoppedRunning);
-        };
-        let (mut write, mut read) = stream.split();
-        let (ws_sender, mut ws_reciver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
-        let (client_sender, client_reciver) = mpsc::unbounded_channel::<Result<Value, Error>>();
+pub struct LCUWebSocket {
+    ws_sender: UnboundedSender<(RequestType, EventType)>,
+    handle: JoinHandle<()>,
+    client_reciever: UnboundedReceiver<Result<Value, Error>>,
+}
 
-        let handle: JoinHandle<()> = tokio::spawn(async move {
-            let mut active_commands: HashSet<String> = HashSet::new();
+impl LCUWebSocket {
+    /// Creates a new connection to the LCU websocket
+    pub async fn new() -> Result<Self, Error> {
+        let tls = TLS_CONFIG.clone();
+        let connector = Connector::Rustls(Arc::new(tls));
+        let (url, pass) = get_running_client()?;
+        let mut req = format!("wss://{}", url).into_client_request().unwrap();
+        req.headers_mut()
+            .insert("Authorization", HeaderValue::from_str(&pass).unwrap());
+
+        let (stream, _) = connect_async_tls_with_config(url, None, false, Some(connector))
+            .await
+            .map_err(Error::WebsocketError)?;
+
+        let (mut write, mut read) = stream.split();
+        let (ws_sender, mut ws_reciever) = mpsc::unbounded_channel::<(RequestType, _)>();
+        let (client_sender, client_reciever) = mpsc::unbounded_channel();
+
+        let handle = tokio::spawn(async move {
+            let mut active_commands = HashSet::new();
             loop {
-                if let Ok((code, endpoint)) = ws_reciver.try_recv() {
+                if let Ok((code, endpoint)) = ws_reciever.try_recv() {
                     let endpoint = match endpoint {
                         EventType::OnJsonApiEvent => String::from("OnJsonApiEvent"),
                         EventType::OnLcdEvent => String::from("OnLcdEvent"),
@@ -116,7 +87,9 @@ impl LCUWebSocket {
                     };
 
                     if write.send(command.into()).await.is_err() {
-                        client_sender.send(Err(Error::LCUStoppedRunning)).unwrap();
+                        client_sender
+                            .send(Err(Error::LCUProcessNotRunning))
+                            .unwrap();
                     };
                 };
 
@@ -137,7 +110,7 @@ impl LCUWebSocket {
         Ok(Self {
             ws_sender,
             handle,
-            client_reciver,
+            client_reciever,
         })
     }
 
@@ -170,6 +143,6 @@ impl Stream for LCUWebSocket {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        self.client_reciver.poll_recv(cx)
+        self.client_reciever.poll_recv(cx)
     }
 }

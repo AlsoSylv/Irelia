@@ -1,80 +1,54 @@
-//! The methods and types in this crate all line up with the ones
-//! in Riots documentation, and should be straight forward to use
-//! this module is templated in a way that adding or removing
-//! methods should be simple and easy
-
-use hyper::{client::HttpConnector, Request};
-use hyper_tls::HttpsConnector;
-use once_cell::sync::Lazy;
-use serde::de::DeserializeOwned;
-
-use crate::{
-    utils::request::{request_template, uri_builder, HYPER_CLIENT},
-    Error,
-};
-
-use self::types::{
-    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
-    Scores, SummonerSpells,
-};
+//! Module for the LoL in_game API, docs have been copied /
+//! from their [official counterparts](https://developer.riotgames.com/docs/lol#game-client-api), and types are all
+//! generated from the official JSON snippets
 
 pub mod types;
 
-/// Struct that handles connections to the in-game API
-/// holding a refernce to the hyper client and url
-pub struct InGameClient<'a> {
-    client: &'a Lazy<hyper::Client<HttpsConnector<HttpConnector>>>,
-    url: &'a str,
-}
+use serde::de::DeserializeOwned;
 
-/// Enum representation of different team IDs
-pub enum TeamID {
-    ALL,
-    UNKNOWN,
-    ORDER,
-    CHAOS,
-    NEUTRAL,
+use crate::{utils::requests::RequestClient, Error};
+
+use self::types::*;
+
+pub struct InGameClient<'a> {
+    client: RequestClient<'a>,
 }
 
 impl InGameClient<'_> {
-    /// Make a connect to the in game API, does not check if the game is running when connecting
-    pub fn new<'a>() -> Result<InGameClient<'a>, Error> {
-        let client = &HYPER_CLIENT;
-        let url = "127.0.0.1:2999";
-        Ok(InGameClient { client, url })
+    pub fn new<'a>() -> InGameClient<'a> {
+        InGameClient {
+            client: RequestClient::new(String::from("127.0.0.1:2999"), None),
+        }
     }
 
-    /// Gets data from the "liveclientdata/allgamedata" endpoint of the ingame api
+    /// Get all available data.
     ///
-    /// ```rust
-    /// async fn all_game_data() {
-    ///     use irelia::in_game::InGameClient;
-    ///     
-    ///     let client = InGameClient::new().unwrap();
-    ///     let all_game_data = client.all_game_data().await.unwrap();
-    ///     println!("{:?}", all_game_data);
-    /// }
-    /// ```
+    /// A sample response can be found [here](https://static.developer.riotgames.com/docs/lol/liveclientdata_sample.json).
     pub async fn all_game_data(&self) -> Result<AllGameData, Error> {
         self.live_client("allgamedata", None).await
     }
 
+    /// Get all data about the active player.
     pub async fn active_player(&self) -> Result<ActivePlayer, Error> {
         self.live_client("activeplayer", None).await
     }
 
+    /// Returns the player name.
     pub async fn active_player_name(&self) -> Result<String, Error> {
         self.live_client("activeplayername", None).await
     }
 
+    /// Get Abilities for the active player.
     pub async fn active_player_abilities(&self) -> Result<Abilities, Error> {
         self.live_client("activeplayerabilities", None).await
     }
 
+    /// Retrieve the full list of runes for the active player.
     pub async fn active_player_runes(&self) -> Result<FullRunes, Error> {
         self.live_client("activeplayerrunes", None).await
     }
 
+    /// Retrieve the list of heroes in the game and their stats.
     pub async fn player_list(&self, team: Option<TeamID>) -> Result<Vec<AllPlayer>, Error> {
         let team = team.map_or_else(
             || "",
@@ -91,23 +65,28 @@ impl InGameClient<'_> {
         self.live_client(&endpoint, None).await
     }
 
+    /// Retrieve the list of the current scores for the player.
     pub async fn player_scores(&self, summoner: &str) -> Result<Scores, Error> {
         self.live_client("playerscores", Some(summoner)).await
     }
 
+    /// Retrieve the list of the summoner spells for the player.
     pub async fn player_summoner_spells(&self, summoner: &str) -> Result<SummonerSpells, Error> {
         self.live_client("playersummonerspells", Some(summoner))
             .await
     }
 
+    /// Retrieve the basic runes of any player.
     pub async fn player_main_runes(&self, summoner: &str) -> Result<Runes, Error> {
         self.live_client("playermainrunes", Some(summoner)).await
     }
 
+    /// Retrieve the list of items for the player.
     pub async fn player_items(&self, summoner: &str) -> Result<Vec<Item>, Error> {
         self.live_client("playeritems", Some(summoner)).await
     }
 
+    /// Get a list of events that have occurred in the game.
     pub async fn event_data(&self, event_id: Option<i32>) -> Result<Events, Error> {
         let event_id = match event_id {
             Some(id) => format!("?eventID={}", id),
@@ -117,29 +96,25 @@ impl InGameClient<'_> {
         self.live_client(&endpoint, None).await
     }
 
+    /// Basic data about the game.
     pub async fn game_stats(&self) -> Result<GameData, Error> {
         self.live_client("gamestats", None).await
     }
 
-    async fn live_client<R: DeserializeOwned>(
-        &self,
-        endpoint: &str,
-        summoner: Option<&str>,
-    ) -> Result<R, Error> {
+    async fn live_client<R>(&self, endpoint: &str, summoner: Option<&str>) -> Result<R, Error>
+    where
+        R: DeserializeOwned,
+    {
         let endpoint = summoner.map_or_else(
             || format!("/liveclientdata/{}", endpoint),
             |summoner| format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
         );
-        let uri = uri_builder(self.url, &endpoint)?;
 
-        let req = Request::builder()
-            .method("GET")
-            .uri(uri)
-            .body(hyper::Body::empty());
-
-        request_template(Error::LeagueStoppedRunning, req, self.client, |bytes| {
-            serde_json::from_slice(&bytes).map_or(Err(Error::FailedParseJson), Ok)
-        })
-        .await
+        self.client
+            .request_template::<(), R>(&endpoint, "GET", None, |bytes| {
+                serde_json::from_slice(&bytes)
+                    .map_or_else(|err| Err(Error::SerdeJsonError(err)), Ok)
+            })
+            .await
     }
 }

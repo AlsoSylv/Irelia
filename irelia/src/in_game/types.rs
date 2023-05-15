@@ -280,3 +280,12 @@ pub struct GameData {
     pub map_number: i64,
     pub map_terrain: String,
 }
+
+/// Enum representation of different team IDs
+pub enum TeamID {
+    ALL,
+    UNKNOWN,
+    ORDER,
+    CHAOS,
+    NEUTRAL,
+}
