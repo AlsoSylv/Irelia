@@ -9,7 +9,7 @@ use crate::{
 
 /// Struct representing a connection to the LCU
 pub struct LCUClient<'a> {
-    client: &'a RequestClient<'a>,
+    client: &'a RequestClient,
     url: String,
     auth_header: Option<String>,
 }

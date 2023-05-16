@@ -4,36 +4,29 @@ use hyper::body::Bytes;
 use hyper::client::HttpConnector;
 use hyper::header::AUTHORIZATION;
 use hyper::http::uri;
-use hyper::{Client, Request};
+use hyper::Request;
 use hyper_rustls::HttpsConnector;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::sync::LazyLock;
 
 use super::setup_tls::TLS_CONFIG;
 
-#[cfg(any(feature = "in_game", feature = "rest"))]
-/// Sets up a hyper client with a TLS connector and riots pem certificate
-pub(crate) static HYPER_CLIENT: LazyLock<Client<HttpsConnector<HttpConnector>>> =
-    LazyLock::new(|| {
+pub struct RequestClient {
+    client: hyper::Client<HttpsConnector<HttpConnector>>,
+}
+
+impl RequestClient {
+    /// Creates a client to be passed to the LCU and in game structs
+    pub fn new() -> RequestClient {
         let tls = TLS_CONFIG.clone();
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(tls)
             .https_or_http()
             .enable_http1()
             .build();
-        hyper::Client::builder().build::<_, hyper::Body>(https)
-    });
+        let client = hyper::Client::builder().build::<_, hyper::Body>(https);
 
-pub struct RequestClient<'a> {
-    client: &'a LazyLock<hyper::Client<HttpsConnector<HttpConnector>>>,
-}
-
-impl RequestClient<'_> {
-    pub fn new<'a>() -> RequestClient<'a> {
-        RequestClient {
-            client: &HYPER_CLIENT,
-        }
+        RequestClient { client }
     }
 
     pub(crate) async fn request_template<T, R>(

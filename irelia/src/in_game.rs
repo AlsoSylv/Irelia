@@ -11,7 +11,7 @@ use crate::{utils::requests::RequestClient, Error};
 use self::types::*;
 
 pub struct InGameClient<'a> {
-    client: &'a RequestClient<'a>,
+    client: &'a RequestClient,
     url: &'a str,
 }
 
