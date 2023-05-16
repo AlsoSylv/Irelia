@@ -11,13 +11,15 @@ use crate::{utils::requests::RequestClient, Error};
 use self::types::*;
 
 pub struct InGameClient<'a> {
-    client: RequestClient<'a>,
+    client: &'a RequestClient<'a>,
+    url: &'a str,
 }
 
 impl InGameClient<'_> {
-    pub fn new<'a>() -> InGameClient<'a> {
+    pub fn new<'a>(client: &'a RequestClient) -> InGameClient<'a> {
         InGameClient {
-            client: RequestClient::new(String::from("127.0.0.1:2999"), None),
+            client,
+            url: "127.0.0.1:2999",
         }
     }
 
@@ -111,7 +113,7 @@ impl InGameClient<'_> {
         );
 
         self.client
-            .request_template::<(), R>(&endpoint, "GET", None, |bytes| {
+            .request_template::<(), R>(self.url, &endpoint, "GET", None, None, |bytes| {
                 serde_json::from_slice(&bytes)
                     .map_or_else(|err| Err(Error::SerdeJsonError(err)), Ok)
             })

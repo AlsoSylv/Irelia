@@ -7,7 +7,9 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_tungstenite::{
-    connect_async_tls_with_config, tungstenite::{client::IntoClientRequest, http::HeaderValue}, Connector,
+    connect_async_tls_with_config,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue},
+    Connector,
 };
 
 use crate::{

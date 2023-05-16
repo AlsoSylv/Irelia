@@ -26,25 +26,23 @@ pub(crate) static HYPER_CLIENT: LazyLock<Client<HttpsConnector<HttpConnector>>> 
     });
 
 pub struct RequestClient<'a> {
-    url: String,
     client: &'a LazyLock<hyper::Client<HttpsConnector<HttpConnector>>>,
-    auth_header: Option<String>,
 }
 
 impl RequestClient<'_> {
-    pub(crate) fn new<'a>(url: String, auth_header: Option<String>) -> RequestClient<'a> {
+    pub fn new<'a>() -> RequestClient<'a> {
         RequestClient {
-            url,
             client: &HYPER_CLIENT,
-            auth_header,
         }
     }
 
     pub(crate) async fn request_template<T, R>(
         &self,
+        url: &str,
         endpoint: &str,
         method: &str,
         body: Option<T>,
+        auth_header: Option<&str>,
         return_logic: fn(bytes: Bytes) -> Result<R, Error>,
     ) -> Result<R, Error>
     where
@@ -53,7 +51,7 @@ impl RequestClient<'_> {
     {
         let uri = uri::Builder::new()
             .scheme("https")
-            .authority(self.url.as_bytes())
+            .authority(url.as_bytes())
             .path_and_query(endpoint)
             .build()
             .map_or_else(|err| Err(Error::HyperHttpError(err)), Ok)?;
@@ -68,7 +66,7 @@ impl RequestClient<'_> {
             },
         )?;
 
-        let req = match &self.auth_header {
+        let req = match auth_header {
             Some(header) => Request::builder()
                 .method(method)
                 .uri(uri)

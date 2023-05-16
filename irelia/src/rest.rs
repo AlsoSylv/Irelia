@@ -9,7 +9,9 @@ use crate::{
 
 /// Struct representing a connection to the LCU
 pub struct LCUClient<'a> {
-    client: RequestClient<'a>,
+    client: &'a RequestClient<'a>,
+    url: String,
+    auth_header: Option<String>,
 }
 
 /// Enum representing the different requests that can be sent to the LCU
@@ -44,10 +46,12 @@ impl LCUClient<'_> {
     /// to spin up the child process, or fails to get data from the client.
     /// On Linux, this can happen well the client launches, but on windows
     /// it should be possible to connect well it spins up.
-    pub fn new<'a>() -> Result<LCUClient<'a>, Error> {
+    pub fn new<'a>(client: &'a RequestClient) -> Result<LCUClient<'a>, Error> {
         let port_pass = get_running_client()?;
         Ok(LCUClient {
-            client: RequestClient::new(port_pass.0, Some(port_pass.1)),
+            client,
+            url: port_pass.0,
+            auth_header: Some(port_pass.1),
         })
     }
 
@@ -139,21 +143,30 @@ impl LCUClient<'_> {
         R: DeserializeOwned,
     {
         self.client
-            .request_template(endpoint, method, body, |bytes| {
-                if bytes.is_empty() {
-                    Ok(None)
-                } else {
-                    serde_json::from_slice(&bytes)
-                        .map(|value| Ok(Some(value)))
-                        .map_or_else(|err| Err(Error::SerdeJsonError(err)), Ok)?
-                }
-            })
+            .request_template(
+                &self.url,
+                endpoint,
+                method,
+                body,
+                self.auth_header.as_deref(),
+                |bytes| {
+                    if bytes.is_empty() {
+                        Ok(None)
+                    } else {
+                        serde_json::from_slice(&bytes)
+                            .map(|value| Ok(Some(value)))
+                            .map_or_else(|err| Err(Error::SerdeJsonError(err)), Ok)?
+                    }
+                },
+            )
             .await
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::requests::RequestClient;
+
     #[tokio::test]
     async fn batch_test() {
         use crate::rest::{BatchRequests, LCUClient, RequestType};
@@ -174,8 +187,9 @@ mod tests {
               "title": "Test Build",
             }
         );
+        let client = RequestClient::new();
 
-        let client = LCUClient::new().unwrap();
+        let client = LCUClient::new(&client).unwrap();
         let id = &client
             .get::<serde_json::Value>("/lol-summoner/v1/current-summoner")
             .await

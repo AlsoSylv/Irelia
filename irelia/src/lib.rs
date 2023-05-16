@@ -4,7 +4,7 @@
 pub mod in_game;
 #[cfg(feature = "rest")]
 pub mod rest;
-pub(crate) mod utils;
+pub mod utils;
 #[cfg(feature = "ws")]
 pub mod ws;
 
