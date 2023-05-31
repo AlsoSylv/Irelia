@@ -1,19 +1,14 @@
-use crate::Error;
+use crate::LCUError;
 
+use crate::RequestClient;
 use hyper::body::Bytes;
-use hyper::client::HttpConnector;
 use hyper::header::AUTHORIZATION;
 use hyper::http::uri;
 use hyper::Request;
-use hyper_rustls::HttpsConnector;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use super::setup_tls::TLS_CONFIG;
-
-pub struct RequestClient {
-    client: hyper::Client<HttpsConnector<HttpConnector>>,
-}
 
 impl RequestClient {
     /// Creates a client to be passed to the LCU and in game structs
@@ -36,8 +31,8 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        return_logic: fn(bytes: Bytes) -> Result<R, Error>,
-    ) -> Result<R, Error>
+        return_logic: fn(bytes: Bytes) -> Result<R, LCUError>,
+    ) -> Result<R, LCUError>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -47,13 +42,13 @@ impl RequestClient {
             .authority(url.as_bytes())
             .path_and_query(endpoint)
             .build()
-            .map_or_else(|err| Err(Error::HyperHttpError(err)), Ok)?;
+            .map_or_else(|err| Err(LCUError::HyperHttpError(err)), Ok)?;
 
         let body = body.map_or_else(
             || Ok(hyper::Body::empty()),
             |body| {
                 serde_json::value::to_value(body).map_or_else(
-                    |err| Err(Error::SerdeJsonError(err)),
+                    |err| Err(LCUError::SerdeJsonError(err)),
                     |json| Ok(hyper::Body::from(json.to_string())),
                 )
             },
@@ -67,13 +62,23 @@ impl RequestClient {
                 .body(body),
             None => Request::builder().method(method).uri(uri).body(body),
         }
-        .map_err(Error::HyperHttpError)?;
+        .map_err(LCUError::HyperHttpError)?;
 
-        let mut res = self.client.request(req).await.map_err(Error::HyperError)?;
+        let mut res = self
+            .client
+            .request(req)
+            .await
+            .map_err(LCUError::HyperError)?;
         let body = res.body_mut();
         match hyper::body::to_bytes(body).await {
             Ok(bytes) => return_logic(bytes),
             Err(err) => panic!("{}", err),
         }
+    }
+}
+
+impl Default for RequestClient {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,3 +1,5 @@
+//! Module containing all the data on the websocket LCU bindings 
+
 use std::{collections::HashSet, sync::Arc};
 
 use futures_util::{SinkExt, Stream, StreamExt};
@@ -14,7 +16,7 @@ use tokio_tungstenite::{
 
 use crate::{
     utils::{process_info::get_running_client, setup_tls::TLS_CONFIG},
-    Error,
+    LCUError,
 };
 
 /// Different LCU WebSocket request types
@@ -41,15 +43,16 @@ pub enum EventType {
     OnLcdEventCallback(String),
 }
 
+/// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
-    client_reciever: UnboundedReceiver<Result<Value, Error>>,
+    client_reciever: UnboundedReceiver<Result<Value, LCUError>>,
 }
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
-    pub async fn new() -> Result<Self, Error> {
+    pub async fn new() -> Result<Self, LCUError> {
         let tls = TLS_CONFIG.clone();
         let connector = Connector::Rustls(Arc::new(tls));
         let (url, pass) = get_running_client()?;
@@ -59,7 +62,7 @@ impl LCUWebSocket {
 
         let (stream, _) = connect_async_tls_with_config(url, None, false, Some(connector))
             .await
-            .map_err(Error::WebsocketError)?;
+            .map_err(LCUError::WebsocketError)?;
 
         let (mut write, mut read) = stream.split();
         let (ws_sender, mut ws_reciever) = mpsc::unbounded_channel::<(RequestType, _)>();
@@ -90,7 +93,7 @@ impl LCUWebSocket {
 
                     if write.send(command.into()).await.is_err() {
                         client_sender
-                            .send(Err(Error::LCUProcessNotRunning))
+                            .send(Err(LCUError::LCUProcessNotRunning))
                             .unwrap();
                     };
                 };
@@ -139,7 +142,7 @@ impl LCUWebSocket {
 }
 
 impl Stream for LCUWebSocket {
-    type Item = Result<Value, Error>;
+    type Item = Result<Value, LCUError>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

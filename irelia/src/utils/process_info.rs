@@ -4,9 +4,12 @@
 //! on Hextech docs here, as well as personal testing on Linux.
 //! <https://hextechdocs.dev/getting-started-with-the-lcu-websocket/>
 
+//! This module also contains a list of constants for the different names
+//! of the processes for Linux, MacOS, and Windows
+
 use sysinfo::{ProcessExt, System, SystemExt};
 
-use crate::Error;
+use crate::LCUError;
 
 use super::encoder::encode;
 
@@ -21,7 +24,7 @@ const TARGET_PROCESS_NAME: &str = "LeagueClientUx";
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
 /// that you can get the exe location, and go backwards.
-pub(crate) fn get_running_client() -> Result<(String, String), Error> {
+pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     let mut system = System::new();
     system.refresh_processes();
 
@@ -30,16 +33,16 @@ pub(crate) fn get_running_client() -> Result<(String, String), Error> {
         .values()
         .find(|process| process.name() == TARGET_PROCESS_NAME)
         .map(|process| process.cmd().join(" "))
-        .ok_or(Error::LCUProcessNotRunning)?;
+        .ok_or(LCUError::LCUProcessNotRunning)?;
 
     let port = process
         .split_whitespace()
         .find_map(|s| s.strip_prefix("--app-port="))
-        .ok_or(Error::PortNotFound)?;
+        .ok_or(LCUError::PortNotFound)?;
     let auth = process
         .split_whitespace()
         .find_map(|s| s.strip_prefix("--remoting-auth-token="))
-        .ok_or(Error::AuthTokenNotFound)?;
+        .ok_or(LCUError::AuthTokenNotFound)?;
 
     Ok((
         format!("127.0.0.1:{}", port),

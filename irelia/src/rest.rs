@@ -1,11 +1,11 @@
+//! Module containing all the data for the rest LCU bindings
+
+#[cfg(feature = "batched")]
 use futures_util::StreamExt;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::{
-    utils::{process_info::get_running_client, requests::RequestClient},
-    Error,
-};
+use crate::{utils::process_info::get_running_client, LCUError, RequestClient};
 
 /// Struct representing a connection to the LCU
 pub struct LCUClient<'a> {
@@ -14,6 +14,7 @@ pub struct LCUClient<'a> {
     auth_header: Option<String>,
 }
 
+#[cfg(feature = "batched")]
 /// Enum representing the different requests that can be sent to the LCU
 pub enum RequestType<'a> {
     Delete,
@@ -24,6 +25,7 @@ pub enum RequestType<'a> {
     Put(Option<&'a dyn erased_serde::Serialize>),
 }
 
+#[cfg(feature = "batched")]
 /// Struct representing a batched request, taking the
 /// request type and endpoint
 pub struct BatchRequests<'a> {
@@ -31,6 +33,7 @@ pub struct BatchRequests<'a> {
     pub endpoint: &'a str,
 }
 
+#[cfg(feature = "batched")]
 impl BatchRequests<'_> {
     /// Creates a new batched request, which can be wrapped in a slice and send to the LCU
     pub fn new<'a>(request_type: RequestType<'a>, endpoint: &'a str) -> BatchRequests<'a> {
@@ -46,7 +49,7 @@ impl LCUClient<'_> {
     /// to spin up the child process, or fails to get data from the client.
     /// On Linux, this can happen well the client launches, but on windows
     /// it should be possible to connect well it spins up.
-    pub fn new<'a>(client: &'a RequestClient) -> Result<LCUClient<'a>, Error> {
+    pub fn new(client: &RequestClient) -> Result<LCUClient, LCUError> {
         let port_pass = get_running_client()?;
         Ok(LCUClient {
             client,
@@ -55,6 +58,7 @@ impl LCUClient<'_> {
         })
     }
 
+    #[cfg(feature = "batched")]
     /// System for batching requests to the LCU by sending a slice
     /// The buffer size is how many requests can be operated on at
     /// the same time, returns a vector with all the replies
@@ -62,7 +66,7 @@ impl LCUClient<'_> {
         &self,
         requests: &[BatchRequests<'a>],
         buffer_size: usize,
-    ) -> Vec<Result<Option<R>, Error>>
+    ) -> Vec<Result<Option<R>, LCUError>>
     where
         R: DeserializeOwned,
     {
@@ -82,7 +86,7 @@ impl LCUClient<'_> {
     }
 
     /// Sends a delete request to the LCU
-    pub async fn delete<R>(&self, endpoint: &str) -> Result<Option<R>, Error>
+    pub async fn delete<R>(&self, endpoint: &str) -> Result<Option<R>, LCUError>
     where
         R: DeserializeOwned,
     {
@@ -90,7 +94,7 @@ impl LCUClient<'_> {
     }
 
     /// Sends a get request to the LCU
-    pub async fn get<R>(&self, endpoint: &str) -> Result<Option<R>, Error>
+    pub async fn get<R>(&self, endpoint: &str) -> Result<Option<R>, LCUError>
     where
         R: DeserializeOwned,
     {
@@ -98,7 +102,7 @@ impl LCUClient<'_> {
     }
 
     /// Sends a head request to the LCU
-    pub async fn head<R>(&self, endpoint: &str) -> Result<Option<R>, Error>
+    pub async fn head<R>(&self, endpoint: &str) -> Result<Option<R>, LCUError>
     where
         R: DeserializeOwned,
     {
@@ -106,7 +110,7 @@ impl LCUClient<'_> {
     }
 
     /// Sends a patch request to the LCU
-    pub async fn patch<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, Error>
+    pub async fn patch<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, LCUError>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -115,7 +119,7 @@ impl LCUClient<'_> {
     }
 
     /// Sends a post request to the LCU
-    pub async fn post<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, Error>
+    pub async fn post<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, LCUError>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -124,7 +128,7 @@ impl LCUClient<'_> {
     }
 
     /// Sends a put request to the LCU
-    pub async fn put<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, Error>
+    pub async fn put<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, LCUError>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -137,7 +141,7 @@ impl LCUClient<'_> {
         endpoint: &str,
         method: &str,
         body: Option<T>,
-    ) -> Result<Option<R>, Error>
+    ) -> Result<Option<R>, LCUError>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -155,7 +159,7 @@ impl LCUClient<'_> {
                     } else {
                         serde_json::from_slice(&bytes)
                             .map(|value| Ok(Some(value)))
-                            .map_or_else(|err| Err(Error::SerdeJsonError(err)), Ok)?
+                            .map_or_else(|err| Err(LCUError::SerdeJsonError(err)), Ok)?
                     }
                 },
             )
@@ -163,9 +167,10 @@ impl LCUClient<'_> {
     }
 }
 
+#[cfg(feature = "batched")]
 #[cfg(test)]
 mod tests {
-    use crate::utils::requests::RequestClient;
+    use crate::RequestClient;
 
     #[tokio::test]
     async fn batch_test() {

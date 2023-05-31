@@ -53,19 +53,20 @@ features = ["sync", "rt", "macros"]
 
 [features]
 default = [
-    "full"
+    "rest"
     ]
 full = [
     "rest", 
     "in_game", 
-    "ws"
+    "ws",
+    "tauri",
+    "batched"
     ]
 
 rest = [
     "dep:serde", 
     "dep:hyper", 
     "dep:futures-util",
-    "dep:erased-serde",
     "dep:hyper-rustls",
     "dep:sysinfo"
     ]
@@ -82,6 +83,13 @@ ws = [
     "dep:tokio", 
     "dep:futures-util",
     "dep:sysinfo"
+    ]
+
+batched = [
+    "dep:erased-serde",
+    ]
+
+tauri = [
     ]
 
 [package.metadata.docs.rs]

@@ -9,6 +9,7 @@ const BASE64_ALPHABET: [char; 64] = [
     '5', '6', '7', '8', '9', '+', '/',
 ];
 
+/// Fast enough encoder for what is a very small string, used once
 pub(super) fn encode(string: String) -> String {
     string
         .as_bytes()
