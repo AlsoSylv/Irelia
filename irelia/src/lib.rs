@@ -1,4 +1,4 @@
-#![feature(lazy_cell)]
+#![feature(array_chunks, int_roundings, lazy_cell)]
 
 //! Irelia is an async set of bindings to the LCU API
 //!
@@ -61,6 +61,7 @@ impl serde::Serialize for LCUError {
     }
 }
 
+#[cfg(any(feature = "in_game", feature = "rest"))]
 /// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
 /// 
 /// # Example

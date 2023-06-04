@@ -8,10 +8,9 @@
 //! of the processes for Linux, MacOS, and Windows
 
 use sysinfo::{ProcessExt, System, SystemExt};
+use encoder::Encoder;
 
 use crate::LCUError;
-
-use super::encoder::encode;
 
 #[cfg(target_os = "windows")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx.exe";
@@ -44,8 +43,10 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
         .find_map(|s| s.strip_prefix("--remoting-auth-token="))
         .ok_or(LCUError::AuthTokenNotFound)?;
 
+    const ENCODER: Encoder = Encoder::new();
+
     Ok((
         format!("127.0.0.1:{}", port),
-        format!("Basic {}", encode(format!("riot:{}", auth))),
+        format!("Basic {}", ENCODER.encode(format!("riot:{}", auth))),
     ))
 }
