@@ -7,6 +7,7 @@
 - Added Tauri feature where error implements ToString and serde::Serialize
 - Reworked the error enum to use anonymous fields
 - Requires nightly for array_chunks, int_rounding, and lazylock
+- Rewrite and re-export the base64 encoder
 
 ## Irelia 0.2.0
 

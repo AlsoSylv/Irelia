@@ -1,4 +1,4 @@
-#![feature(array_chunks, core_intrinsics, int_roundings, lazy_cell, test)]
+#![feature(array_chunks, core_intrinsics, int_roundings, test)]
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
@@ -254,9 +254,7 @@ mod test {
         b.iter(|| {
             black_box({
                 for x in 0..10000 {
-                    unsafe {
-                        black_box(encoder.encode_unchecked(&strings[x]));
-                    }
+                    black_box(encoder.encode(&strings[x]));
                 }
             });
         })

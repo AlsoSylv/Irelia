@@ -1,4 +1,4 @@
-#![feature(array_chunks, int_roundings, lazy_cell)]
+#![feature(lazy_cell)]
 
 //! Irelia is an async set of bindings to the LCU API
 //!
@@ -8,6 +8,8 @@
 //! - ws: Allows connections to the LCU websocket API, providing all functionality needed
 //!
 //! Irelia is currently nightly only, as it relies on the lazy_cell feature internally
+
+pub use encoder;
 
 #[cfg(feature = "in_game")]
 pub mod in_game;
