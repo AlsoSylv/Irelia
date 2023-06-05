@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/AlsoSylv/Irelia"
 homepage = "https://github.com/AlsoSylv/Irelia"
 documentation = "https://docs.rs/irelia"
-readme = "README.md"
+readme = "../README.md"
 
 [dependencies]
 # Required across all features
