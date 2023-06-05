@@ -1,8 +1,7 @@
-//! This module is full of auto generated JSON
-//! for in game events, if anything fails to
-//! serialize this module probably needs to
-//! be updated to a newer version of the
-//! in-game API.
+//! This module is full of auto generated JSON for in game events
+//!
+//! if anything fails to serialize this module probably needs to
+//! be updated to a newer version of the in-game API.
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -279,4 +278,13 @@ pub struct GameData {
     pub map_name: String,
     pub map_number: i64,
     pub map_terrain: String,
+}
+
+/// Enum representation of different team IDs
+pub enum TeamID {
+    ALL,
+    UNKNOWN,
+    ORDER,
+    CHAOS,
+    NEUTRAL,
 }
