@@ -9,7 +9,7 @@
 //!
 //! Irelia is currently nightly only, as it relies on the lazy_cell feature internally
 
-pub use encoder;
+pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
 pub mod in_game;
