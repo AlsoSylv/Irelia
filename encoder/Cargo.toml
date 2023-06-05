@@ -2,6 +2,10 @@
 name = "irelia_encoder"
 version = "0.1.0"
 edition = "2021"
+description = "A Rust wrapper around the native LoL APIs"
+license = "MIT"
+repository = "https://github.com/AlsoSylv/Irelia"
+documentation = "https://docs.rs/irelia_encoder"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
