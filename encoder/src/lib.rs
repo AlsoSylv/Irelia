@@ -1,10 +1,15 @@
-#![feature(array_chunks, int_roundings, lazy_cell)]
+#![feature(array_chunks, core_intrinsics, int_roundings, lazy_cell, test)]
+#![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
 //! It goes into detail about the entire thing, and why it works the way it does, and I hightly reccomend reading it
 //! Very big thanks to Tiemen for writing it!
-//! 
+//!
 //! The usage of u64s as byte arrays is taken from the base64 crate, which is under the MIT licsense
+
+extern crate alloc;
+
+use alloc::{string::String, vec};
 
 /// BASE64 encoder struct
 pub struct Encoder {
@@ -12,6 +17,7 @@ pub struct Encoder {
 }
 
 impl Encoder {
+    /// Creates a new instance of the encoder using the default base64 alphabet
     pub const fn new() -> Self {
         Self {
             encode_table: [
@@ -24,10 +30,14 @@ impl Encoder {
         }
     }
 
+    pub const fn with_encode_table(encode_table: [u8; 64]) -> Self {
+        Self { encode_table }
+    }
+
     #[rustfmt::skip]
     /// Converts the buffer to base64, uses an out paramater to avoid allocations
     fn internal_encode(&self, buf: &[u8], out: &mut [u8]) {
-        let chunks = buf.as_ref().array_chunks::<24>();
+        let chunks = buf.array_chunks::<24>();
         let out_chunks = out.array_chunks_mut::<32>();
 
         let mut output_index = 0;
@@ -114,27 +124,24 @@ impl Encoder {
 
         let rem_out = &mut out[output_index..];
 
-        match rem {
-            [] => {}
-            [a] => {
+        match (rem, rem_out) {
+            ([], _) => {}
+            ([a], [out_a, out_b, _, _]) => {
                 let bit_1 = a >> 2;
                 let bit_2 = (a & 0b00000011) << 4;
 
-                rem_out[0] = self.encode_table[bit_1 as usize];
-                rem_out[1] = self.encode_table[bit_2 as usize];
-                rem_out[2] = b'=';
-                rem_out[3] = b'=';
+                *out_a = self.encode_table[bit_1 as usize];
+                *out_b = self.encode_table[bit_2 as usize];
             }
-            [a, b] => {
+            ([a, b], [out_a, out_b, out_c, _]) => {
                 let byte_array = u16::from_be_bytes([*a, *b]);
-                let bit_1 = byte_array >> 10;
-                let bit_2 = byte_array >> 4;
-                let bit_3 = byte_array & 0b00001111 << 2;
+                let bit_1 = byte_array >> 10 & 0b00111111;
+                let bit_2 = byte_array >> 4 & 0b00111111;
+                let bit_3 = byte_array << 2 & 0b00111111;
 
-                rem_out[0] = self.encode_table[bit_1 as usize];
-                rem_out[1] = self.encode_table[bit_2 as usize];
-                rem_out[2] = self.encode_table[bit_3 as usize];
-                rem_out[3] = b'=';
+                *out_a = self.encode_table[bit_1 as usize];
+                *out_b = self.encode_table[bit_2 as usize];
+                *out_c = self.encode_table[bit_3 as usize];
             }
             _ => unreachable!(),
         }
@@ -146,6 +153,36 @@ impl Encoder {
         T: AsRef<[u8]>,
     {
         let buf = bytes.as_ref();
+        let mut out = vec![b'='; buf.len().div_ceil(3) * 4];
+        self.internal_encode(buf, &mut out);
+
+        String::from_utf8(out).unwrap()
+    }
+
+    /// Converts the bytes to BASE64
+    ///
+    /// # Safety
+    ///
+    /// This does not check that all characters are valid UTF-8
+    /// The behavoir of strings containing invalid UTF-8 bytes
+    /// is undefined
+    pub unsafe fn encode_unchecked<T>(&self, bytes: T) -> String
+    where
+        T: AsRef<[u8]>,
+    {
+        let buf = bytes.as_ref();
+        let mut out = vec![b'='; buf.len().div_ceil(3) * 4];
+        self.internal_encode(buf, &mut out);
+
+        String::from_utf8_unchecked(out)
+    }
+
+    /// Converts the bytes to BASE64
+    pub fn encode_without_padding<T>(&self, bytes: T) -> String
+    where
+        T: AsRef<[u8]>,
+    {
+        let buf = bytes.as_ref();
         let mut out = vec![0; buf.len().div_ceil(3) * 4];
         self.internal_encode(buf, &mut out);
 
@@ -153,13 +190,13 @@ impl Encoder {
     }
 
     /// Converts the bytes to BASE64
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// This does not check that all characters are valid UTF-8
     /// The behavoir of strings containing invalid UTF-8 bytes
     /// is undefined
-    pub unsafe fn encode_unchecked<T>(&self, bytes: T) -> String
+    pub unsafe fn encode_unchecked_without_padding<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
     {
@@ -173,7 +210,13 @@ impl Encoder {
 
 #[cfg(test)]
 mod test {
-    use base64::{self, engine::general_purpose, Engine};
+    extern crate test;
+
+    use alloc::{string::String, vec};
+    use core::intrinsics::black_box;
+    use test::Bencher;
+
+    use base64::{engine::general_purpose, Engine};
     use rand::{
         distributions::{Alphanumeric, DistString},
         thread_rng,
@@ -194,5 +237,47 @@ mod test {
                 panic!("{my_encoded:?} != {b64_encoded:?}")
             }
         }
+    }
+
+    #[bench]
+    fn my_b64(b: &mut Bencher) {
+        let mut strings = vec![String::new(); 10000];
+
+        let mut rng = black_box(thread_rng());
+
+        for x in 0..10000 {
+            strings[x] = black_box(Alphanumeric.sample_string(&mut rng, 1924));
+        }
+
+        let encoder = Encoder::new();
+
+        b.iter(|| {
+            black_box({
+                for x in 0..10000 {
+                    unsafe {
+                        black_box(encoder.encode_unchecked(&strings[x]));
+                    }
+                }
+            });
+        })
+    }
+
+    #[bench]
+    fn real_b64(b: &mut Bencher) {
+        let mut strings = vec![String::new(); 10000];
+
+        let mut rng = black_box(thread_rng());
+
+        for x in 0..10000 {
+            strings[x] = black_box(Alphanumeric.sample_string(&mut rng, 1924));
+        }
+
+        b.iter(|| {
+            black_box({
+                for x in 0..10000 {
+                    general_purpose::STANDARD.encode(&strings[x]);
+                }
+            });
+        })
     }
 }

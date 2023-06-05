@@ -56,18 +56,19 @@ impl ToString for LCUError {
 impl serde::Serialize for LCUError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         serializer.serialize_str(self.to_string().as_str())
     }
 }
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
 /// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
-/// 
+///
 /// # Example
 /// ```rs
 /// use irelia::{RequestClient, rest::LCUClient};
-/// 
+///
 /// fn main() {
 ///     let client = RequestClient::new();
 ///     

@@ -1,4 +1,4 @@
-//! Module containing all the data on the websocket LCU bindings 
+//! Module containing all the data on the websocket LCU bindings
 
 use std::{collections::HashSet, sync::Arc};
 

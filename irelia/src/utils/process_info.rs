@@ -7,8 +7,8 @@
 //! This module also contains a list of constants for the different names
 //! of the processes for Linux, MacOS, and Windows
 
-use sysinfo::{ProcessExt, System, SystemExt};
 use encoder::Encoder;
+use sysinfo::{ProcessExt, System, SystemExt};
 
 use crate::LCUError;
 
