@@ -8,24 +8,50 @@ typedef struct RT RT;
 
 typedef struct RequestClient RequestClient;
 
-const struct RT *new_rt(void);
+struct RT *new_rt(void);
 
-const struct LCUResponse *block_on(struct Future *fut, const struct RT *rt, char **res);
+void drop_rt(struct RT *rt);
+
+struct LCUResponse *block_on(struct Future *fut, const struct RT *rt, char **res);
 
 char is_finished(struct Future *fut);
 
-const struct RequestClient *new_request_client(void);
+struct RequestClient *new_request_client(void);
 
-const struct LCUResponse *new_lcu_client(const struct RequestClient *client,
-                                         struct LCUClient **lcu_client);
+void drop_request_client(struct RequestClient *client);
+
+struct LCUResponse *new_lcu_client(const struct RequestClient *client,
+                                   struct LCUClient **lcu_client);
+
+struct Future *lcu_delete(const struct LCUClient *client,
+                          const struct RT *rt,
+                          const char *endpoint);
 
 struct Future *lcu_get(const struct LCUClient *client, const struct RT *rt, const char *endpoint);
+
+struct Future *lcu_head(const struct LCUClient *client, const struct RT *rt, const char *endpoint);
 
 struct Future *lcu_post(const struct LCUClient *client,
                         const struct RT *rt,
                         const char *endpoint,
                         const char *body);
 
-char get_response_code(const struct LCUResponse *res);
+struct Future *lcu_patch(const struct LCUClient *client,
+                         const struct RT *rt,
+                         const char *endpoint,
+                         const char *body);
 
-const char *get_response_description(const struct LCUResponse *res);
+struct Future *lcu_put(const struct LCUClient *client,
+                       const struct RT *rt,
+                       const char *endpoint,
+                       const char *body);
+
+void drop_lcu_client(struct LCUClient **lcu_client);
+
+char get_response_code(struct LCUResponse *res);
+
+const char *get_response_description(struct LCUResponse *res);
+
+void drop_future(struct Future *fut);
+
+void drop_lcu_res(struct LCUResponse *res);
