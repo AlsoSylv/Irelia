@@ -46,7 +46,7 @@ struct Future *lcu_put(const struct LCUClient *client,
                        const char *endpoint,
                        const char *body);
 
-void drop_lcu_client(struct LCUClient **lcu_client);
+void drop_lcu_client(struct LCUClient *lcu_client);
 
 char get_response_code(struct LCUResponse *res);
 

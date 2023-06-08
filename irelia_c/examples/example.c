@@ -3,6 +3,8 @@
 #include <stdlib.h>
 
 int main() {
+    int return_val = 0;
+
     struct RT* rt = new_rt();
     struct RequestClient* rc = new_request_client();
 
@@ -15,6 +17,8 @@ int main() {
 
     if (code != 0) {
         printf("%s \n", get_response_description(res));
+
+        return_val = 1;
     } else {
         Future* fut = lcu_get(lc, rt, "/lol-summoner/v1/current-summoner");
 
@@ -27,6 +31,8 @@ int main() {
 
         if (code != 0) {
             printf("%s \n", get_response_description(get_res));
+
+            return_val = 1;
         } else {
             printf("%s \n", res);
         }
@@ -34,10 +40,13 @@ int main() {
         drop_lcu_res(get_res);
     }
 
+    if (lc != NULL) {
+        drop_lcu_client(lc);
+    }
+
     drop_lcu_res(res);
-    drop_lcu_client(lc);
     drop_request_client(rc);
     drop_rt(rt);
 
-    return 0;
+    return return_val;
 }
