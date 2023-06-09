@@ -9,7 +9,7 @@ fn main() {
         .with_crate(crate_dir)
         .with_no_includes()
         .with_language(cbindgen::Language::C)
-        .rename_item("CRT", "RT")
+        .rename_item("Crt", "RT")
         .rename_item("CRequestClient", "RequestClient")
         .rename_item("CLCUClient", "LCUClient")
         .rename_item("CLCUResponse", "LCUResponse")
@@ -42,15 +42,13 @@ fn c_flags() {
 
     #[cfg(target_os = "linux")]
     println!(
-        "cargo:rustc-env=INLINE_C_RS_LDFLAGS={shared_object_dir}/{lib}",
+        "cargo:rustc-env=INLINE_C_RS_LDFLAGS={shared_object_dir}/libirelia_c.so",
         shared_object_dir = shared_object_dir,
-        lib = "libirelia_c.so",
     );
 
     #[cfg(target_os = "windows")]
     println!(
-        "cargo:rustc-env=INLINE_C_RS_LDFLAGS={shared_object_dir}/{lib}",
+        "cargo:rustc-env=INLINE_C_RS_LDFLAGS={shared_object_dir}/libirelia_c.dylib",
         shared_object_dir = shared_object_dir,
-        lib = "libirelia_c.dylib",
     );
 }

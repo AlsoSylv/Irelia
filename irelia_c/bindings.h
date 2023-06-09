@@ -4,9 +4,9 @@ typedef struct LCUClient LCUClient;
 
 typedef struct LCUResponse LCUResponse;
 
-typedef struct RT RT;
-
 typedef struct RequestClient RequestClient;
+
+typedef struct RT RT;
 
 struct RT *new_rt(void);
 

@@ -1,65 +1,40 @@
 #![cfg_attr(not(test), no_std)]
 
-use irelia::{rest::LCUClient, LCUError, RequestClient};
-use serde_json::Value;
-use tokio::{runtime::Runtime, task::JoinHandle};
-
 extern crate alloc;
 
-pub struct CRT {
-    rt: Runtime,
-}
-
-pub struct CFuture {
-    fut: JoinHandle<Result<Option<Value>, LCUError>>,
-}
-
-pub struct CRequestClient {
-    client: RequestClient,
-}
-
-pub struct CLCUClient<'a> {
-    client: LCUClient<'a>,
-}
-
-pub struct CLCUResponse {
-    res: i8,
-    error: Option<LCUError>,
-}
+mod types;
 
 mod rt {
-    use crate::{utils::error_to_int, CFuture, CLCUResponse, CRT};
-    use alloc::{boxed::Box, ffi::CString, string::ToString};
-    use core::{
-        ffi::c_char,
-        ptr::{null, null_mut},
+    use crate::{
+        types::{CFuture, CLCUResponse, Crt},
+        utils::error_to_int,
     };
+    use alloc::{boxed::Box, ffi::CString, string::ToString};
+    use core::{ffi::c_char, ptr::null_mut};
     use tokio::runtime::Runtime;
 
     #[no_mangle]
-    pub extern "C" fn new_rt() -> *mut CRT {
-        Box::into_raw(Box::new(CRT {
-            rt: Runtime::new().unwrap(),
-        }))
+    pub extern "C" fn new_rt() -> *mut Crt {
+        Box::into_raw(Box::new(Crt::new(Runtime::new().unwrap())))
     }
 
     #[no_mangle]
-    pub extern "C" fn drop_rt(rt: *mut CRT) {
-        assert!(rt != null_mut());
+    pub extern "C" fn drop_rt(rt: *mut Crt) {
+        assert!(rt.is_null());
         unsafe { drop(Box::from_raw(rt)) };
     }
 
     #[no_mangle]
     pub extern "C" fn block_on(
         fut: *mut CFuture,
-        rt: *const CRT,
+        rt: *const Crt,
         res: *mut *mut c_char,
     ) -> *mut CLCUResponse {
-        assert!(fut != null_mut());
-        assert!(rt != null());
+        assert!(fut.is_null());
+        assert!(rt.is_null());
 
-        let rt = &unsafe { &*rt }.rt;
-        let fut = unsafe { core::ptr::read(fut) }.fut;
+        let rt = unsafe { &*rt }.rt();
+        let fut = unsafe { core::ptr::read(fut) }.take_fut();
         let endpoint_res = rt.block_on(fut).unwrap();
 
         match endpoint_res {
@@ -71,10 +46,7 @@ mod rt {
                     None => unsafe { *res = null_mut() },
                 };
 
-                Box::leak(Box::new(CLCUResponse {
-                    res: 0,
-                    error: None,
-                }))
+                Box::leak(Box::new(CLCUResponse::new(0, None)))
             }
             Err(err) => {
                 let response = error_to_int(&err);
@@ -82,45 +54,44 @@ mod rt {
                     *res = null_mut();
                 }
 
-                Box::leak(Box::new(CLCUResponse {
-                    res: response,
-                    error: Some(err),
-                }))
+                Box::leak(Box::new(CLCUResponse::new(response, Some(err))))
             }
         }
     }
 
     #[no_mangle]
     pub extern "C" fn is_finished(fut: *mut CFuture) -> c_char {
-        assert!(fut != null_mut());
-        unsafe { &*fut }.fut.is_finished() as c_char
+        assert!(fut.is_null());
+        unsafe { &*fut }.fut().is_finished() as c_char
     }
 }
 
 mod request {
-    use crate::CRequestClient;
+    use crate::types::CRequestClient;
     use alloc::boxed::Box;
     use irelia::RequestClient;
 
     #[no_mangle]
     pub extern "C" fn new_request_client() -> *mut CRequestClient {
-        Box::leak(Box::new(CRequestClient {
-            client: RequestClient::new(),
-        }))
+        Box::leak(Box::new(CRequestClient::new(RequestClient::new())))
     }
 
     #[no_mangle]
     pub extern "C" fn drop_request_client(client: *mut CRequestClient) {
+        assert!(client.is_null());
         unsafe { drop(Box::from_raw(client)) }
     }
 }
 
 mod lcu {
-    use crate::{utils::error_to_int, CFuture, CLCUClient, CLCUResponse, CRequestClient, CRT};
+    use crate::{
+        types::{CFuture, CLCUClient, CLCUResponse, CRequestClient, Crt},
+        utils::error_to_int,
+    };
     use alloc::{boxed::Box, str::FromStr};
     use core::{
         ffi::{c_char, CStr},
-        ptr::{null, null_mut},
+        ptr::null_mut,
     };
     use irelia::rest::LCUClient;
     use serde_json::Value;
@@ -131,19 +102,16 @@ mod lcu {
         client: *const CRequestClient,
         lcu_client: *mut *mut CLCUClient,
     ) -> *mut CLCUResponse {
-        assert!(client != null());
+        assert!(client.is_null());
 
         let client_ref = unsafe { &*client };
 
-        let client = LCUClient::new(&client_ref.client);
+        let client = LCUClient::new(client_ref.client());
 
         match client {
             Ok(client) => {
-                unsafe { *lcu_client = Box::leak(Box::new(CLCUClient { client })) };
-                Box::leak(Box::new(CLCUResponse {
-                    res: 0,
-                    error: None,
-                }))
+                unsafe { *lcu_client = Box::leak(Box::new(CLCUClient::new(client))) };
+                Box::leak(Box::new(CLCUResponse::new(0, None)))
             }
 
             Err(err) => {
@@ -151,18 +119,15 @@ mod lcu {
 
                 unsafe { *lcu_client = null_mut() };
 
-                Box::leak(Box::new(CLCUResponse {
-                    res: error_code,
-                    error: Some(err),
-                }))
+                Box::leak(Box::new(CLCUResponse::new(error_code, Some(err))))
             }
         }
     }
 
     #[no_mangle]
     pub extern "C" fn lcu_delete(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
     ) -> *mut CFuture {
         let (client, rt) = check_ptrs(client, rt, endpoint);
@@ -172,8 +137,8 @@ mod lcu {
 
     #[no_mangle]
     pub extern "C" fn lcu_get(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
     ) -> *mut CFuture {
         let (client, rt) = check_ptrs(client, rt, endpoint);
@@ -183,8 +148,8 @@ mod lcu {
 
     #[no_mangle]
     pub extern "C" fn lcu_head(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
     ) -> *mut CFuture {
         let (client, rt) = check_ptrs(client, rt, endpoint);
@@ -194,8 +159,8 @@ mod lcu {
 
     #[no_mangle]
     pub extern "C" fn lcu_post(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
         body: *const c_char,
     ) -> *mut CFuture {
@@ -206,8 +171,8 @@ mod lcu {
 
     #[no_mangle]
     pub extern "C" fn lcu_patch(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
         body: *const c_char,
     ) -> *mut CFuture {
@@ -218,8 +183,8 @@ mod lcu {
 
     #[no_mangle]
     pub extern "C" fn lcu_put(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
         body: *const c_char,
     ) -> *mut CFuture {
@@ -230,26 +195,27 @@ mod lcu {
 
     #[no_mangle]
     pub extern "C" fn drop_lcu_client(lcu_client: *mut CLCUClient) {
+        assert!(lcu_client.is_null());
         unsafe { drop(Box::from_raw(lcu_client)) };
     }
 
     fn check_ptrs(
-        client: *const CLCUClient<'static>,
-        rt: *const CRT,
+        client: *const CLCUClient,
+        rt: *const Crt,
         endpoint: *const c_char,
-    ) -> (&'static LCUClient<'static>, &Runtime) {
-        assert!(client != null());
-        assert!(endpoint != null());
-        assert!(rt != null());
+    ) -> (&'static LCUClient<'static>, &'static Runtime) {
+        assert!(client.is_null());
+        assert!(endpoint.is_null());
+        assert!(rt.is_null());
 
-        let client = &unsafe { &*client }.client;
-        let rt = &unsafe { &*rt }.rt;
+        let client = &unsafe { &*client }.client();
+        let rt = &unsafe { &*rt }.rt();
 
         (client, rt)
     }
 
     fn convert_body(body: *const c_char) -> Option<Value> {
-        if body == null() {
+        if body.is_null() {
             None
         } else {
             let body = unsafe { CStr::from_ptr(body) }.to_str().unwrap();
@@ -265,16 +231,14 @@ mod lcu {
     ) -> *mut CFuture {
         let endpoint = unsafe { CStr::from_ptr(endpoint) }.to_str().unwrap();
 
-        Box::leak(Box::new(CFuture {
-            fut: match request {
-                RequestType::Delete => rt.spawn(client.delete(endpoint)),
-                RequestType::Get => rt.spawn(client.get(endpoint)),
-                RequestType::Head => rt.spawn(client.head(endpoint)),
-                RequestType::Patch(body) => rt.spawn(client.patch(endpoint, body)),
-                RequestType::Post(body) => rt.spawn(client.post(endpoint, body)),
-                RequestType::Put(body) => rt.spawn(client.put(endpoint, body)),
-            },
-        }))
+        Box::leak(Box::new(CFuture::new(match request {
+            RequestType::Delete => rt.spawn(client.delete(endpoint)),
+            RequestType::Get => rt.spawn(client.get(endpoint)),
+            RequestType::Head => rt.spawn(client.head(endpoint)),
+            RequestType::Patch(body) => rt.spawn(client.patch(endpoint, body)),
+            RequestType::Post(body) => rt.spawn(client.post(endpoint, body)),
+            RequestType::Put(body) => rt.spawn(client.put(endpoint, body)),
+        })))
     }
 
     pub enum RequestType {
@@ -288,9 +252,9 @@ mod lcu {
 }
 
 pub(crate) mod utils {
-    use crate::{CFuture, CLCUResponse};
+    use crate::types::{CFuture, CLCUResponse};
     use alloc::{boxed::Box, ffi::CString, string::ToString};
-    use core::{ffi::c_char, ptr::null_mut};
+    use core::ffi::c_char;
     use irelia::LCUError;
 
     pub fn error_to_int(error: &LCUError) -> c_char {
@@ -306,19 +270,19 @@ pub(crate) mod utils {
 
     #[no_mangle]
     pub extern "C" fn get_response_code(res: *mut CLCUResponse) -> c_char {
-        assert!(res != null_mut());
+        assert!(res.is_null());
 
         let err = unsafe { &*res };
-        err.res
+        err.res()
     }
 
     #[no_mangle]
     pub extern "C" fn get_response_description(res: *mut CLCUResponse) -> *const c_char {
-        assert!(res != null_mut());
+        assert!(res.is_null());
 
         let err = unsafe { &*res };
 
-        if let Some(err) = &err.error {
+        if let Some(err) = &err.error() {
             CString::new(err.to_string()).unwrap().into_raw()
         } else {
             CString::new("Success").unwrap().into_raw()
@@ -327,13 +291,13 @@ pub(crate) mod utils {
 
     #[no_mangle]
     pub extern "C" fn drop_future(fut: *mut CFuture) {
-        assert!(fut != null_mut());
+        assert!(fut.is_null());
         unsafe { drop(Box::from_raw(fut)) };
     }
 
     #[no_mangle]
     pub extern "C" fn drop_lcu_res(res: *mut CLCUResponse) {
-        assert!(res != null_mut());
+        assert!(res.is_null());
         unsafe { drop(Box::from_raw(res)) };
     }
 }

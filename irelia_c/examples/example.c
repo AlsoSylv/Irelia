@@ -17,7 +17,6 @@ int main() {
 
     if (code != 0) {
         printf("%s \n", get_response_description(res));
-
         return_val = 1;
     } else {
         Future* fut = lcu_get(lc, rt, "/lol-summoner/v1/current-summoner");
@@ -31,18 +30,16 @@ int main() {
 
         if (code != 0) {
             printf("%s \n", get_response_description(get_res));
-
             return_val = 1;
-        } else {
+        } else 
             printf("%s \n", res);
-        }
+        
 
         drop_lcu_res(get_res);
     }
 
-    if (lc != NULL) {
+    if (lc != NULL) 
         drop_lcu_client(lc);
-    }
 
     drop_lcu_res(res);
     drop_request_client(rc);
