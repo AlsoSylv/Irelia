@@ -60,7 +60,7 @@ impl LCUWebSocket {
         req.headers_mut()
             .insert("Authorization", HeaderValue::from_str(&pass).unwrap());
 
-        let (stream, _) = connect_async_tls_with_config(url, None, false, Some(connector))
+        let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
             .await
             .map_err(LCUError::WebsocketError)?;
 
