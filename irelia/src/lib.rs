@@ -1,4 +1,4 @@
-#![feature(lazy_cell)]
+#![feature(lazy_cell, test)]
 
 //! Irelia is an async set of bindings to the LCU API
 //!

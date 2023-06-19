@@ -151,3 +151,18 @@ impl Stream for LCUWebSocket {
         self.client_reciever.poll_recv(cx)
     }
 }
+
+#[cfg(test)]
+mod test {
+    extern crate test;
+
+    use tokio;
+
+    use super::LCUWebSocket;
+
+    #[tokio::test]
+    #[ignore]
+    async fn it_inits() {
+        let _ws_client = LCUWebSocket::new().await.unwrap();
+    }
+}
