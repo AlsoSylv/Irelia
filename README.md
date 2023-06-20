@@ -4,6 +4,8 @@ Irelia is a set of bindings to native LoL APIs built on top of Hyper.
 
 This crate provides support for Windows, and Linux, with untested MacOS support.
 
+Note: The base64 encoder used in irelia requires a .cargo/config.toml, an example can be found [here](./.cargo/config.toml)
+
 #
 ### Cargo Features
 

@@ -1,4 +1,4 @@
-#![feature(array_chunks, core_intrinsics, int_roundings, test)]
+#![feature(array_chunks, core_intrinsics, int_roundings, test, portable_simd)]
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
@@ -8,6 +8,8 @@
 //! The usage of u64s as byte arrays is taken from the base64 crate, which is under the MIT licsense
 
 extern crate alloc;
+
+use core::{mem::{transmute, transmute_copy}, simd::*, simd::Which::*, slice};
 
 use alloc::{string::String, vec};
 
@@ -36,67 +38,118 @@ impl Encoder {
 
     #[rustfmt::skip]
     /// Converts the buffer to base64, uses an out paramater to avoid allocations
+    /// 
+    /// # SAFETY
+    /// 
+    /// We ignore the last four elements of the slice we create, so no garbage data is passed
     fn internal_encode(&self, buf: &[u8], out: &mut [u8]) {
-        let chunks = buf.array_chunks::<24>();
-        let out_chunks = out.array_chunks_mut::<32>();
+        let chunks = buf.array_chunks::<12>();
+        let out_chunks = out.array_chunks_mut::<16>();
 
         let mut output_index = 0;
         let rem = chunks.remainder();
 
-        chunks.zip(out_chunks).for_each(|(chunk, out)| {
-            let byte_array_1 = u64::from_be_bytes([
-                chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], 0, 0,
-            ]);
+        // Original Github: https://github.com/lemire/fastbase64/tree/master
+        
+        // Copyright (c) 2015-2016, Wojciech Muła, Alfred Klomp,  Daniel Lemire
+        // (Unless otherwise stated in the source code)
+        // All rights reserved.
 
-            let byte_array_2 = u64::from_be_bytes([
-                chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11], 0, 0,
-            ]);
+        // Redistribution and use in source and binary forms, with or without
+        // modification, are permitted provided that the following conditions are
+        // met:
 
-            let byte_array_3 = u64::from_be_bytes([
-                chunk[12], chunk[13], chunk[14], chunk[15], chunk[16], chunk[17], 0, 0,
-            ]);
+        // 1. Redistributions of source code must retain the above copyright
+        //    notice, this list of conditions and the following disclaimer.
 
-            let byte_array_4 = u64::from_be_bytes([
-                chunk[18], chunk[19], chunk[20], chunk[21], chunk[22], chunk[23], 0, 0,
-            ]);
+        // 2. Redistributions in binary form must reproduce the above copyright
+        //    notice, this list of conditions and the following disclaimer in the
+        //    documentation and/or other materials provided with the distribution.
 
-            *out = [
-                self.encode_table[(byte_array_1 >> 58 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 52 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 46 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 40 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 34 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 28 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 22 & 0b00111111) as usize],
-                self.encode_table[(byte_array_1 >> 16 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 58 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 52 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 46 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 40 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 34 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 28 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 22 & 0b00111111) as usize],
-                self.encode_table[(byte_array_2 >> 16 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 58 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 52 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 46 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 40 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 34 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 28 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 22 & 0b00111111) as usize],
-                self.encode_table[(byte_array_3 >> 16 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 58 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 52 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 46 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 40 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 34 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 28 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 22 & 0b00111111) as usize],
-                self.encode_table[(byte_array_4 >> 16 & 0b00111111) as usize],
-            ];
+        // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+        // IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+        // TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+        // PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+        // HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+        // SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+        // TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+        // PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+        // LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+        // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+        // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-            output_index += 32;
-        });
+        // Rust portable-simd port and additional optimizations 
+        // authored by AlsoSylv and burgerindividual
+        {
+            /// # SAFETY
+            ///
+            /// Because it's being converted between simd types, this is valid
+            pub fn unpack_with_bswap(input: u8x16) -> u8x16 {
+                let in_u8 = simd_swizzle!(input, [1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10,]);
+                
+
+                unsafe {
+                    let in_u32: u32x4 = transmute(in_u8);
+                
+                    let t0 = in_u32 & u32x4::splat(0x0fc0fc00);
+                    let t0_u16 = transmute::<_, u16x8>(t0);
+                
+                    let t1 = simd_swizzle!(
+                        t0_u16 >> Simd::splat(10),
+                        t0_u16 >> Simd::splat(6),
+                        [
+                            First(0),
+                            Second(1),
+                            First(2),
+                            Second(3),
+                            First(4),
+                            Second(5),
+                            First(6),
+                            Second(7),
+                        ]
+                    );
+                
+                    let t2 = in_u32 & u32x4::splat(0x003f03f0);
+                
+                    let t3 = transmute::<_, u16x8>(t2)
+                        * u16x8::from_array([
+                            0x0010, 0x0100, 0x0010, 0x0100, 0x0010, 0x0100, 0x0010, 0x0100,
+                        ]);
+                        
+                    transmute(t1 | t3)
+                }
+            }
+            
+            fn enc_translate(input: u8x16) -> u8x16 {
+                let lut: Simd<i8, 16> = Simd::from_array([
+                    65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 0, 0,
+                ]);
+                let indicies = input.saturating_sub(Simd::splat(51));
+                let mask = input
+                    .simd_gt(Simd::splat(25))
+                    .to_int()
+                    .cast::<u8>();
+                
+                let indicies = indicies - mask;
+                
+                let out = input.cast::<i8>() + swizzle_dyn(lut.cast::<u8>(), indicies).cast::<i8>();
+                
+                out.cast::<u8>()
+            }
+
+            chunks.zip(out_chunks).for_each(|(chunk, out)| {
+                let buf = unsafe { slice::from_raw_parts(chunk.as_ptr(), 16) };
+                let vec: Simd<u8, 16> = Simd::from_slice(buf);
+        
+                let indicies = unpack_with_bswap(vec);
+        
+                let chars = enc_translate(indicies);
+        
+                *out = chars.to_array();
+
+                output_index += 16;
+            });
+        }
 
         let rem_out = &mut out[output_index..];
 
@@ -206,6 +259,83 @@ impl Encoder {
 
         String::from_utf8_unchecked(out)
     }
+}
+
+/// Swizzle a vector of bytes according to the index vector.
+/// Indices within range select the appropriate byte.
+/// Indices "out of bounds" instead select 0.
+///
+/// Note that the current implementation is selected during build-time
+/// of the standard library, so `cargo build -Zbuild-std` may be necessary
+/// to unlock better performance, especially for larger vectors.
+/// A planned compiler improvement will enable using `#[target_feature]` instead.
+#[inline]
+pub fn swizzle_dyn<const N: usize>(val: Simd<u8, N>, idxs: Simd<u8, N>) -> Simd<u8, N>
+where
+    LaneCount<N>: SupportedLaneCount,
+{
+    #![allow(unused_imports, unused_unsafe)]
+    #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+    use core::arch::aarch64::{uint8x8_t, vqtbl1q_u8, vtbl1_u8};
+    #[cfg(all(target_arch = "arm", target_feature = "v7", target_endian = "little"))]
+    use core::arch::arm::{uint8x8_t, vtbl1_u8};
+    #[cfg(target_arch = "wasm32")]
+    use core::arch::wasm32 as wasm;
+    #[cfg(target_arch = "x86")]
+    use core::arch::x86;
+    #[cfg(target_arch = "x86_64")]
+    use core::arch::x86_64 as x86;
+    // SAFETY: Intrinsics covered by cfg
+    unsafe {
+        #[cfg(target_feature = "ssse3")]
+        return transize(x86::_mm_shuffle_epi8, val, idxs);
+        #[cfg(target_feature = "simd128")]
+        return transize(wasm::i8x16_swizzle, val, idxs);
+        #[cfg(all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        ))]
+        return transize(vqtbl1q_u8, val, idxs);
+    }
+}
+
+/// This sets up a call to an architecture-specific function, and in doing so
+/// it persuades rustc that everything is the correct size. Which it is.
+/// This would not be needed if one could convince Rust that, by matching on N,
+/// N is that value, and thus it would be valid to substitute e.g. 16.
+///
+/// # Safety
+/// The correctness of this function hinges on the sizes agreeing in actuality.
+#[allow(dead_code)]
+#[inline(always)]
+unsafe fn transize<T, const N: usize>(
+    f: unsafe fn(T, T) -> T,
+    bytes: Simd<u8, N>,
+    idxs: Simd<u8, N>,
+) -> Simd<u8, N>
+where
+    LaneCount<N>: SupportedLaneCount,
+{
+    let idxs = zeroing_idxs(idxs);
+    // SAFETY: Same obligation to use this function as to use transmute_copy.
+    unsafe { transmute_copy(&f(transmute_copy(&bytes), transmute_copy(&idxs))) }
+}
+
+/// Make indices that yield 0 for this architecture
+#[inline(always)]
+fn zeroing_idxs<const N: usize>(idxs: Simd<u8, N>) -> Simd<u8, N>
+where
+    LaneCount<N>: SupportedLaneCount,
+{
+    // On x86, make sure the top bit is set.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    let idxs = {
+        idxs.simd_lt(Simd::splat(N as u8))
+            .select(idxs, Simd::splat(u8::MAX))
+    };
+    // Simply do nothing on most architectures.
+    idxs
 }
 
 #[cfg(test)]
