@@ -11,7 +11,7 @@ use crate::{utils::process_info::get_running_client, LCUError, RequestClient};
 pub struct LCUClient<'a> {
     client: &'a RequestClient,
     url: String,
-    auth_header: Option<String>,
+    auth_header: String,
 }
 
 #[cfg(feature = "batched")]
@@ -54,8 +54,16 @@ impl LCUClient<'_> {
         Ok(LCUClient {
             client,
             url: port_pass.0,
-            auth_header: Some(port_pass.1),
+            auth_header: port_pass.1,
         })
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn auth_header(&self) -> &str {
+        &self.auth_header
     }
 
     #[cfg(feature = "batched")]
@@ -152,7 +160,7 @@ impl LCUClient<'_> {
                 endpoint,
                 method,
                 body,
-                self.auth_header.as_deref(),
+                Some(&self.auth_header),
                 |bytes| {
                     if bytes.is_empty() {
                         Ok(None)

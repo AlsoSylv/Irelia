@@ -24,6 +24,10 @@ impl InGameClient<'_> {
         }
     }
 
+    pub fn url(&self) -> &str {
+        self.url
+    }
+
     /// Get all available data.
     ///
     /// A sample response can be found [here](https://static.developer.riotgames.com/docs/lol/liveclientdata_sample.json).

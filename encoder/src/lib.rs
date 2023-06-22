@@ -9,7 +9,12 @@
 
 extern crate alloc;
 
-use core::{mem::{transmute, transmute_copy}, simd::*, simd::Which::*, slice};
+use core::{
+    mem::{transmute, transmute_copy},
+    simd::Which::*,
+    simd::*,
+    slice,
+};
 
 use alloc::{string::String, vec};
 
@@ -38,9 +43,9 @@ impl Encoder {
 
     #[rustfmt::skip]
     /// Converts the buffer to base64, uses an out paramater to avoid allocations
-    /// 
+    ///
     /// # SAFETY
-    /// 
+    ///
     /// We ignore the last four elements of the slice we create, so no garbage data is passed
     fn internal_encode(&self, buf: &[u8], out: &mut [u8]) {
         let chunks = buf.array_chunks::<12>();
@@ -50,7 +55,7 @@ impl Encoder {
         let rem = chunks.remainder();
 
         // Original Github: https://github.com/lemire/fastbase64/tree/master
-        
+
         // Copyright (c) 2015-2016, Wojciech Muła, Alfred Klomp,  Daniel Lemire
         // (Unless otherwise stated in the source code)
         // All rights reserved.
@@ -86,14 +91,13 @@ impl Encoder {
             /// Because it's being converted between simd types, this is valid
             pub fn unpack_with_bswap(input: u8x16) -> u8x16 {
                 let in_u8 = simd_swizzle!(input, [1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10,]);
-                
 
                 unsafe {
                     let in_u32: u32x4 = transmute(in_u8);
-                
+
                     let t0 = in_u32 & u32x4::splat(0x0fc0fc00);
                     let t0_u16 = transmute::<_, u16x8>(t0);
-                
+
                     let t1 = simd_swizzle!(
                         t0_u16 >> Simd::splat(10),
                         t0_u16 >> Simd::splat(6),
@@ -108,18 +112,18 @@ impl Encoder {
                             Second(7),
                         ]
                     );
-                
+
                     let t2 = in_u32 & u32x4::splat(0x003f03f0);
-                
+
                     let t3 = transmute::<_, u16x8>(t2)
                         * u16x8::from_array([
                             0x0010, 0x0100, 0x0010, 0x0100, 0x0010, 0x0100, 0x0010, 0x0100,
                         ]);
-                        
+
                     transmute(t1 | t3)
                 }
             }
-            
+
             fn enc_translate(input: u8x16) -> u8x16 {
                 let lut: Simd<i8, 16> = Simd::from_array([
                     65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 0, 0,
@@ -129,22 +133,22 @@ impl Encoder {
                     .simd_gt(Simd::splat(25))
                     .to_int()
                     .cast::<u8>();
-                
+
                 let indicies = indicies - mask;
-                
+
                 let out = input.cast::<i8>() + swizzle_dyn(lut.cast::<u8>(), indicies).cast::<i8>();
-                
+
                 out.cast::<u8>()
             }
 
             chunks.zip(out_chunks).for_each(|(chunk, out)| {
                 let buf = unsafe { slice::from_raw_parts(chunk.as_ptr(), 16) };
                 let vec: Simd<u8, 16> = Simd::from_slice(buf);
-        
+
                 let indicies = unpack_with_bswap(vec);
-        
+
                 let chars = enc_translate(indicies);
-        
+
                 *out = chars.to_array();
 
                 output_index += 16;
@@ -177,27 +181,44 @@ impl Encoder {
 
         let rem_out = &mut out[output_index..];
 
-        match (rem, rem_out) {
-            ([], _) => {}
-            ([a], [out_a, out_b, _, _]) => {
-                let bit_1 = a >> 2;
-                let bit_2 = (a & 0b00000011) << 4;
+        let chunks = rem.array_chunks::<2>();
+        let out_chunks = rem_out.array_chunks_mut::<3>();
 
-                *out_a = self.encode_table[bit_1 as usize];
-                *out_b = self.encode_table[bit_2 as usize];
-            }
-            ([a, b], [out_a, out_b, out_c, _]) => {
-                let byte_array = u16::from_be_bytes([*a, *b]);
-                let bit_1 = byte_array >> 10 & 0b00111111;
-                let bit_2 = byte_array >> 4 & 0b00111111;
-                let bit_3 = byte_array << 2 & 0b00111111;
+        let rem = chunks.remainder();
 
-                *out_a = self.encode_table[bit_1 as usize];
-                *out_b = self.encode_table[bit_2 as usize];
-                *out_c = self.encode_table[bit_3 as usize];
-            }
-            _ => unreachable!(),
-        }
+        chunks.zip(out_chunks).for_each(|(chunk, out)| {
+            let byte_array = u16::from_be_bytes([chunk[0], chunk[1]]);
+            let bit_1 = byte_array >> 10 & 0b00111111;
+            let bit_2 = byte_array >> 4 & 0b00111111;
+            let bit_3 = byte_array << 2 & 0b00111111;
+
+            *out = [
+                self.encode_table[bit_1 as usize],
+                self.encode_table[bit_2 as usize],
+                self.encode_table[bit_3 as usize],
+            ];
+
+            output_index += 3;
+        });
+
+
+        let rem_out = &mut out[output_index..];
+
+        let chunks = rem.array_chunks::<1>();
+        let out_chunks = rem_out.array_chunks_mut::<2>();
+
+        chunks.zip(out_chunks).for_each(|(chunk, out)| {
+            let byte = chunk[0];
+            let bit_1 = byte >> 2;
+            let bit_2 = (byte & 0b00000011) << 4;
+
+            *out = [
+                self.encode_table[bit_1 as usize],
+                self.encode_table[bit_2 as usize],
+            ];
+
+            output_index += 2;
+        });
     }
 
     /// Converts the bytes to BASE64
