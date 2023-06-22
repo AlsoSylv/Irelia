@@ -60,7 +60,7 @@ impl LCUWebSocket {
         req.headers_mut()
             .insert("Authorization", HeaderValue::from_str(&pass).unwrap());
 
-        let (stream, _) = connect_async_tls_with_config(url, None, false, Some(connector))
+        let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
             .await
             .map_err(LCUError::WebsocketError)?;
 
@@ -149,5 +149,20 @@ impl Stream for LCUWebSocket {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         self.client_reciever.poll_recv(cx)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    extern crate test;
+
+    use tokio;
+
+    use super::LCUWebSocket;
+
+    #[tokio::test]
+    #[ignore]
+    async fn it_inits() {
+        let _ws_client = LCUWebSocket::new().await.unwrap();
     }
 }
