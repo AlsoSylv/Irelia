@@ -24,6 +24,7 @@ impl InGameClient<'_> {
         }
     }
 
+    /// Returns the url, which is currently static
     pub fn url(&self) -> &str {
         self.url
     }

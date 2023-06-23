@@ -48,6 +48,8 @@ pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
     client_reciever: UnboundedReceiver<Result<Value, LCUError>>,
+    url: String,
+    auth_header: String,
 }
 
 impl LCUWebSocket {
@@ -55,10 +57,10 @@ impl LCUWebSocket {
     pub async fn new() -> Result<Self, LCUError> {
         let tls = TLS_CONFIG.clone();
         let connector = Connector::Rustls(Arc::new(tls));
-        let (url, pass) = get_running_client()?;
+        let (url, auth_header) = get_running_client()?;
         let mut req = format!("wss://{}", url).into_client_request().unwrap();
         req.headers_mut()
-            .insert("Authorization", HeaderValue::from_str(&pass).unwrap());
+            .insert("Authorization", HeaderValue::from_str(&auth_header).unwrap());
 
         let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
             .await
@@ -116,7 +118,19 @@ impl LCUWebSocket {
             ws_sender,
             handle,
             client_reciever,
+            url,
+            auth_header,
         })
+    }
+
+    /// Returns a reference to the URL in use
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Returns a reference to the auth header in use
+    pub fn auth_header(&self) -> &str {
+        &self.auth_header
     }
 
     /// Subscribe to a new API event

@@ -58,10 +58,12 @@ impl LCUClient<'_> {
         })
     }
 
+    /// Returns a reference to the URL in use
     pub fn url(&self) -> &str {
         &self.url
     }
 
+    /// Returns a reference to the auth header in use
     pub fn auth_header(&self) -> &str {
         &self.auth_header
     }
