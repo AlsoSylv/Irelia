@@ -38,9 +38,9 @@ pub enum RequestType {
 /// subscribe and unsubscribe methods.
 pub enum EventType {
     OnJsonApiEvent,
-    OnLcdEvent,
+    OnLcdsEvent,
     OnJsonApiEventCallback(String),
-    OnLcdEventCallback(String),
+    OnLcdsEventCallback(String),
 }
 
 /// Struct representing a connection to the LCU websocket
@@ -74,12 +74,12 @@ impl LCUWebSocket {
                 if let Ok((code, endpoint)) = ws_reciever.try_recv() {
                     let endpoint = match endpoint {
                         EventType::OnJsonApiEvent => String::from("OnJsonApiEvent"),
-                        EventType::OnLcdEvent => String::from("OnLcdEvent"),
+                        EventType::OnLcdsEvent => String::from("OnLcdsEvent"),
                         EventType::OnJsonApiEventCallback(callback) => {
                             format!("OnJsonApiEvent{}", callback.replace('/', "_"))
                         }
-                        EventType::OnLcdEventCallback(callback) => {
-                            format!("OnLcdEvent{}", callback.replace('/', "_"))
+                        EventType::OnLcdsEventCallback(callback) => {
+                            format!("OnLcdsEvent{}", callback.replace('/', "_"))
                         }
                     };
 
