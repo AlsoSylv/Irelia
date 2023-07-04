@@ -39,6 +39,11 @@ pub enum RequestType {
 pub enum EventType {
     OnJsonApiEvent,
     OnLcdEvent,
+    OnLog,
+    OnRegionLocaleChanged,
+    OnServiceProxyAsyncEvent,
+    OnServiceProxyMethodEvent,
+    OnServiceProxyUuidEvent,
     OnJsonApiEventCallback(String),
     OnLcdEventCallback(String),
 }
@@ -75,6 +80,17 @@ impl LCUWebSocket {
                     let endpoint = match endpoint {
                         EventType::OnJsonApiEvent => String::from("OnJsonApiEvent"),
                         EventType::OnLcdEvent => String::from("OnLcdEvent"),
+                        EventType::OnLog => String::from("OnLog"),
+                        EventType::OnRegionLocaleChanged => String::from("OnRegionLocaleChanged"),
+                        EventType::OnServiceProxyAsyncEvent => {
+                            String::from("OnServiceProxyAsyncEvent")
+                        }
+                        EventType::OnServiceProxyMethodEvent => {
+                            String::from("OnServiceProxyMethodEvent")
+                        }
+                        EventType::OnServiceProxyUuidEvent => {
+                            String::from("OnServiceProxyUuidEvent")
+                        }
                         EventType::OnJsonApiEventCallback(callback) => {
                             format!("OnJsonApiEvent{}", callback.replace('/', "_"))
                         }
