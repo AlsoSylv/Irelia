@@ -1,4 +1,6 @@
-#![feature(array_chunks, core_intrinsics, int_roundings, test, portable_simd)]
+#![feature(array_chunks)]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+#![cfg_attr(test, feature(core_intrinsics, test))]
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
@@ -9,10 +11,10 @@
 
 extern crate alloc;
 
+#[cfg(feature = "simd")]
 use core::{
     mem::{transmute, transmute_copy},
-    simd::Which::*,
-    simd::*,
+    simd::{Which::*, *},
     slice,
 };
 
@@ -48,11 +50,74 @@ impl Encoder {
     ///
     /// We ignore the last four elements of the slice we create, so no garbage data is passed
     fn internal_encode(&self, buf: &[u8], out: &mut [u8]) {
+        #[cfg(not(feature = "simd"))]
+        let chunks = buf.array_chunks::<24>();
+        #[cfg(not(feature = "simd"))]
+        let out_chunks = out.array_chunks_mut::<32>();
+
+        #[cfg(feature = "simd")]
         let chunks = buf.array_chunks::<12>();
+        #[cfg(feature = "simd")]
         let out_chunks = out.array_chunks_mut::<16>();
 
         let mut output_index = 0;
         let rem = chunks.remainder();
+
+        #[cfg(not(feature = "simd"))]
+        {
+            chunks.zip(out_chunks).for_each(|(chunk, out)| {
+                let byte_array_1 = u64::from_be_bytes([
+                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], 0, 0,
+                ]);
+    
+                let byte_array_2 = u64::from_be_bytes([
+                    chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11], 0, 0,
+                ]);
+    
+                let byte_array_3 = u64::from_be_bytes([
+                    chunk[12], chunk[13], chunk[14], chunk[15], chunk[16], chunk[17], 0, 0,
+                ]);
+    
+                let byte_array_4 = u64::from_be_bytes([
+                    chunk[18], chunk[19], chunk[20], chunk[21], chunk[22], chunk[23], 0, 0,
+                ]);
+    
+                *out = [
+                    self.encode_table[(byte_array_1 >> 58 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 52 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 46 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 40 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 34 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 28 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 22 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 16 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 58 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 52 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 46 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 40 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 34 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 28 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 22 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 16 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 58 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 52 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 46 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 40 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 34 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 28 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 22 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 16 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 58 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 52 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 46 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 40 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 34 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 28 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 22 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 16 & 0b00111111) as usize],
+                ];
+            });
+        }
 
         // Original Github: https://github.com/lemire/fastbase64/tree/master
 
@@ -85,6 +150,7 @@ impl Encoder {
 
         // Rust portable-simd port and additional optimizations 
         // authored by AlsoSylv and burgerindividual
+        #[cfg(feature = "simd")]
         {
             /// # SAFETY
             ///
@@ -142,6 +208,9 @@ impl Encoder {
             }
 
             chunks.zip(out_chunks).for_each(|(chunk, out)| {
+                // # SAFETY
+                //
+                // We ignore the last four values, so this is safe
                 let buf = unsafe { slice::from_raw_parts(chunk.as_ptr(), 16) };
                 let vec: Simd<u8, 16> = Simd::from_slice(buf);
 
@@ -227,7 +296,7 @@ impl Encoder {
         T: AsRef<[u8]>,
     {
         let buf = bytes.as_ref();
-        let mut out = vec![b'='; buf.len().div_ceil(3) * 4];
+        let mut out = vec![b'='; div_ceil(buf.len(), 3) * 4];
         self.internal_encode(buf, &mut out);
 
         String::from_utf8(out).unwrap()
@@ -245,7 +314,7 @@ impl Encoder {
         T: AsRef<[u8]>,
     {
         let buf = bytes.as_ref();
-        let mut out = vec![b'='; buf.len().div_ceil(3) * 4];
+        let mut out = vec![b'='; div_ceil(buf.len(), 3) * 4];
         self.internal_encode(buf, &mut out);
 
         String::from_utf8_unchecked(out)
@@ -257,7 +326,7 @@ impl Encoder {
         T: AsRef<[u8]>,
     {
         let buf = bytes.as_ref();
-        let mut out = vec![0; buf.len().div_ceil(3) * 4];
+        let mut out = vec![0; div_ceil(buf.len(), 3) * 4];
         self.internal_encode(buf, &mut out);
 
         String::from_utf8(out).unwrap()
@@ -275,10 +344,22 @@ impl Encoder {
         T: AsRef<[u8]>,
     {
         let buf = bytes.as_ref();
-        let mut out = vec![0; buf.len().div_ceil(3) * 4];
+        let mut out = vec![0; div_ceil(buf.len(), 3) * 4];
         self.internal_encode(buf, &mut out);
 
         String::from_utf8_unchecked(out)
+    }
+}
+
+#[inline]
+const fn div_ceil(divisor: usize, dividend: usize) -> usize {
+    let quotient = divisor / dividend;
+    let remainder = divisor % dividend;
+
+    if remainder > 0 {
+        quotient + 1
+    } else {
+        quotient
     }
 }
 
@@ -290,8 +371,9 @@ impl Encoder {
 /// of the standard library, so `cargo build -Zbuild-std` may be necessary
 /// to unlock better performance, especially for larger vectors.
 /// A planned compiler improvement will enable using `#[target_feature]` instead.
+#[cfg(feature = "simd")]
 #[inline]
-pub fn swizzle_dyn<const N: usize>(val: Simd<u8, N>, idxs: Simd<u8, N>) -> Simd<u8, N>
+fn swizzle_dyn<const N: usize>(val: Simd<u8, N>, idxs: Simd<u8, N>) -> Simd<u8, N>
 where
     LaneCount<N>: SupportedLaneCount,
 {
@@ -328,6 +410,7 @@ where
 ///
 /// # Safety
 /// The correctness of this function hinges on the sizes agreeing in actuality.
+#[cfg(feature = "simd")]
 #[allow(dead_code)]
 #[inline(always)]
 unsafe fn transize<T, const N: usize>(
@@ -344,6 +427,7 @@ where
 }
 
 /// Make indices that yield 0 for this architecture
+#[cfg(feature = "simd")]
 #[inline(always)]
 fn zeroing_idxs<const N: usize>(idxs: Simd<u8, N>) -> Simd<u8, N>
 where
