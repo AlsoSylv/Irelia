@@ -14,10 +14,10 @@ readme = "../README.md"
 serde_json = { version = "1.0" }
 rustls = "0.21.0"
 rustls-pemfile = "1.0.2"
+irelia_encoder = { path = "../encoder", version = "0.1.0", features = ["simd"] }
 # Optional across some features
 # hyper-tls = { version = "0.5.0", optional = true }
 hyper-rustls = { version = "0.24.0", optional = true }
-irelia_encoder = { path = "../encoder", optional = true, version = "0.1.0" }
 sysinfo = { version = "0.28.4", optional = true }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
@@ -70,7 +70,6 @@ rest = [
     "dep:futures-util",
     "dep:hyper-rustls",
     "dep:sysinfo",
-    "dep:irelia_encoder",
     ]
 
 in_game = [
@@ -78,7 +77,6 @@ in_game = [
     "dep:hyper", 
     "dep:serde_derive",
     "dep:hyper-rustls",
-    "dep:irelia_encoder",
     ]
 
 ws = [

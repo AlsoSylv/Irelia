@@ -47,7 +47,7 @@ pub enum EventType {
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
-    client_reciever: UnboundedReceiver<Result<Value, LCUError>>,
+    client_reciever: UnboundedReceiver<Result<Vec<Value>, LCUError>>,
     url: String,
     auth_header: String,
 }
@@ -59,8 +59,10 @@ impl LCUWebSocket {
         let connector = Connector::Rustls(Arc::new(tls));
         let (url, auth_header) = get_running_client()?;
         let mut req = format!("wss://{}", url).into_client_request().unwrap();
-        req.headers_mut()
-            .insert("Authorization", HeaderValue::from_str(&auth_header).unwrap());
+        req.headers_mut().insert(
+            "Authorization",
+            HeaderValue::from_str(&auth_header).unwrap(),
+        );
 
         let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
             .await
@@ -101,7 +103,7 @@ impl LCUWebSocket {
                 };
 
                 if let Some(Ok(data)) = read.next().await {
-                    if let Ok(json) = &serde_json::from_slice::<Value>(&data.into_data()) {
+                    if let Ok(json) = &serde_json::from_slice::<Vec<Value>>(&data.into_data()) {
                         if let Some(endpoint) = json[1].as_str() {
                             if active_commands.contains(endpoint) {
                                 client_sender.send(Ok(json.to_owned())).unwrap();
@@ -156,7 +158,7 @@ impl LCUWebSocket {
 }
 
 impl Stream for LCUWebSocket {
-    type Item = Result<Value, LCUError>;
+    type Item = Result<Vec<Value>, LCUError>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
