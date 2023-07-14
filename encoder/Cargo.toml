@@ -16,4 +16,5 @@ rand = "0.8.5"
 base64 = "0.21.0"
 
 [features]
-simd = []
+simd = ["nightly"]
+nightly = []

@@ -1,4 +1,4 @@
-#![feature(array_chunks)]
+#![cfg_attr(feature = "nightly", feature(array_chunks))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 #![cfg_attr(test, feature(core_intrinsics, test))]
 #![no_std]
@@ -50,15 +50,20 @@ impl Encoder {
     ///
     /// We ignore the last four elements of the slice we create, so no garbage data is passed
     fn internal_encode(&self, buf: &[u8], out: &mut [u8]) {
-        #[cfg(not(feature = "simd"))]
-        let chunks = buf.array_chunks::<24>();
-        #[cfg(not(feature = "simd"))]
-        let out_chunks = out.array_chunks_mut::<32>();
-
         #[cfg(feature = "simd")]
         let chunks = buf.array_chunks::<12>();
         #[cfg(feature = "simd")]
         let out_chunks = out.array_chunks_mut::<16>();
+
+        #[cfg(all(feature = "nightly", not(feature = "simd")))]
+        let chunks = buf.array_chunks::<24>();
+        #[cfg(all(feature = "nightly", not(feature = "simd")))]
+        let out_chunks = out.array_chunks_mut::<32>();
+
+        #[cfg(not(feature = "nightly"))]
+        let chunks = buf.chunks_exact(24);
+        #[cfg(not(feature = "nightly"))]
+        let out_chunks = out.chunks_exact_mut(32);
 
         let mut output_index = 0;
         let rem = chunks.remainder();
@@ -66,22 +71,25 @@ impl Encoder {
         #[cfg(not(feature = "simd"))]
         {
             chunks.zip(out_chunks).for_each(|(chunk, out)| {
+                #[cfg(not(feature = "nightly"))]
+                let out: &mut [u8; 32] = out.try_into().unwrap();
+
                 let byte_array_1 = u64::from_be_bytes([
                     chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], 0, 0,
                 ]);
-    
+
                 let byte_array_2 = u64::from_be_bytes([
                     chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11], 0, 0,
                 ]);
-    
+
                 let byte_array_3 = u64::from_be_bytes([
                     chunk[12], chunk[13], chunk[14], chunk[15], chunk[16], chunk[17], 0, 0,
                 ]);
-    
+
                 let byte_array_4 = u64::from_be_bytes([
                     chunk[18], chunk[19], chunk[20], chunk[21], chunk[22], chunk[23], 0, 0,
                 ]);
-    
+
                 *out = [
                     self.encode_table[(byte_array_1 >> 58 & 0b00111111) as usize],
                     self.encode_table[(byte_array_1 >> 52 & 0b00111111) as usize],
@@ -226,12 +234,22 @@ impl Encoder {
 
         let rem_out = &mut out[output_index..];
 
+        #[cfg(feature = "nightly")]
         let chunks = rem.array_chunks::<3>();
+        #[cfg(feature = "nightly")]
         let out_chunks = rem_out.array_chunks_mut::<4>();
+
+        #[cfg(not(feature = "nightly"))]
+        let chunks = rem.chunks_exact(3);
+        #[cfg(not(feature = "nightly"))]
+        let out_chunks = rem_out.chunks_exact_mut(4);
 
         let rem = chunks.remainder();
 
         chunks.zip(out_chunks).for_each(|(chunk, out)| {
+            #[cfg(not(feature = "nightly"))]
+            let out: &mut [u8; 4] = out.try_into().unwrap();
+
             let byte_array = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], 0]);
             let bit_1 = byte_array >> 26 & 0b00111111;
             let bit_2 = byte_array >> 20 & 0b00111111;
@@ -250,12 +268,22 @@ impl Encoder {
 
         let rem_out = &mut out[output_index..];
 
+        #[cfg(feature = "nightly")]
         let chunks = rem.array_chunks::<2>();
+        #[cfg(feature = "nightly")]
         let out_chunks = rem_out.array_chunks_mut::<3>();
+
+        #[cfg(not(feature = "nightly"))]
+        let chunks = rem.chunks_exact(2);
+        #[cfg(not(feature = "nightly"))]
+        let out_chunks = rem_out.chunks_exact_mut(3);
 
         let rem = chunks.remainder();
 
         chunks.zip(out_chunks).for_each(|(chunk, out)| {
+            #[cfg(not(feature = "nightly"))]
+            let out: &mut [u8; 3] = out.try_into().unwrap();
+
             let byte_array = u16::from_be_bytes([chunk[0], chunk[1]]);
             let bit_1 = byte_array >> 10 & 0b00111111;
             let bit_2 = byte_array >> 4 & 0b00111111;
@@ -273,10 +301,20 @@ impl Encoder {
 
         let rem_out = &mut out[output_index..];
 
+        #[cfg(feature = "nightly")]
         let chunks = rem.array_chunks::<1>();
+        #[cfg(feature = "nightly")]
         let out_chunks = rem_out.array_chunks_mut::<2>();
 
+        #[cfg(not(feature = "nightly"))]
+        let chunks = rem.chunks_exact(1);
+        #[cfg(not(feature = "nightly"))]
+        let out_chunks = rem_out.chunks_exact_mut(2);
+
         chunks.zip(out_chunks).for_each(|(chunk, out)| {
+            #[cfg(not(feature = "nightly"))]
+            let out: &mut [u8; 2] = out.try_into().unwrap();
+
             let byte = chunk[0];
             let bit_1 = byte >> 2;
             let bit_2 = (byte & 0b00000011) << 4;
