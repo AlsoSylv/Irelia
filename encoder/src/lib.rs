@@ -27,6 +27,15 @@ pub struct Encoder {
 
 impl Encoder {
     /// Creates a new instance of the encoder using the default base64 alphabet
+    /// 
+    /// # Examples
+    /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
+    /// fn main() {
+    ///     const ENCODER: Encoder = Encoder::new();
+    /// }
+    /// ```
     pub const fn new() -> Self {
         Self {
             encode_table: [
@@ -39,16 +48,31 @@ impl Encoder {
         }
     }
 
+
+    /// Creates a new instance of the encoder using a specified alphabet
+    /// 
+    /// # Example:
+    /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
+    /// fn main() {
+    ///     const ALPHABET: [u8; 64] = [
+    ///         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
+    ///         b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',
+    ///         b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p',
+    ///         b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3',
+    ///         b'4', b'5', b'6', b'7', b'8', b'9', b'+', b'/',
+    ///     ];
+    /// 
+    ///     const ENCODER: Encoder = Encoder::with_encode_table(ALPHABET);
+    /// }
+    /// ```
     pub const fn with_encode_table(encode_table: [u8; 64]) -> Self {
         Self { encode_table }
     }
 
     #[rustfmt::skip]
     /// Converts the buffer to base64, uses an out paramater to avoid allocations
-    ///
-    /// # SAFETY
-    ///
-    /// We ignore the last four elements of the slice we create, so no garbage data is passed
     fn internal_encode(&self, buf: &[u8], out: &mut [u8]) {
         #[cfg(feature = "simd")]
         let chunks = buf.array_chunks::<12>();
@@ -75,54 +99,54 @@ impl Encoder {
                 let out: &mut [u8; 32] = out.try_into().unwrap();
 
                 let byte_array_1 = u64::from_be_bytes([
-                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], 0, 0,
+                    0, 0, chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5],
                 ]);
 
                 let byte_array_2 = u64::from_be_bytes([
-                    chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11], 0, 0,
+                    0, 0, chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11],
                 ]);
 
                 let byte_array_3 = u64::from_be_bytes([
-                    chunk[12], chunk[13], chunk[14], chunk[15], chunk[16], chunk[17], 0, 0,
+                    0, 0, chunk[12], chunk[13], chunk[14], chunk[15], chunk[16], chunk[17],
                 ]);
 
                 let byte_array_4 = u64::from_be_bytes([
-                    chunk[18], chunk[19], chunk[20], chunk[21], chunk[22], chunk[23], 0, 0,
+                    0, 0, chunk[18], chunk[19], chunk[20], chunk[21], chunk[22], chunk[23],
                 ]);
 
                 *out = [
-                    self.encode_table[(byte_array_1 >> 58 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 52 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 46 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 40 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 34 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 28 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 22 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 16 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 58 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 52 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 46 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 40 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 34 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 28 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 22 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 16 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 58 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 52 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 46 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 40 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 34 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 28 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 22 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 16 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 58 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 52 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 46 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 40 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 34 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 28 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 22 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 16 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 42 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 36 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 30 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 24 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 18 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 12 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 6 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 42 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 36 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 30 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 24 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 18 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 12 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 6 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 42 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 36 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 30 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 24 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 18 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 12 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 6 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 42 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 36 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 30 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 24 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 18 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 12 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 6 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 >> 0 & 0b00111111) as usize],
                 ];
             });
         }
@@ -160,12 +184,10 @@ impl Encoder {
         // authored by AlsoSylv and burgerindividual
         #[cfg(feature = "simd")]
         {
-            /// # SAFETY
-            ///
-            /// Because it's being converted between simd types, this is valid
             pub fn unpack_with_bswap(input: u8x16) -> u8x16 {
                 let in_u8 = simd_swizzle!(input, [1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10,]);
 
+                /// # SAFETY: Transmute is only used to convert between same sized simd types
                 unsafe {
                     let in_u32: u32x4 = transmute(in_u8);
 
@@ -216,9 +238,7 @@ impl Encoder {
             }
 
             chunks.zip(out_chunks).for_each(|(chunk, out)| {
-                // # SAFETY
-                //
-                // We ignore the last four values, so this is safe
+                // # SAFETY: We ignore the last four values, which are the only ones that would be random
                 let buf = unsafe { slice::from_raw_parts(chunk.as_ptr(), 16) };
                 let vec: Simd<u8, 16> = Simd::from_slice(buf);
 
@@ -329,6 +349,17 @@ impl Encoder {
     }
 
     /// Converts the bytes to BASE64
+    /// 
+    /// # Examples
+    /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
+    /// fn main() {
+    ///     const ENCODER: Encoder = Encoder::new();
+    /// 
+    ///     let base64_encoded = ENCODER.encode("Hello, World!");
+    /// }
+    /// ```
     pub fn encode<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
@@ -340,13 +371,24 @@ impl Encoder {
         String::from_utf8(out).unwrap()
     }
 
-    /// Converts the bytes to BASE64
+    /// Converts the bytes to BASE64, but doesn't check if the output is valid UTF-8
     ///
+    /// # Example:
+    /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
+    /// fn main() {
+    ///     const ENCODER: Encoder = Encoder::new();
+    /// 
+    ///     let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
+    /// }
+    /// ```
+    /// 
     /// # Safety
-    ///
-    /// This does not check that all characters are valid UTF-8
-    /// The behavoir of strings containing invalid UTF-8 bytes
-    /// is undefined
+    /// 
+    /// The characters used for the encode table need to be valid UTF-8
+    /// This is true with the default table, but might not be for custom ones.
+    /// 
     pub unsafe fn encode_unchecked<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
@@ -358,7 +400,18 @@ impl Encoder {
         String::from_utf8_unchecked(out)
     }
 
-    /// Converts the bytes to BASE64
+    /// Converts the bytes to BASE64 without padding
+    /// 
+    /// # Examples
+    /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
+    /// fn main() {
+    ///     const ENCODER: Encoder = Encoder::new();
+    /// 
+    ///     let base64_encoded = ENCODER.encode_without_padding("Hello, World!");
+    /// }
+    /// ```
     pub fn encode_without_padding<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
@@ -370,13 +423,24 @@ impl Encoder {
         String::from_utf8(out).unwrap()
     }
 
-    /// Converts the bytes to BASE64
+    /// Converts the bytes to BASE64 without padding, but doesn't check if the output is valid UTF-8
     ///
+    /// # Example:
+    /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
+    /// fn main() {
+    ///     const ENCODER: Encoder = Encoder::new();
+    /// 
+    ///     let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
+    /// }
+    /// ```
+    /// 
     /// # Safety
-    ///
-    /// This does not check that all characters are valid UTF-8
-    /// The behavoir of strings containing invalid UTF-8 bytes
-    /// is undefined
+    /// 
+    /// The characters used for the encode table need to be valid UTF-8
+    /// This is true with the default table, but might not be for custom ones.
+    /// 
     pub unsafe fn encode_unchecked_without_padding<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
