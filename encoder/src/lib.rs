@@ -27,14 +27,10 @@ pub struct Encoder {
 
 impl Encoder {
     /// Creates a new instance of the encoder using the default base64 alphabet
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use irelia_encoder::Encoder;
-    /// 
-    /// fn main() {
-    ///     const ENCODER: Encoder = Encoder::new();
-    /// }
+    /// const ENCODER: Encoder = Encoder::new();
     /// ```
     pub const fn new() -> Self {
         Self {
@@ -48,24 +44,19 @@ impl Encoder {
         }
     }
 
-
     /// Creates a new instance of the encoder using a specified alphabet
-    /// 
+    ///
     /// # Example:
     /// ```
-    /// use irelia_encoder::Encoder;
-    /// 
-    /// fn main() {
-    ///     const ALPHABET: [u8; 64] = [
-    ///         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
-    ///         b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',
-    ///         b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p',
-    ///         b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3',
-    ///         b'4', b'5', b'6', b'7', b'8', b'9', b'+', b'/',
-    ///     ];
-    /// 
-    ///     const ENCODER: Encoder = Encoder::with_encode_table(ALPHABET);
-    /// }
+    /// const ALPHABET: [u8; 64] = [
+    ///     b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
+    ///     b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',
+    ///     b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p',
+    ///     b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3',
+    ///     b'4', b'5', b'6', b'7', b'8', b'9', b'+', b'/',
+    /// ];
+    ///
+    /// const ENCODER: Encoder = Encoder::with_encode_table(ALPHABET);
     /// ```
     pub const fn with_encode_table(encode_table: [u8; 64]) -> Self {
         Self { encode_table }
@@ -122,7 +113,7 @@ impl Encoder {
                     self.encode_table[(byte_array_1 >> 18 & 0b00111111) as usize],
                     self.encode_table[(byte_array_1 >> 12 & 0b00111111) as usize],
                     self.encode_table[(byte_array_1 >> 6 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_1 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_1 & 0b00111111) as usize],
                     self.encode_table[(byte_array_2 >> 42 & 0b00111111) as usize],
                     self.encode_table[(byte_array_2 >> 36 & 0b00111111) as usize],
                     self.encode_table[(byte_array_2 >> 30 & 0b00111111) as usize],
@@ -130,7 +121,7 @@ impl Encoder {
                     self.encode_table[(byte_array_2 >> 18 & 0b00111111) as usize],
                     self.encode_table[(byte_array_2 >> 12 & 0b00111111) as usize],
                     self.encode_table[(byte_array_2 >> 6 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_2 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_2 & 0b00111111) as usize],
                     self.encode_table[(byte_array_3 >> 42 & 0b00111111) as usize],
                     self.encode_table[(byte_array_3 >> 36 & 0b00111111) as usize],
                     self.encode_table[(byte_array_3 >> 30 & 0b00111111) as usize],
@@ -138,7 +129,7 @@ impl Encoder {
                     self.encode_table[(byte_array_3 >> 18 & 0b00111111) as usize],
                     self.encode_table[(byte_array_3 >> 12 & 0b00111111) as usize],
                     self.encode_table[(byte_array_3 >> 6 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_3 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_3 & 0b00111111) as usize],
                     self.encode_table[(byte_array_4 >> 42 & 0b00111111) as usize],
                     self.encode_table[(byte_array_4 >> 36 & 0b00111111) as usize],
                     self.encode_table[(byte_array_4 >> 30 & 0b00111111) as usize],
@@ -146,7 +137,7 @@ impl Encoder {
                     self.encode_table[(byte_array_4 >> 18 & 0b00111111) as usize],
                     self.encode_table[(byte_array_4 >> 12 & 0b00111111) as usize],
                     self.encode_table[(byte_array_4 >> 6 & 0b00111111) as usize],
-                    self.encode_table[(byte_array_4 >> 0 & 0b00111111) as usize],
+                    self.encode_table[(byte_array_4 & 0b00111111) as usize],
                 ];
             });
         }
@@ -187,7 +178,7 @@ impl Encoder {
             pub fn unpack_with_bswap(input: u8x16) -> u8x16 {
                 let in_u8 = simd_swizzle!(input, [1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10,]);
 
-                /// # SAFETY: Transmute is only used to convert between same sized simd types
+                // # SAFETY: Transmute is only used to convert between same sized simd types
                 unsafe {
                     let in_u32: u32x4 = transmute(in_u8);
 
@@ -349,16 +340,12 @@ impl Encoder {
     }
 
     /// Converts the bytes to BASE64
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use irelia_encoder::Encoder;
-    /// 
-    /// fn main() {
-    ///     const ENCODER: Encoder = Encoder::new();
-    /// 
-    ///     let base64_encoded = ENCODER.encode("Hello, World!");
-    /// }
+    /// const ENCODER: Encoder = Encoder::new();
+    ///
+    /// let base64_encoded = ENCODER.encode("Hello, World!");
     /// ```
     pub fn encode<T>(&self, bytes: T) -> String
     where
@@ -371,24 +358,33 @@ impl Encoder {
         String::from_utf8(out).unwrap()
     }
 
+    pub fn encode_with_ascii_check<T>(&self, bytes: T) -> String
+    where
+        T: AsRef<[u8]>,
+    {
+        let buf = bytes.as_ref();
+        let mut out = vec![b'='; div_ceil(buf.len(), 3) * 4];
+        self.internal_encode(buf, &mut out);
+
+        assert!(is_ascii(&out));
+
+        unsafe { String::from_utf8_unchecked(out) }
+    }
+
     /// Converts the bytes to BASE64, but doesn't check if the output is valid UTF-8
     ///
     /// # Example:
     /// ```
-    /// use irelia_encoder::Encoder;
-    /// 
-    /// fn main() {
-    ///     const ENCODER: Encoder = Encoder::new();
-    /// 
-    ///     let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
-    /// }
+    /// const ENCODER: Encoder = Encoder::new();
+    ///
+    /// let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
     /// ```
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The characters used for the encode table need to be valid UTF-8
     /// This is true with the default table, but might not be for custom ones.
-    /// 
+    ///
     pub unsafe fn encode_unchecked<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
@@ -401,16 +397,12 @@ impl Encoder {
     }
 
     /// Converts the bytes to BASE64 without padding
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use irelia_encoder::Encoder;
-    /// 
-    /// fn main() {
-    ///     const ENCODER: Encoder = Encoder::new();
-    /// 
-    ///     let base64_encoded = ENCODER.encode_without_padding("Hello, World!");
-    /// }
+    /// const ENCODER: Encoder = Encoder::new();
+    ///
+    /// let base64_encoded = ENCODER.encode_without_padding("Hello, World!");
     /// ```
     pub fn encode_without_padding<T>(&self, bytes: T) -> String
     where
@@ -427,20 +419,16 @@ impl Encoder {
     ///
     /// # Example:
     /// ```
-    /// use irelia_encoder::Encoder;
-    /// 
-    /// fn main() {
-    ///     const ENCODER: Encoder = Encoder::new();
-    /// 
-    ///     let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
-    /// }
+    /// const ENCODER: Encoder = Encoder::new();
+    ///
+    /// let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
     /// ```
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The characters used for the encode table need to be valid UTF-8
     /// This is true with the default table, but might not be for custom ones.
-    /// 
+    ///
     pub unsafe fn encode_unchecked_without_padding<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
@@ -451,6 +439,49 @@ impl Encoder {
 
         String::from_utf8_unchecked(out)
     }
+}
+
+//TODO: Benchmark these\
+#[cfg(feature = "simd")]
+fn is_ascii(buffer: &[u8]) -> bool {
+    let mut mask: Simd<i8, 16> = Simd::splat(0);
+    let spans = buffer.array_chunks::<256>();
+
+    let mut has_error: Mask<i8, 16>;
+
+    for span in spans {
+        let chunks = span.array_chunks::<16>();
+
+        for chunk in chunks {
+            let current_bytes: Simd<u8, 16> = Simd::from_slice(chunk);
+            mask |= current_bytes.cast::<i8>();
+        }
+
+        has_error = mask.simd_gt(Simd::splat(0));
+
+        if !has_error.any() {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(not(feature = "simd"))]
+fn is_ascii(buffer: &[u8]) -> bool {
+    for x in buffer {
+        if x < &0 {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[test]
+fn is_ascii_test() {
+    let vec = vec![b'a'; 16];
+    assert!(is_ascii(&vec) == true);
 }
 
 #[inline]
@@ -592,6 +623,48 @@ mod test {
             black_box({
                 for x in 0..10000 {
                     black_box(encoder.encode(&strings[x]));
+                }
+            });
+        })
+    }
+
+    #[bench]
+    fn my_b64_my_check(b: &mut Bencher) {
+        let mut strings = vec![String::new(); 10000];
+
+        let mut rng = black_box(thread_rng());
+
+        for x in 0..10000 {
+            strings[x] = black_box(Alphanumeric.sample_string(&mut rng, 1924));
+        }
+
+        let encoder = Encoder::new();
+
+        b.iter(|| {
+            black_box({
+                for x in 0..10000 {
+                    black_box(encoder.encode_with_ascii_check(&strings[x]));
+                }
+            });
+        })
+    }
+
+    #[bench]
+    fn my_b64_unchecked(b: &mut Bencher) {
+        let mut strings = vec![String::new(); 10000];
+
+        let mut rng = black_box(thread_rng());
+
+        for x in 0..10000 {
+            strings[x] = black_box(Alphanumeric.sample_string(&mut rng, 1924));
+        }
+
+        let encoder = Encoder::new();
+
+        b.iter(|| {
+            black_box({
+                for x in 0..10000 {
+                    black_box(unsafe { encoder.encode_unchecked(&strings[x]) });
                 }
             });
         })
