@@ -68,6 +68,13 @@ impl LCUClient<'_> {
         &self.auth_header
     }
 
+    pub fn refresh(&mut self) -> Result<(), LCUError> {
+        let new_port_pass = get_running_client()?;
+        self.url = new_port_pass.0;
+        self.auth_header = new_port_pass.1;
+        Ok(())
+    }
+
     #[cfg(feature = "batched")]
     /// System for batching requests to the LCU by sending a slice
     /// The buffer size is how many requests can be operated on at

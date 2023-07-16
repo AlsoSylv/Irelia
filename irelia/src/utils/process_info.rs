@@ -46,7 +46,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     const ENCODER: Encoder = Encoder::new();
 
     Ok((
-        format!("127.0.0.1:{}", port),
-        format!("Basic {}", ENCODER.encode(format!("riot:{}", auth))),
+        format!("127.0.0.1:{port}"),
+        format!("Basic {}", ENCODER.encode_with_ascii_check(format!("riot:{auth}"))),
     ))
 }

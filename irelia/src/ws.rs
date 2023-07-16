@@ -2,16 +2,20 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use futures_util::{SinkExt, Stream, StreamExt};
+use futures_util::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
 use serde_json::Value;
 use tokio::{
-    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    net::TcpStream,
+    sync::mpsc::{self, UnboundedSender},
     task::JoinHandle,
 };
 use tokio_tungstenite::{
     connect_async_tls_with_config,
-    tungstenite::{client::IntoClientRequest, http::HeaderValue},
-    Connector,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue, Message},
+    Connector, MaybeTlsStream, WebSocketStream,
 };
 
 use crate::{
@@ -48,18 +52,25 @@ pub enum EventType {
     OnLcdsEventCallback(String),
 }
 
+pub enum WSControl {
+    Refresh,
+    Continue,
+}
+
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
-    client_reciever: UnboundedReceiver<Result<Vec<Value>, LCUError>>,
     url: String,
     auth_header: String,
 }
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
-    pub async fn new() -> Result<Self, LCUError> {
+    pub async fn new<F>(event_loop: F) -> Result<Self, LCUError>
+    where
+        F: Fn(Result<&Vec<Value>, LCUError>) -> WSControl + Send + Sync + 'static,
+    {
         let tls = TLS_CONFIG.clone();
         let connector = Connector::Rustls(Arc::new(tls));
         let (url, auth_header) = get_running_client()?;
@@ -75,7 +86,6 @@ impl LCUWebSocket {
 
         let (mut write, mut read) = stream.split();
         let (ws_sender, mut ws_reciever) = mpsc::unbounded_channel::<(RequestType, _)>();
-        let (client_sender, client_reciever) = mpsc::unbounded_channel();
 
         let handle = tokio::spawn(async move {
             let mut active_commands = HashSet::new();
@@ -112,20 +122,41 @@ impl LCUWebSocket {
                     };
 
                     if write.send(command.into()).await.is_err() {
-                        client_sender
-                            .send(Err(LCUError::LCUProcessNotRunning))
-                            .unwrap();
+                        let mut last_error = Some(LCUError::LCUProcessNotRunning);
+                        handle_event_loop(
+                            &mut last_error,
+                            &event_loop,
+                            &mut write,
+                            &mut read,
+                            None,
+                        )
+                        .await;
                     };
                 };
 
                 if let Some(Ok(data)) = read.next().await {
+                    let mut last_error = None;
                     if let Ok(json) = &serde_json::from_slice::<Vec<Value>>(&data.into_data()) {
                         if let Some(endpoint) = json[1].as_str() {
                             if active_commands.contains(endpoint) {
-                                client_sender.send(Ok(json.to_owned())).unwrap();
+                                handle_event_loop(
+                                    &mut last_error,
+                                    &event_loop,
+                                    &mut write,
+                                    &mut read,
+                                    Some(json),
+                                )
+                                .await;
                             }
                         } else {
-                            client_sender.send(Ok(json.to_owned())).unwrap();
+                            handle_event_loop(
+                                &mut last_error,
+                                &event_loop,
+                                &mut write,
+                                &mut read,
+                                Some(json),
+                            )
+                            .await;
                         }
                     };
                 };
@@ -135,7 +166,6 @@ impl LCUWebSocket {
         Ok(Self {
             ws_sender,
             handle,
-            client_reciever,
             url,
             auth_header,
         })
@@ -173,14 +203,83 @@ impl LCUWebSocket {
     }
 }
 
-impl Stream for LCUWebSocket {
-    type Item = Result<Vec<Value>, LCUError>;
+async fn handle_event_loop<F>(
+    last_error: &mut Option<LCUError>,
+    event_loop: &F,
+    write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    value: Option<&Vec<Value>>,
+) where
+    F: Fn(Result<&Vec<Value>, LCUError>) -> WSControl + Send + Sync + 'static,
+{
+    'handle_event_loop: loop {
+        if let Some(err) = last_error.take() {
+            match event_loop(Err(err)) {
+                WSControl::Refresh => match get_running_client() {
+                    Ok((url, auth)) => {
+                        let tls = TLS_CONFIG.clone();
+                        let connector = Connector::Rustls(Arc::new(tls));
+                        let mut req = format!("wss://{}", url).into_client_request().unwrap();
 
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        self.client_reciever.poll_recv(cx)
+                        req.headers_mut()
+                            .insert("Authorization", HeaderValue::from_str(&auth).unwrap());
+
+                        let res =
+                            connect_async_tls_with_config(req, None, false, Some(connector)).await;
+
+                        match res {
+                            Ok((stream, _)) => {
+                                (*write, *read) = stream.split();
+                                break 'handle_event_loop;
+                            }
+                            Err(err) => {
+                                *last_error = Some(LCUError::WebsocketError(err));
+                                continue 'handle_event_loop;
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        *last_error = Some(err);
+                        continue 'handle_event_loop;
+                    }
+                },
+                WSControl::Continue => break 'handle_event_loop,
+            };
+        } else if let Some(json) = value {
+            match event_loop(Ok(json)) {
+                WSControl::Refresh => match get_running_client() {
+                    Ok((url, auth)) => {
+                        let tls = TLS_CONFIG.clone();
+                        let connector = Connector::Rustls(Arc::new(tls));
+                        let mut req = format!("wss://{}", url).into_client_request().unwrap();
+
+                        req.headers_mut()
+                            .insert("Authorization", HeaderValue::from_str(&auth).unwrap());
+
+                        let res =
+                            connect_async_tls_with_config(req, None, false, Some(connector)).await;
+
+                        match res {
+                            Ok((stream, _)) => {
+                                (*write, *read) = stream.split();
+                                break 'handle_event_loop;
+                            }
+                            Err(err) => {
+                                *last_error = Some(LCUError::WebsocketError(err));
+                                continue 'handle_event_loop;
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        *last_error = Some(err);
+                        continue 'handle_event_loop;
+                    }
+                },
+                WSControl::Continue => break 'handle_event_loop,
+            };
+        } else {
+            break 'handle_event_loop;
+        }
     }
 }
 
@@ -195,6 +294,22 @@ mod test {
     #[tokio::test]
     #[ignore]
     async fn it_inits() {
-        let _ws_client = LCUWebSocket::new().await.unwrap();
+        let _ws_client = LCUWebSocket::new(|vec| {
+            match vec {
+                Ok(_events) => {
+                    // Do event handling here
+                    crate::ws::WSControl::Continue
+                }
+                Err(err) => match err {
+                    crate::LCUError::SerdeJsonError(err) => panic!("{}", err),
+                    crate::LCUError::WebsocketError(err) => panic!("{}", err),
+                    crate::LCUError::LCUProcessNotRunning => crate::ws::WSControl::Refresh,
+                    crate::LCUError::PortNotFound => crate::ws::WSControl::Refresh,
+                    crate::LCUError::AuthTokenNotFound => crate::ws::WSControl::Refresh,
+                },
+            }
+        })
+        .await
+        .unwrap();
     }
 }

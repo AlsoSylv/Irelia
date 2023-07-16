@@ -54,7 +54,7 @@ features = ["sync", "rt", "macros"]
 
 [features]
 default = [
-    "ws"
+    "rest"
     ]
 full = [
     "rest", 
