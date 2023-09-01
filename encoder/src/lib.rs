@@ -441,11 +441,11 @@ impl Encoder {
     }
 }
 
-//TODO: Benchmark these\
 #[cfg(feature = "simd")]
 fn is_ascii(buffer: &[u8]) -> bool {
     let mut mask: Simd<i8, 16> = Simd::splat(0);
     let spans = buffer.array_chunks::<256>();
+    let rem = spans.remainder();
 
     let mut has_error: Mask<i8, 16>;
 
@@ -457,9 +457,29 @@ fn is_ascii(buffer: &[u8]) -> bool {
             mask |= current_bytes.cast::<i8>();
         }
 
-        has_error = mask.simd_gt(Simd::splat(0));
+        has_error = mask.simd_lt(Simd::splat(0));
 
-        if !has_error.any() {
+        if has_error.any() {
+            return false;
+        }
+    }
+
+    let chunks = rem.array_chunks::<16>();
+    let rem = chunks.remainder();
+
+    for chunk in chunks {
+        let current_bytes: Simd<u8, 16> = Simd::from_slice(chunk);
+        mask |= current_bytes.cast::<i8>();
+    }
+
+    has_error = mask.simd_lt(Simd::splat(0));
+
+    if has_error.any() {
+        return false;
+    }
+
+    for x in rem {
+        if x > &127 {
             return false;
         }
     }
@@ -469,19 +489,24 @@ fn is_ascii(buffer: &[u8]) -> bool {
 
 #[cfg(not(feature = "simd"))]
 fn is_ascii(buffer: &[u8]) -> bool {
-    for x in buffer {
-        if x < &0 {
+    #[cfg(feature = "nightly")]
+    let spans = buffer.array_chunks::<256>();
+    #[cfg(not(feature = "nightly"))]
+    let spans = buffer.chunks_exact(256);
+    let rem = spans.remainder();
+    for span in spans {
+        if span > &[127; 256] {
+            return false;
+        }
+    }
+
+    for x in rem {
+        if x > &127 {
             return false;
         }
     }
 
     true
-}
-
-#[test]
-fn is_ascii_test() {
-    let vec = vec![b'a'; 16];
-    assert!(is_ascii(&vec) == true);
 }
 
 #[inline]
@@ -577,6 +602,33 @@ where
 }
 
 #[cfg(test)]
+/*
+These are the current benchmark results running on an Ryzen 7 5700u
+
+Simd Feature Enabled:
+base64_crate               ... bench: 8,935,681 ns/iter (+/- 289,240)
+irelia_encoder             ... bench: 4,270,517 ns/iter (+/- 61,791)
+irelia_encoder_ascii_check ... bench: 3,595,404 ns/iter (+/- 79,627)
+irelia_encoder_unchecked   ... bench: 3,306,281 ns/iter (+/- 39,131)
+
+Nightly Feature Enabled:
+base64_crate               ... bench: 8,896,750 ns/iter (+/- 148,658)
+irelia_encoder             ... bench: 7,312,479 ns/iter (+/- 24,627)
+irelia_encoder_ascii_check ... bench: 6,871,569 ns/iter (+/- 18,158)
+irelia_encoder_unchecked   ... bench: 6,589,772 ns/iter (+/- 55,076)
+
+Stable Toolchain:
+base64_crate               ... bench: 9,042,472 ns/iter (+/- 261,678)
+irelia_encoder             ... bench: 7,382,325 ns/iter (+/- 87,712)
+irelia_encoder_ascii_check ... bench: 6,951,625 ns/iter (+/- 21,298)
+irelia_encoder_unchecked   ... bench: 6,578,281 ns/iter (+/- 21,827)
+
+Stable Toolchain no rustflags:
+base64_crate               ... bench: 8,532,239 ns/iter (+/- 31,178)
+irelia_encoder             ... bench: 8,069,776 ns/iter (+/- 95,354)
+irelia_encoder_ascii_check ... bench: 7,568,010 ns/iter (+/- 23,848)
+irelia_encoder_unchecked   ... bench: 7,190,625 ns/iter (+/- 58,626)
+*/
 mod test {
     extern crate test;
 
@@ -593,7 +645,7 @@ mod test {
     use super::Encoder;
 
     #[test]
-    fn b64() {
+    fn b64_validity_check() {
         for _ in 0..100000 {
             let mut rng = thread_rng();
             let string = Alphanumeric.sample_string(&mut rng, 20);
@@ -608,7 +660,7 @@ mod test {
     }
 
     #[bench]
-    fn my_b64(b: &mut Bencher) {
+    fn irelia_encoder(b: &mut Bencher) {
         let mut strings = vec![String::new(); 10000];
 
         let mut rng = black_box(thread_rng());
@@ -629,7 +681,7 @@ mod test {
     }
 
     #[bench]
-    fn my_b64_my_check(b: &mut Bencher) {
+    fn irelia_encoder_ascii_check(b: &mut Bencher) {
         let mut strings = vec![String::new(); 10000];
 
         let mut rng = black_box(thread_rng());
@@ -650,7 +702,7 @@ mod test {
     }
 
     #[bench]
-    fn my_b64_unchecked(b: &mut Bencher) {
+    fn irelia_encoder_unchecked(b: &mut Bencher) {
         let mut strings = vec![String::new(); 10000];
 
         let mut rng = black_box(thread_rng());
@@ -671,7 +723,7 @@ mod test {
     }
 
     #[bench]
-    fn real_b64(b: &mut Bencher) {
+    fn base64_crate(b: &mut Bencher) {
         let mut strings = vec![String::new(); 10000];
 
         let mut rng = black_box(thread_rng());
