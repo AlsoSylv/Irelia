@@ -369,6 +369,8 @@ impl Encoder {
 
         assert!(is_ascii(&out));
 
+        // Safety: This is checked to be valid ASCII
+        // Which also makes it valid UTF-8
         unsafe { String::from_utf8_unchecked(out) }
     }
 
@@ -454,8 +456,8 @@ fn is_ascii(buffer: &[u8]) -> bool {
         let chunks = span.array_chunks::<16>();
 
         for chunk in chunks {
-            let current_bytes: Simd<u8, 16> = Simd::from_slice(chunk);
-            mask |= current_bytes.cast::<i8>();
+            let current_bytes = Simd::from_slice(chunk);
+            mask |= current_bytes.cast();
         }
 
         has_error = mask.simd_lt(Simd::splat(0));
@@ -469,8 +471,8 @@ fn is_ascii(buffer: &[u8]) -> bool {
     let rem = chunks.remainder();
 
     for chunk in chunks {
-        let current_bytes: Simd<u8, 16> = Simd::from_slice(chunk);
-        mask |= current_bytes.cast::<i8>();
+        let current_bytes = Simd::from_slice(chunk);
+        mask |= current_bytes.cast();
     }
 
     has_error = mask.simd_lt(Simd::splat(0));
