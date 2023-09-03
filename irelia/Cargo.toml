@@ -14,7 +14,7 @@ readme = "../README.md"
 serde_json = { version = "1.0" }
 rustls = "0.21.0"
 rustls-pemfile = "1.0.2"
-irelia_encoder = { path = "../encoder", version = "0.1.0", features = ["simd"] }
+irelia_encoder = { path = "../encoder", version = "0.1.0" }
 # Optional across some features
 # hyper-tls = { version = "0.5.0", optional = true }
 hyper-rustls = { version = "0.24.0", optional = true }
@@ -54,7 +54,8 @@ features = ["sync", "rt", "macros"]
 
 [features]
 default = [
-    "ws"
+    "ws",
+    "encoder_simd",
     ]
 full = [
     "rest", 
@@ -93,6 +94,8 @@ batched = [
 
 tauri = [
     ]
+encoder_nightly = ["irelia_encoder/nightly"]
+encoder_simd = ["irelia_encoder/simd"]
 
 [package.metadata.docs.rs]
 all-features = true
