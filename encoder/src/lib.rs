@@ -44,6 +44,7 @@ impl Encoder {
         }
     }
 
+    #[cfg(not(feature = "simd"))]
     /// Creates a new instance of the encoder using a specified alphabet
     ///
     /// # Example:
