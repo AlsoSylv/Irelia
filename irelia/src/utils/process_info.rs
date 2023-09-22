@@ -15,7 +15,7 @@ use crate::LCUError;
 #[cfg(target_os = "windows")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx.exe";
 #[cfg(target_os = "linux")]
-const TARGET_PROCESS_NAME: &str = "LeagueClientUx.";
+const TARGET_PROCESS_NAME: &str = "LeagueClientUx."; // Might be "LeagueClient.ex" instead, but I can't validate anything right now
 #[cfg(target_os = "macos")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx";
 

@@ -1,5 +1,7 @@
 //! Module containing all the data for the rest LCU bindings
 
+use std::ops::Deref;
+
 #[cfg(feature = "batched")]
 use futures_util::StreamExt;
 use serde::de::DeserializeOwned;
@@ -8,8 +10,7 @@ use serde::Serialize;
 use crate::{utils::process_info::get_running_client, LCUError, RequestClient};
 
 /// Struct representing a connection to the LCU
-pub struct LCUClient<'a> {
-    client: &'a RequestClient,
+pub struct LCUClient {
     url: String,
     auth_header: String,
 }
@@ -30,13 +31,16 @@ pub enum RequestType<'a> {
 /// request type and endpoint
 pub struct BatchRequests<'a> {
     pub request_type: RequestType<'a>,
-    pub endpoint: &'a str,
+    pub endpoint: &'a dyn Deref<Target = str>,
 }
 
 #[cfg(feature = "batched")]
-impl BatchRequests<'_> {
+impl<'a> BatchRequests<'a> {
     /// Creates a new batched request, which can be wrapped in a slice and send to the LCU
-    pub fn new<'a>(request_type: RequestType<'a>, endpoint: &'a str) -> BatchRequests<'a> {
+    pub fn new(
+        request_type: RequestType<'a>,
+        endpoint: &'a dyn Deref<Target = str>,
+    ) -> BatchRequests<'a> {
         BatchRequests {
             request_type,
             endpoint,
@@ -44,15 +48,14 @@ impl BatchRequests<'_> {
     }
 }
 
-impl LCUClient<'_> {
+impl LCUClient {
     /// Attempts to create a connection to the LCU, errors if it fails
     /// to spin up the child process, or fails to get data from the client.
     /// On Linux, this can happen well the client launches, but on windows
     /// it should be possible to connect well it spins up.
-    pub fn new(client: &RequestClient) -> Result<LCUClient, LCUError> {
+    pub fn new() -> Result<LCUClient, LCUError> {
         let port_pass = get_running_client()?;
         Ok(LCUClient {
-            client,
             url: port_pass.0,
             auth_header: port_pass.1,
         })
@@ -76,18 +79,25 @@ impl LCUClient<'_> {
         &self,
         requests: &[BatchRequests<'a>],
         buffer_size: usize,
+        request_client: &RequestClient,
     ) -> Vec<Result<Option<R>, LCUError>>
     where
         R: DeserializeOwned,
     {
         futures_util::stream::iter(requests.iter().map(|request| async move {
             match &request.request_type {
-                RequestType::Delete => self.delete(request.endpoint).await,
-                RequestType::Get => self.get(request.endpoint).await,
-                RequestType::Head => self.head(request.endpoint).await,
-                RequestType::Patch(body) => self.patch(request.endpoint, *body).await,
-                RequestType::Post(body) => self.post(request.endpoint, *body).await,
-                RequestType::Put(body) => self.put(request.endpoint, *body).await,
+                RequestType::Delete => self.delete(&**request.endpoint, request_client).await,
+                RequestType::Get => self.get(&**request.endpoint, request_client).await,
+                RequestType::Head => self.head(&**request.endpoint, request_client).await,
+                RequestType::Patch(body) => {
+                    self.patch(&**request.endpoint, *body, request_client).await
+                }
+                RequestType::Post(body) => {
+                    self.post(&**request.endpoint, *body, request_client).await
+                }
+                RequestType::Put(body) => {
+                    self.put(&**request.endpoint, *body, request_client).await
+                }
             }
         }))
         .buffered(buffer_size)
@@ -96,70 +106,111 @@ impl LCUClient<'_> {
     }
 
     /// Sends a delete request to the LCU
-    pub async fn delete<R>(&self, endpoint: &str) -> Result<Option<R>, LCUError>
+    pub async fn delete<'a, R, S>(
+        &self,
+        endpoint: S,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, LCUError>
     where
         R: DeserializeOwned,
+        S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(endpoint, "DELETE", None).await
+        self.lcu_request::<(), R, _>(endpoint, "DELETE", None, request_client)
+            .await
     }
 
     /// Sends a get request to the LCU
-    pub async fn get<R>(&self, endpoint: &str) -> Result<Option<R>, LCUError>
+    pub async fn get<'a, R, S>(
+        &self,
+        endpoint: S,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, LCUError>
     where
         R: DeserializeOwned,
+        S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(endpoint, "GET", None).await
+        self.lcu_request::<(), R, _>(endpoint, "GET", None, request_client)
+            .await
     }
 
     /// Sends a head request to the LCU
-    pub async fn head<R>(&self, endpoint: &str) -> Result<Option<R>, LCUError>
+    pub async fn head<'a, R, S>(
+        &self,
+        endpoint: S,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, LCUError>
     where
         R: DeserializeOwned,
+        S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(endpoint, "HEAD", None).await
+        self.lcu_request::<(), R, _>(endpoint, "HEAD", None, request_client)
+            .await
     }
 
     /// Sends a patch request to the LCU
-    pub async fn patch<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, LCUError>
-    where
-        T: Serialize,
-        R: DeserializeOwned,
-    {
-        self.lcu_request(endpoint, "PATCH", body).await
-    }
-
-    /// Sends a post request to the LCU
-    pub async fn post<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, LCUError>
-    where
-        T: Serialize,
-        R: DeserializeOwned,
-    {
-        self.lcu_request(endpoint, "POST", body).await
-    }
-
-    /// Sends a put request to the LCU
-    pub async fn put<T, R>(&self, endpoint: &str, body: Option<T>) -> Result<Option<R>, LCUError>
-    where
-        T: Serialize,
-        R: DeserializeOwned,
-    {
-        self.lcu_request(endpoint, "PUT", body).await
-    }
-
-    async fn lcu_request<T, R>(
+    pub async fn patch<'a, T, R, S>(
         &self,
-        endpoint: &str,
-        method: &str,
+        endpoint: S,
         body: Option<T>,
+        request_client: &RequestClient,
     ) -> Result<Option<R>, LCUError>
     where
         T: Serialize,
         R: DeserializeOwned,
+        S: Deref<Target = str>,
     {
-        self.client
+        self.lcu_request(endpoint, "PATCH", body, request_client)
+            .await
+    }
+
+    /// Sends a post request to the LCU
+    pub async fn post<'a, T, R, S>(
+        &self,
+        endpoint: S,
+        body: Option<T>,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, LCUError>
+    where
+        T: Serialize,
+        R: DeserializeOwned,
+        S: Deref<Target = str>,
+    {
+        self.lcu_request(endpoint, "POST", body, request_client)
+            .await
+    }
+
+    /// Sends a put request to the LCU
+    pub async fn put<'a, T, R, S>(
+        &self,
+        endpoint: S,
+        body: Option<T>,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, LCUError>
+    where
+        T: Serialize,
+        R: DeserializeOwned,
+        S: Deref<Target = str>,
+    {
+        self.lcu_request(endpoint, "PUT", body, request_client)
+            .await
+    }
+
+    async fn lcu_request<'a, T, R, S>(
+        &self,
+        endpoint: S,
+        method: &str,
+        body: Option<T>,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, LCUError>
+    where
+        T: Serialize,
+        R: DeserializeOwned,
+        S: Deref<Target = str>,
+    {
+        request_client
             .request_template(
                 &self.url,
-                endpoint,
+                &endpoint,
                 method,
                 body,
                 Some(&self.auth_header),
@@ -204,19 +255,23 @@ mod tests {
         );
         let client = RequestClient::new();
 
-        let client = LCUClient::new(&client).unwrap();
-        let id = &client
-            .get::<serde_json::Value>("/lol-summoner/v1/current-summoner")
-            .await
-            .unwrap()
-            .unwrap()["summonerId"];
+        let lcu_client = LCUClient::new().unwrap();
 
-        let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
-        let mut json = client
-            .get::<serde_json::Value>(&endpoint)
+        let request: &serde_json::Value = &lcu_client
+            .get("/lol-summoner/v1/current-summoner", &client)
             .await
             .unwrap()
             .unwrap();
+
+        let id = &request["summonerId"];
+
+        let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
+        let mut json = lcu_client
+            .get::<serde_json::Value, _>(endpoint, &client)
+            .await
+            .unwrap()
+            .unwrap();
+        
         json["itemSets"].as_array_mut().unwrap().push(page);
 
         let req = BatchRequests {
@@ -224,14 +279,17 @@ mod tests {
             endpoint: &format!("/lol-item-sets/v1/item-sets/{id}/sets"),
         };
 
-        let res = client.batched::<serde_json::Value>(&[req], 1).await;
+        let res = lcu_client
+            .batched::<serde_json::Value>(&[req], 1, &client)
+            .await;
 
         println!("{:?}", res);
 
-        let a = client
-            .put::<_, serde_json::Value>(
-                &format!("/lol-item-sets/v1/item-sets/{id}/sets"),
+        let a = lcu_client
+            .put::<_, serde_json::Value, _>(
+                format!("/lol-item-sets/v1/item-sets/{id}/sets"),
                 Some(json),
+                &client,
             )
             .await;
         println!("{:?}", a);

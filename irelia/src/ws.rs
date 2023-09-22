@@ -119,6 +119,7 @@ impl LCUWebSocket {
                 };
 
                 if let Some(Ok(data)) = read.next().await {
+                    println!("A");
                     if let Ok(json) = &serde_json::from_slice::<Vec<Value>>(&data.into_data()) {
                         if let Some(endpoint) = json[1].as_str() {
                             if active_commands.contains(endpoint) {
@@ -188,13 +189,21 @@ impl Stream for LCUWebSocket {
 mod test {
     extern crate test;
 
+    use futures_util::StreamExt;
     use tokio;
 
     use super::LCUWebSocket;
 
     #[tokio::test]
-    #[ignore]
+    // #[ignore]
     async fn it_inits() {
-        let _ws_client = LCUWebSocket::new().await.unwrap();
+        let mut _ws_client = LCUWebSocket::new().await.unwrap();
+        _ws_client.subscribe(crate::ws::EventType::OnJsonApiEvent);
+
+        loop {
+            while let Some(event) = _ws_client.next().await {
+                println!("{:?}", event)
+            }
+        }
     }
 }
