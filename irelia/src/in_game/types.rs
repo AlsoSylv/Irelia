@@ -29,26 +29,16 @@ pub struct ActivePlayer {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Abilities {
-    #[serde(rename = "E")]
-    pub e: E,
     #[serde(rename = "Passive")]
     pub passive: Passive,
     #[serde(rename = "Q")]
     pub q: Q,
-    #[serde(rename = "R")]
-    pub r: R,
     #[serde(rename = "W")]
     pub w: W,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct E {
-    pub ability_level: i64,
-    pub display_name: String,
-    pub id: String,
-    pub raw_description: String,
-    pub raw_display_name: String,
+    #[serde(rename = "E")]
+    pub e: E,
+    #[serde(rename = "R")]
+    pub r: R,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,7 +62,7 @@ pub struct Q {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct R {
+pub struct W {
     pub ability_level: i64,
     pub display_name: String,
     pub id: String,
@@ -82,7 +72,18 @@ pub struct R {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct W {
+pub struct E {
+    pub ability_level: i64,
+    pub display_name: String,
+    pub id: String,
+    pub raw_description: String,
+    pub raw_display_name: String,
+}
+
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct R {
     pub ability_level: i64,
     pub display_name: String,
     pub id: String,

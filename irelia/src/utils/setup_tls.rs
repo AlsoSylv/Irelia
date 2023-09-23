@@ -10,5 +10,4 @@ pub(crate) fn setup_tls_connector() -> rustls::ClientConfig {
         .with_safe_defaults()
         .with_root_certificates(roots)
         .with_no_client_auth()
-        .into()
 }

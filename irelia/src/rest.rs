@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use crate::{utils::process_info::get_running_client, LCUError, RequestClient};
 
+#[derive(Default)]
 /// Struct representing a connection to the LCU
 pub struct LCUClient {
     url: String,

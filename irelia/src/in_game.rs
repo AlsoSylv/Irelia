@@ -10,6 +10,7 @@ use crate::{LCUError, RequestClient};
 
 use self::types::*;
 
+#[derive(Default)]
 /// Struct that represents a connection to the in_game client
 pub struct InGameClient {
     url: &'static str,

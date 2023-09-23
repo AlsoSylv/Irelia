@@ -44,15 +44,13 @@ impl RequestClient {
             .build()
             .map_or_else(|err| Err(LCUError::HyperHttpError(err)), Ok)?;
 
-        let body = body.map_or_else(
-            || Ok(hyper::Body::empty()),
-            |body| {
-                serde_json::value::to_value(body).map_or_else(
-                    |err| Err(LCUError::SerdeJsonError(err)),
-                    |json| Ok(hyper::Body::from(json.to_string())),
-                )
+        let body = match body {
+            Some(body) => match serde_json::value::to_value(body) {
+                Ok(json) => Ok(hyper::Body::from(json.to_string())),
+                Err(err) => Err(LCUError::SerdeJsonError(err)),
             },
-        )?;
+            None => Ok(hyper::Body::empty()),
+        }?;
 
         let req = match auth_header {
             Some(header) => Request::builder()
@@ -69,7 +67,9 @@ impl RequestClient {
             .request(req)
             .await
             .map_err(LCUError::HyperError)?;
+        
         let body = res.body_mut();
+
         match hyper::body::to_bytes(body).await {
             Ok(bytes) => return_logic(bytes),
             Err(err) => panic!("{}", err),
