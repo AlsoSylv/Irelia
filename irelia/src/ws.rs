@@ -15,7 +15,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    utils::{process_info::get_running_client, setup_tls::TLS_CONFIG},
+    utils::{process_info::get_running_client, setup_tls::setup_tls_connector},
     LCUError,
 };
 
@@ -60,7 +60,7 @@ pub struct LCUWebSocket {
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
     pub async fn new() -> Result<Self, LCUError> {
-        let tls = TLS_CONFIG.clone();
+        let tls = setup_tls_connector();
         let connector = Connector::Rustls(Arc::new(tls));
         let (url, auth_header) = get_running_client()?;
         let mut req = format!("wss://{}", url).into_client_request().unwrap();
@@ -187,8 +187,6 @@ impl Stream for LCUWebSocket {
 
 #[cfg(test)]
 mod test {
-    extern crate test;
-
     use futures_util::StreamExt;
     use tokio;
 

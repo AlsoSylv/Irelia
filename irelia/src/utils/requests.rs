@@ -8,12 +8,12 @@ use hyper::Request;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::setup_tls::TLS_CONFIG;
+use super::setup_tls::setup_tls_connector;
 
 impl RequestClient {
     /// Creates a client to be passed to the LCU and in game structs
     pub fn new() -> RequestClient {
-        let tls = TLS_CONFIG.clone();
+        let tls = setup_tls_connector();
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(tls)
             .https_or_http()

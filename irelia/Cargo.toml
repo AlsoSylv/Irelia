@@ -35,7 +35,7 @@ features = ["sync", "rt"]
 optional = true
 
 [dependencies.tokio-tungstenite]
-version = "0.19"
+version = "0.20"
 features = ["__rustls-tls"]
 optional = true
 
@@ -55,7 +55,6 @@ features = ["sync", "rt", "macros"]
 [features]
 default = [
     "full",
-    "encoder_simd",
     ]
 full = [
     "rest", 

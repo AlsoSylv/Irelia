@@ -218,9 +218,10 @@ impl LCUClient {
                     if bytes.is_empty() {
                         Ok(None)
                     } else {
-                        serde_json::from_slice(&bytes)
-                            .map(|value| Ok(Some(value)))
-                            .map_or_else(|err| Err(LCUError::SerdeJsonError(err)), Ok)?
+                        match serde_json::from_slice(&bytes) {
+                            Ok(some) => Ok(Some(some)),
+                            Err(err) => Err(LCUError::SerdeJsonError(err)),
+                        }
                     }
                 },
             )
@@ -258,7 +259,7 @@ mod tests {
         let lcu_client = LCUClient::new().unwrap();
 
         let request: &serde_json::Value = &lcu_client
-            .get("/lol-summoner/v1/current-summoner", &client)
+            .get("/lol-summoner/v2/current-summoner", &client)
             .await
             .unwrap()
             .unwrap();
@@ -271,7 +272,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        
+
         json["itemSets"].as_array_mut().unwrap().push(page);
 
         let req = BatchRequests {

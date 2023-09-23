@@ -1,5 +1,3 @@
-#![feature(lazy_cell, test)]
-
 //! Irelia is an async set of bindings to the LCU API
 //!
 //! Features are broken down as follows:
@@ -8,7 +6,6 @@
 //! - ws: Allows connections to the LCU websocket API, providing all functionality needed
 //!
 //! Irelia is currently nightly only, as it relies on the lazy_cell feature internally
-
 pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]

@@ -161,15 +161,14 @@ impl InGameClient {
     where
         R: DeserializeOwned,
     {
-        let endpoint = summoner.map_or_else(
-            || format!("/liveclientdata/{}", endpoint),
-            |summoner| format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
-        );
+        let endpoint = match summoner {
+            Some(summoner) => format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
+            None => format!("/liveclientdata/{}", endpoint),
+        };
 
         request_client
-            .request_template::<(), R>(self.url, &endpoint, "GET", None, None, |bytes| {
-                serde_json::from_slice(&bytes)
-                    .map_or_else(|err| Err(LCUError::SerdeJsonError(err)), Ok)
+            .request_template(self.url, &endpoint, "GET", None::<()>, None, |bytes| {
+                serde_json::from_slice(&bytes).map_err(LCUError::SerdeJsonError)
             })
             .await
     }
