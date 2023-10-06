@@ -1,3 +1,12 @@
+## Irelia 0.4.0
+- Rework the request client system
+- General imrpovements to the API usability
+- Remove a global lock
+- General code cleanup
+- Implement std::error::Error for LCU Error
+- Implement Searialize for LCU Error
+- Allow batching system to take multiple types
+
 ## Irelia 0.3.0
 
 - Rework the way in_game and rest make requests
