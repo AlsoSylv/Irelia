@@ -359,6 +359,14 @@ impl Encoder {
         String::from_utf8(out).unwrap()
     }
 
+    /// Converts the bytes to BASE64, and validates that the BASE64 is all ASCII
+    ///
+    /// # Examples
+    /// ```
+    /// const ENCODER: Encoder = Encoder::new();
+    ///
+    /// let base64_encoded = ENCODER.encode_with_ascii_check("Hello, World!");
+    /// ```
     pub fn encode_with_ascii_check<T>(&self, bytes: T) -> String
     where
         T: AsRef<[u8]>,
