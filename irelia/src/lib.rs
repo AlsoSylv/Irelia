@@ -73,7 +73,7 @@ impl serde::Serialize for LCUError {
 /// fn main() {
 ///     let client = RequestClient::new();
 ///     
-///     let lcu_client = LCUClient::new(&client);
+///     let lcu_client = LCUClient::new();
 /// }
 /// ```
 pub struct RequestClient {

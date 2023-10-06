@@ -193,7 +193,7 @@ mod test {
     use super::LCUWebSocket;
 
     #[tokio::test]
-    // #[ignore]
+    #[ignore]
     async fn it_inits() {
         let mut _ws_client = LCUWebSocket::new().await.unwrap();
         _ws_client.subscribe(crate::ws::EventType::OnJsonApiEvent);

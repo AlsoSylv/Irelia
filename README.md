@@ -32,11 +32,11 @@ async fn get_summoner() -> Result<Option<Value>, LCUError> {
     let client = RequestClient::new();
 
     // Pass the client to the LCU connection
-    let lcu_client = LCUClient::new(&client)?;
+    let lcu_client = LCUClient::new()?;
 
     // The return type must be defined
     // And can be any struct that implements serde::Deserialize
-    client.get("/lol-summoner/v1/current-summoner").await
+    client.get("/lol-summoner/v1/current-summoner", &client).await
 }
 ```
 
@@ -50,9 +50,9 @@ async fn get_in_game_summoner() -> Result<ActivePlayer, LCUError> {
     let client = RequestClient::new();
 
     // Pass the client to the LCU connection
-    let game_client = InGameClient::new(&client)?;
+    let game_client = InGameClient::new()?;
 
-    game_client.active_player()
+    game_client.active_player(&client)
 }
 
 ```
