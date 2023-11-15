@@ -15,7 +15,7 @@ use crate::LCUError;
 #[cfg(target_os = "windows")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx.exe";
 #[cfg(target_os = "linux")]
-const TARGET_PROCESS_NAME: &str = "LeagueClientUx."; // Might be "LeagueClient.ex" instead, but I can't validate anything right now
+const TARGET_PROCESS_NAME: &str = "CrBrowserMain"; // This seems to work, and it should be reliable?
 #[cfg(target_os = "macos")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx";
 
@@ -68,4 +68,15 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
         format!("127.0.0.1:{}", port),
         format!("Basic {}", ENCODER.encode(format!("riot:{}", auth))),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_running_client;
+
+    #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
+    #[test]
+    fn test_process_info() {
+        get_running_client().unwrap();
+    }
 }
