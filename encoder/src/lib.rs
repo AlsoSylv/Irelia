@@ -140,6 +140,8 @@ impl Encoder {
                     self.encode_table[(byte_array_4 >> 6 & 0b00111111) as usize],
                     self.encode_table[(byte_array_4 & 0b00111111) as usize],
                 ];
+
+                output_index += 32;
             });
         }
 
@@ -659,7 +661,7 @@ mod test {
     fn b64_validity_check() {
         for _ in 0..100000 {
             let mut rng = thread_rng();
-            let string = Alphanumeric.sample_string(&mut rng, 20);
+            let string = Alphanumeric.sample_string(&mut rng, 34);
             let b64_encoded = general_purpose::STANDARD.encode(string.clone());
             let encoder = Encoder::new();
             let my_encoded = encoder.encode(string);
