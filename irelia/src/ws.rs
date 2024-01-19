@@ -119,7 +119,6 @@ impl LCUWebSocket {
                 };
 
                 if let Some(Ok(data)) = read.next().await {
-                    println!("A");
                     if let Ok(json) = &serde_json::from_slice::<Vec<Value>>(&data.into_data()) {
                         if let Some(endpoint) = json[1].as_str() {
                             if active_commands.contains(endpoint) {
