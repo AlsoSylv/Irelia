@@ -27,18 +27,13 @@ pub struct ActivePlayer {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct Abilities {
-    #[serde(rename = "Passive")]
     pub passive: Passive,
-    #[serde(rename = "Q")]
-    pub q: Q,
-    #[serde(rename = "W")]
-    pub w: W,
-    #[serde(rename = "E")]
-    pub e: E,
-    #[serde(rename = "R")]
-    pub r: R,
+    pub q: Ability,
+    pub w: Ability,
+    pub e: Ability,
+    pub r: Ability,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,38 +47,7 @@ pub struct Passive {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Q {
-    pub ability_level: i64,
-    pub display_name: String,
-    pub id: String,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct W {
-    pub ability_level: i64,
-    pub display_name: String,
-    pub id: String,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct E {
-    pub ability_level: i64,
-    pub display_name: String,
-    pub id: String,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct R {
+pub struct Ability {
     pub ability_level: i64,
     pub display_name: String,
     pub id: String,
@@ -127,43 +91,16 @@ pub struct ChampionStats {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FullRunes {
-    pub keystone: Keystone,
-    pub primary_rune_tree: PrimaryRuneTree,
-    pub secondary_rune_tree: SecondaryRuneTree,
-    pub general_runes: Vec<GeneralRune>,
+    pub keystone: Rune,
+    pub primary_rune_tree: Rune,
+    pub secondary_rune_tree: Rune,
+    pub general_runes: Vec<Rune>,
     pub stat_runes: Vec<StatRune>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GeneralRune {
-    pub display_name: String,
-    pub id: i64,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Keystone {
-    pub display_name: String,
-    pub id: i64,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PrimaryRuneTree {
-    pub display_name: String,
-    pub id: i64,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SecondaryRuneTree {
+pub struct Rune {
     pub display_name: String,
     pub id: i64,
     pub raw_description: String,
@@ -200,9 +137,9 @@ pub struct AllPlayer {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Runes {
-    pub keystone: Keystone,
-    pub primary_rune_tree: PrimaryRuneTree,
-    pub secondary_rune_tree: SecondaryRuneTree,
+    pub keystone: Rune,
+    pub primary_rune_tree: Rune,
+    pub secondary_rune_tree: Rune,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -218,21 +155,25 @@ pub struct Scores {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpells {
-    pub summoner_spell_one: SummonerSpellOne,
-    pub summoner_spell_two: SummonerSpellTwo,
+    pub summoner_spell_one: SummonerSpell,
+    pub summoner_spell_two: SummonerSpell,
+}
+
+impl core::ops::Index<usize> for SummonerSpells {
+    type Output = SummonerSpell;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.summoner_spell_one,
+            1 => &self.summoner_spell_two,
+            e => panic!("Index Out Of Bounds, expected 0 or 1, but found {e}!")
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SummonerSpellOne {
-    pub display_name: String,
-    pub raw_description: String,
-    pub raw_display_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SummonerSpellTwo {
+pub struct SummonerSpell {
     pub display_name: String,
     pub raw_description: String,
     pub raw_display_name: String,
@@ -254,20 +195,25 @@ pub struct Item {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct Events {
-    #[serde(rename = "Events")]
     pub events: Vec<Event>,
 }
 
+impl core::ops::Index<usize> for Events {
+    type Output = Event;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.events[index]
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct Event {
     #[serde(rename = "EventID")]
     pub event_id: i64,
-    #[serde(rename = "EventName")]
     pub event_name: String,
-    #[serde(rename = "EventTime")]
     pub event_time: f64,
 }
 

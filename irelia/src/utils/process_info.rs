@@ -28,11 +28,11 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     let mut system = System::new();
     system.refresh_processes();
 
-    /* 
+    /*
         Iterate through all of the processes, using .values() because
         We don't need the PID. Try to find a process with the same name
         as the constant for that platform, ohterwise return an error.
-    */ 
+    */
     let process = system
         .processes()
         .values()
@@ -41,20 +41,20 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
         .ok_or(LCUError::LCUProcessNotRunning)?;
 
     /*
-        Look for a port to connect to the LCU with, otherwise return an error.
-        If no port is found, but the LCU is running, something is probably wrong
-        with the constant, or the code itself
-     */
+       Look for a port to connect to the LCU with, otherwise return an error.
+       If no port is found, but the LCU is running, something is probably wrong
+       with the constant, or the code itself
+    */
     let port = process
         .split_whitespace()
         .find_map(|s| s.strip_prefix("--app-port="))
         .ok_or(LCUError::PortNotFound)?;
 
     /*
-        Look for an auth key to put inside the header, otherwise return an error.
-        If no auth key is found, but the LCU is running, something is probably wrong
-        with the constant, or the code itself
-     */
+       Look for an auth key to put inside the header, otherwise return an error.
+       If no auth key is found, but the LCU is running, something is probably wrong
+       with the constant, or the code itself
+    */
     let auth = process
         .split_whitespace()
         .find_map(|s| s.strip_prefix("--remoting-auth-token="))

@@ -67,7 +67,7 @@ impl RequestClient {
             .request(req)
             .await
             .map_err(LCUError::HyperError)?;
-        
+
         let body = res.body_mut();
 
         match hyper::body::to_bytes(body).await {
