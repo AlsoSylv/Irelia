@@ -1,6 +1,7 @@
 use crate::LCUError;
 
 use crate::RequestClient;
+use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use hyper::header::AUTHORIZATION;
 use hyper::http::uri;
@@ -19,7 +20,7 @@ impl RequestClient {
             .https_or_http()
             .enable_http1()
             .build();
-        let client = hyper::Client::builder().build::<_, hyper::Body>(https);
+        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build::<_, http_body_util::Full<Bytes>>(https);
 
         RequestClient { client }
     }
@@ -46,10 +47,10 @@ impl RequestClient {
 
         let body = match body {
             Some(body) => match serde_json::value::to_value(body) {
-                Ok(json) => Ok(hyper::Body::from(json.to_string())),
+                Ok(json) => Ok(http_body_util::Full::from(json.to_string())),
                 Err(err) => Err(LCUError::SerdeJsonError(err)),
             },
-            None => Ok(hyper::Body::empty()),
+            None => Ok(http_body_util::Full::new(Bytes::new())),
         }?;
 
         let req = match auth_header {
@@ -66,14 +67,13 @@ impl RequestClient {
             .client
             .request(req)
             .await
-            .map_err(LCUError::HyperError)?;
+            .map_err(LCUError::HyperClientError)?;
 
         let body = res.body_mut();
 
-        match hyper::body::to_bytes(body).await {
-            Ok(bytes) => return_logic(bytes),
-            Err(err) => panic!("{}", err),
-        }
+        let bytes = body.collect().await.map_err(LCUError::HyperError)?.to_bytes();
+
+        return_logic(bytes)
     }
 }
 

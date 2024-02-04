@@ -8,7 +8,7 @@
 //! of the processes for Linux, MacOS, and Windows
 
 use irelia_encoder::Encoder;
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::{System, SystemExt, ProcessExt};
 
 use crate::LCUError;
 
@@ -74,7 +74,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
 mod tests {
     use super::get_running_client;
 
-    #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
+    // #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
     #[test]
     fn test_process_info() {
         get_running_client().unwrap();

@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "nightly", feature(array_chunks))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
-#![cfg_attr(test, feature(core_intrinsics, test))]
+#![cfg_attr(test, feature(test))]
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
@@ -14,7 +14,7 @@ extern crate alloc;
 #[cfg(feature = "simd")]
 use core::{
     mem::{transmute, transmute_copy},
-    simd::{Which::*, *},
+    simd::{*, cmp::SimdPartialOrd, num::{SimdInt, SimdUint}},
     slice,
 };
 
@@ -192,14 +192,14 @@ impl Encoder {
                         t0_u16 >> Simd::splat(10),
                         t0_u16 >> Simd::splat(6),
                         [
-                            First(0),
-                            Second(1),
-                            First(2),
-                            Second(3),
-                            First(4),
-                            Second(5),
-                            First(6),
-                            Second(7),
+                            0,  // First(0),
+                            9,  // Second(1),
+                            2,  // First(2),
+                            11, // Second(3),
+                            4,  // First(4),
+                            13, // Second(5),
+                            6,  // First(6),
+                            15, // Second(7),
                         ]
                     );
 
@@ -616,7 +616,23 @@ where
 
 #[cfg(test)]
 /*
+These are the current benchmark results running on an Ryzen 9 7900x
+Note: This was after recent changes to core::simd
+
+Simd Feature Enabled:
+base64_crate               ... bench:   7,008,375 ns/iter (+/- 660,934)
+irelia_encoder             ... bench:   2,859,420 ns/iter (+/- 708,613)
+irelia_encoder_ascii_check ... bench:   2,509,612 ns/iter (+/- 378,540)
+irelia_encoder_unchecked   ... bench:   2,260,470 ns/iter (+/- 609,514)
+
+Nightly Feature Enabled:
+base64_crate               ... bench:   6,892,705 ns/iter (+/- 413,544)
+irelia_encoder             ... bench:   5,896,720 ns/iter (+/- 483,676)
+irelia_encoder_ascii_check ... bench:   5,613,385 ns/iter (+/- 478,652)
+irelia_encoder_unchecked   ... bench:   5,432,165 ns/iter (+/- 379,335)
+
 These are the current benchmark results running on an Ryzen 7 5700u
+Note: This was before recent changes to core::simd
 
 Simd Feature Enabled:
 base64_crate               ... bench: 8,935,681 ns/iter (+/- 289,240)
@@ -646,8 +662,7 @@ mod test {
     extern crate test;
 
     use alloc::{string::String, vec};
-    use core::intrinsics::black_box;
-    use test::Bencher;
+    use test::{black_box, Bencher};
 
     use base64::{engine::general_purpose, Engine};
     use rand::{

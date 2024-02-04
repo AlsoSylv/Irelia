@@ -470,7 +470,7 @@ impl core::ops::Index<usize> for SummonerSpells {
         match index {
             0 => &self.summoner_spell_one,
             1 => &self.summoner_spell_two,
-            e => panic!("Index Out Of Bounds, expected 0 or 1, but found {e}!")
+            e => panic!("Index Out Of Bounds, expected 0 or 1, but found {e}!"),
         }
     }
 }
