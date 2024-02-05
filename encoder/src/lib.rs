@@ -14,7 +14,11 @@ extern crate alloc;
 #[cfg(feature = "simd")]
 use core::{
     mem::{transmute, transmute_copy},
-    simd::{*, cmp::SimdPartialOrd, num::{SimdInt, SimdUint}},
+    simd::{
+        cmp::SimdPartialOrd,
+        num::{SimdInt, SimdUint},
+        *,
+    },
     slice,
 };
 

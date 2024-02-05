@@ -8,7 +8,7 @@
 //! of the processes for Linux, MacOS, and Windows
 
 use irelia_encoder::Encoder;
-use sysinfo::{System, SystemExt, ProcessExt};
+use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 use crate::LCUError;
 
@@ -25,8 +25,10 @@ const TARGET_PROCESS_NAME: &str = "LeagueClientUx";
 /// that you can get the exe location, and go backwards.
 pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     // Get the current list of processes
-    let mut system = System::new();
-    system.refresh_processes();
+    let system = System::new_with_specifics(
+        RefreshKind::new()
+            .with_processes(ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::OnlyIfNotSet)),
+    );
 
     /*
         Iterate through all of the processes, using .values() because

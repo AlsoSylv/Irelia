@@ -20,7 +20,9 @@ impl RequestClient {
             .https_or_http()
             .enable_http1()
             .build();
-        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build::<_, http_body_util::Full<Bytes>>(https);
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build::<_, http_body_util::Full<Bytes>>(https);
 
         RequestClient { client }
     }
@@ -71,7 +73,11 @@ impl RequestClient {
 
         let body = res.body_mut();
 
-        let bytes = body.collect().await.map_err(LCUError::HyperError)?.to_bytes();
+        let bytes = body
+            .collect()
+            .await
+            .map_err(LCUError::HyperError)?
+            .to_bytes();
 
         return_logic(bytes)
     }

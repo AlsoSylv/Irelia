@@ -81,5 +81,8 @@ impl serde::Serialize for LCUError {
 /// }
 /// ```
 pub struct RequestClient {
-    client: hyper_util::client::legacy::Client<hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>, http_body_util::Full<Bytes>>,
+    client: hyper_util::client::legacy::Client<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+        http_body_util::Full<Bytes>,
+    >,
 }
