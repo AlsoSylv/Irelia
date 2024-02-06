@@ -1,6 +1,6 @@
 [package]
 name = "irelia_encoder"
-version = "0.1.0"
+version = "0.1.4"
 edition = "2021"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
@@ -14,3 +14,10 @@ documentation = "https://docs.rs/irelia_encoder"
 [dev-dependencies]
 rand = "0.8.5"
 base64 = "0.21.0"
+
+[features]
+simd = ["nightly"]
+nightly = []
+
+[package.metadata.docs.rs]
+rustc-args = ["-C", "target-cpu=native"]

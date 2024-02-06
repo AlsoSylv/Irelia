@@ -2,7 +2,11 @@
 
 Irelia is a set of bindings to native LoL APIs built on top of Hyper.
 
-This crate provides support for Windows, and Linux, with untested MacOS support.
+This crate provides support for Windows, with untested MacOS support.
+
+Please note, League of Legends will not be playable on wine as of patch 14.5, and as such, the platform is no longer supported
+
+Note: The base64 encoder used in irelia requires a .cargo/config.toml, an example can be found [here](./.cargo/config.toml)
 
 #
 ### Cargo Features
@@ -30,11 +34,11 @@ async fn get_summoner() -> Result<Option<Value>, LCUError> {
     let client = RequestClient::new();
 
     // Pass the client to the LCU connection
-    let lcu_client = LCUClient::new(&client)?;
+    let lcu_client = LCUClient::new()?;
 
     // The return type must be defined
     // And can be any struct that implements serde::Deserialize
-    client.get("/lol-summoner/v1/current-summoner").await
+    client.get("/lol-summoner/v1/current-summoner", &client).await
 }
 ```
 
@@ -48,9 +52,9 @@ async fn get_in_game_summoner() -> Result<ActivePlayer, LCUError> {
     let client = RequestClient::new();
 
     // Pass the client to the LCU connection
-    let game_client = InGameClient::new(&client)?;
+    let game_client = InGameClient::new()?;
 
-    game_client.active_player()
+    game_client.active_player(&client)
 }
 
 ```

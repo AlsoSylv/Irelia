@@ -1,5 +1,3 @@
-#![feature(lazy_cell)]
-
 //! Irelia is an async set of bindings to the LCU API
 //!
 //! Features are broken down as follows:
@@ -8,7 +6,6 @@
 //! - ws: Allows connections to the LCU websocket API, providing all functionality needed
 //!
 //! Irelia is currently nightly only, as it relies on the lazy_cell feature internally
-
 pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
@@ -27,6 +24,8 @@ pub enum LCUError {
     #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperHttpError(hyper::http::Error),
     #[cfg(any(feature = "in_game", feature = "rest"))]
+    HyperClientError(hyper_util::client::legacy::Error),
+    #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperError(hyper::Error),
     SerdeJsonError(serde_json::Error),
     #[cfg(feature = "ws")]
@@ -36,23 +35,27 @@ pub enum LCUError {
     AuthTokenNotFound,
 }
 
-#[cfg(feature = "tauri")]
-impl ToString for LCUError {
-    fn to_string(&self) -> String {
-        match self {
+impl std::fmt::Display for LCUError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let error = match self {
             #[cfg(any(feature = "in_game", feature = "rest"))]
             LCUError::HyperHttpError(err) => err.to_string(),
             #[cfg(any(feature = "in_game", feature = "rest"))]
             LCUError::HyperError(err) => err.to_string(),
+            #[cfg(any(feature = "in_game", feature = "rest"))]
+            LCUError::HyperClientError(err) => err.to_string(),
             LCUError::SerdeJsonError(err) => err.to_string(),
             #[cfg(feature = "ws")]
             LCUError::WebsocketError(err) => err.to_string(),
             LCUError::LCUProcessNotRunning => String::from("LCU Process is not running!"),
             LCUError::PortNotFound => String::from("Port Not Found!"),
             LCUError::AuthTokenNotFound => String::from("Auth Token Not Found!"),
-        }
+        };
+        f.write_fmt(format_args!("LCU Error: {}", error))
     }
 }
+
+impl std::error::Error for LCUError {}
 
 #[cfg(feature = "tauri")]
 impl serde::Serialize for LCUError {
@@ -74,9 +77,12 @@ impl serde::Serialize for LCUError {
 /// fn main() {
 ///     let client = RequestClient::new();
 ///     
-///     let lcu_client = LCUClient::new(&client);
+///     let lcu_client = LCUClient::new();
 /// }
 /// ```
 pub struct RequestClient {
-    client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    client: hyper_util::client::legacy::Client<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+        http_body_util::Full<hyper::body::Bytes>,
+    >,
 }

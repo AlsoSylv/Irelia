@@ -15,7 +15,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    utils::{process_info::get_running_client, setup_tls::TLS_CONFIG},
+    utils::{process_info::get_running_client, setup_tls::setup_tls_connector},
     LCUError,
 };
 
@@ -38,29 +38,38 @@ pub enum RequestType {
 /// subscribe and unsubscribe methods.
 pub enum EventType {
     OnJsonApiEvent,
-    OnLcdEvent,
+    OnLcdsEvent,
+    OnLog,
+    OnRegionLocaleChanged,
+    OnServiceProxyAsyncEvent,
+    OnServiceProxyMethodEvent,
+    OnServiceProxyUuidEvent,
     OnJsonApiEventCallback(String),
-    OnLcdEventCallback(String),
+    OnLcdsEventCallback(String),
 }
 
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
     handle: JoinHandle<()>,
-    client_reciever: UnboundedReceiver<Result<Value, LCUError>>,
+    client_reciever: UnboundedReceiver<Result<Vec<Value>, LCUError>>,
+    url: String,
+    auth_header: String,
 }
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
     pub async fn new() -> Result<Self, LCUError> {
-        let tls = TLS_CONFIG.clone();
+        let tls = setup_tls_connector();
         let connector = Connector::Rustls(Arc::new(tls));
-        let (url, pass) = get_running_client()?;
+        let (url, auth_header) = get_running_client()?;
         let mut req = format!("wss://{}", url).into_client_request().unwrap();
-        req.headers_mut()
-            .insert("Authorization", HeaderValue::from_str(&pass).unwrap());
+        req.headers_mut().insert(
+            "Authorization",
+            HeaderValue::from_str(&auth_header).unwrap(),
+        );
 
-        let (stream, _) = connect_async_tls_with_config(url, None, false, Some(connector))
+        let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
             .await
             .map_err(LCUError::WebsocketError)?;
 
@@ -74,12 +83,23 @@ impl LCUWebSocket {
                 if let Ok((code, endpoint)) = ws_reciever.try_recv() {
                     let endpoint = match endpoint {
                         EventType::OnJsonApiEvent => String::from("OnJsonApiEvent"),
-                        EventType::OnLcdEvent => String::from("OnLcdEvent"),
+                        EventType::OnLcdsEvent => String::from("OnLcdsEvent"),
+                        EventType::OnLog => String::from("OnLog"),
+                        EventType::OnRegionLocaleChanged => String::from("OnRegionLocaleChanged"),
+                        EventType::OnServiceProxyAsyncEvent => {
+                            String::from("OnServiceProxyAsyncEvent")
+                        }
+                        EventType::OnServiceProxyMethodEvent => {
+                            String::from("OnServiceProxyMethodEvent")
+                        }
+                        EventType::OnServiceProxyUuidEvent => {
+                            String::from("OnServiceProxyUuidEvent")
+                        }
                         EventType::OnJsonApiEventCallback(callback) => {
                             format!("OnJsonApiEvent{}", callback.replace('/', "_"))
                         }
-                        EventType::OnLcdEventCallback(callback) => {
-                            format!("OnLcdEvent{}", callback.replace('/', "_"))
+                        EventType::OnLcdsEventCallback(callback) => {
+                            format!("OnLcdsEvent{}", callback.replace('/', "_"))
                         }
                     };
 
@@ -99,7 +119,7 @@ impl LCUWebSocket {
                 };
 
                 if let Some(Ok(data)) = read.next().await {
-                    if let Ok(json) = &serde_json::from_slice::<Value>(&data.into_data()) {
+                    if let Ok(json) = &serde_json::from_slice::<Vec<Value>>(&data.into_data()) {
                         if let Some(endpoint) = json[1].as_str() {
                             if active_commands.contains(endpoint) {
                                 client_sender.send(Ok(json.to_owned())).unwrap();
@@ -116,7 +136,19 @@ impl LCUWebSocket {
             ws_sender,
             handle,
             client_reciever,
+            url,
+            auth_header,
         })
+    }
+
+    /// Returns a reference to the URL in use
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Returns a reference to the auth header in use
+    pub fn auth_header(&self) -> &str {
+        &self.auth_header
     }
 
     /// Subscribe to a new API event
@@ -142,12 +174,33 @@ impl LCUWebSocket {
 }
 
 impl Stream for LCUWebSocket {
-    type Item = Result<Value, LCUError>;
+    type Item = Result<Vec<Value>, LCUError>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         self.client_reciever.poll_recv(cx)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use futures_util::StreamExt;
+    use tokio;
+
+    use super::LCUWebSocket;
+
+    #[tokio::test]
+    #[ignore]
+    async fn it_inits() {
+        let mut _ws_client = LCUWebSocket::new().await.unwrap();
+        _ws_client.subscribe(crate::ws::EventType::OnJsonApiEvent);
+
+        loop {
+            while let Some(event) = _ws_client.next().await {
+                println!("{:?}", event)
+            }
+        }
     }
 }

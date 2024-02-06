@@ -8,14 +8,14 @@
 //! of the processes for Linux, MacOS, and Windows
 
 use irelia_encoder::Encoder;
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 use crate::LCUError;
 
 #[cfg(target_os = "windows")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx.exe";
 #[cfg(target_os = "linux")]
-const TARGET_PROCESS_NAME: &str = "LeagueClientUx.";
+const TARGET_PROCESS_NAME: &str = "CrBrowserMain"; // This seems to work, and it should be reliable?
 #[cfg(target_os = "macos")]
 const TARGET_PROCESS_NAME: &str = "LeagueClientUx";
 
@@ -24,9 +24,17 @@ const TARGET_PROCESS_NAME: &str = "LeagueClientUx";
 /// a fallback could be implemented in theory using the fact
 /// that you can get the exe location, and go backwards.
 pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
-    let mut system = System::new();
-    system.refresh_processes();
+    // Get the current list of processes
+    let system = System::new_with_specifics(
+        RefreshKind::new()
+            .with_processes(ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::OnlyIfNotSet)),
+    );
 
+    /*
+        Iterate through all of the processes, using .values() because
+        We don't need the PID. Try to find a process with the same name
+        as the constant for that platform, ohterwise return an error.
+    */
     let process = system
         .processes()
         .values()
@@ -34,19 +42,43 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
         .map(|process| process.cmd().join(" "))
         .ok_or(LCUError::LCUProcessNotRunning)?;
 
+    /*
+       Look for a port to connect to the LCU with, otherwise return an error.
+       If no port is found, but the LCU is running, something is probably wrong
+       with the constant, or the code itself
+    */
     let port = process
         .split_whitespace()
         .find_map(|s| s.strip_prefix("--app-port="))
         .ok_or(LCUError::PortNotFound)?;
+
+    /*
+       Look for an auth key to put inside the header, otherwise return an error.
+       If no auth key is found, but the LCU is running, something is probably wrong
+       with the constant, or the code itself
+    */
     let auth = process
         .split_whitespace()
         .find_map(|s| s.strip_prefix("--remoting-auth-token="))
         .ok_or(LCUError::AuthTokenNotFound)?;
 
+    // Create a new instance of the encoder
     const ENCODER: Encoder = Encoder::new();
 
+    // Format the port and header so that they can be used properly
     Ok((
         format!("127.0.0.1:{}", port),
         format!("Basic {}", ENCODER.encode(format!("riot:{}", auth))),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_running_client;
+
+    #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
+    #[test]
+    fn test_process_info() {
+        get_running_client().unwrap();
+    }
 }
