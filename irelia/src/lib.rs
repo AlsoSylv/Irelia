@@ -6,7 +6,6 @@
 //! - ws: Allows connections to the LCU websocket API, providing all functionality needed
 //!
 //! Irelia is currently nightly only, as it relies on the lazy_cell feature internally
-use hyper::body::Bytes;
 pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
@@ -26,6 +25,7 @@ pub enum LCUError {
     HyperHttpError(hyper::http::Error),
     #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperClientError(hyper_util::client::legacy::Error),
+    #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperError(hyper::Error),
     SerdeJsonError(serde_json::Error),
     #[cfg(feature = "ws")]
@@ -83,6 +83,6 @@ impl serde::Serialize for LCUError {
 pub struct RequestClient {
     client: hyper_util::client::legacy::Client<
         hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        http_body_util::Full<Bytes>,
+        http_body_util::Full<hyper::body::Bytes>,
     >,
 }
