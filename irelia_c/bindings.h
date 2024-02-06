@@ -20,28 +20,37 @@ struct RequestClient *new_request_client(void);
 
 void drop_request_client(struct RequestClient *client);
 
-struct LCUResponse *new_lcu_client(const struct RequestClient *client,
-                                   struct LCUClient **lcu_client);
+struct LCUResponse *new_lcu_client(struct LCUClient **lcu_client);
 
 struct Future *lcu_delete(const struct LCUClient *client,
+                          const struct RequestClient *request_client,
                           const struct RT *rt,
                           const char *endpoint);
 
-struct Future *lcu_get(const struct LCUClient *client, const struct RT *rt, const char *endpoint);
+struct Future *lcu_get(const struct LCUClient *client,
+                       const struct RequestClient *request_client,
+                       const struct RT *rt,
+                       const char *endpoint);
 
-struct Future *lcu_head(const struct LCUClient *client, const struct RT *rt, const char *endpoint);
+struct Future *lcu_head(const struct LCUClient *client,
+                        const struct RequestClient *request_client,
+                        const struct RT *rt,
+                        const char *endpoint);
 
 struct Future *lcu_post(const struct LCUClient *client,
+                        const struct RequestClient *request_client,
                         const struct RT *rt,
                         const char *endpoint,
                         const char *body);
 
 struct Future *lcu_patch(const struct LCUClient *client,
+                         const struct RequestClient *request_client,
                          const struct RT *rt,
                          const char *endpoint,
                          const char *body);
 
 struct Future *lcu_put(const struct LCUClient *client,
+                       const struct RequestClient *request_client,
                        const struct RT *rt,
                        const char *endpoint,
                        const char *body);

@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-irelia = { path = "../irelia", version = "0.3.0", default-features = false, features = ["rest", "in_game", "tauri"] }
-serde_json = { version = "1.0.96", default-features = false }
-tokio = { version = "1.28.2", default-features = false, features = ["rt", "rt-multi-thread"] }
+irelia = { path = "../irelia", version = "0.4.2", default-features = false, features = ["rest", "in_game", "tauri"] }
+serde_json = { version = "1.0", default-features = false }
+tokio = { version = "1.36.0", default-features = false, features = ["rt", "rt-multi-thread"] }
 
 [build-dependencies]
-cbindgen = "0.24.3"
+cbindgen = "0.26.0"
 
 [dev-dependencies]
 inline-c = "0.1.7"

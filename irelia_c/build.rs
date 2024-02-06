@@ -48,7 +48,7 @@ fn c_flags() {
 
     #[cfg(target_os = "windows")]
     println!(
-        "cargo:rustc-env=INLINE_C_RS_LDFLAGS={shared_object_dir}/libirelia_c.dylib",
+        "cargo:rustc-env=INLINE_C_RS_LDFLAGS={shared_object_dir}\\irelia_c.dll",
         shared_object_dir = shared_object_dir,
     );
 }

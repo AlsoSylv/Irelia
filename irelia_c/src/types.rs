@@ -49,11 +49,11 @@ impl CRequestClient {
 }
 
 pub struct CLCUClient {
-    client: LCUClient<'static>,
+    client: LCUClient,
 }
 
 impl CLCUClient {
-    pub fn new(client: LCUClient<'static>) -> Self {
+    pub fn new(client: LCUClient) -> Self {
         Self { client }
     }
 
