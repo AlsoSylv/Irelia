@@ -313,7 +313,7 @@ impl Rune {
         &self.raw_description
     }
     pub fn raw_display_name(&self) -> &str {
-        &self.raw_description
+        &self.raw_display_name
     }
 }
 

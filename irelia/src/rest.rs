@@ -1,9 +1,13 @@
 //! Module containing all the data for the rest LCU bindings
 
+pub mod types;
+
 use std::ops::Deref;
 
 #[cfg(feature = "batched")]
 use futures_util::StreamExt;
+use http_body_util::BodyExt;
+use hyper::Uri;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -194,6 +198,28 @@ impl LCUClient {
     {
         self.lcu_request(endpoint, "PUT", body, request_client)
             .await
+    }
+
+    /// Fetches the schema from a remote endpoint, for example: 
+    /// https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json
+    pub async fn schema(
+        &self,
+        remote: &'static str,
+        request_client: &RequestClient,
+    ) -> Result<types::Schema, LCUError> {
+        let uri = Uri::from_static(remote);
+        let mut request = request_client
+            .client
+            .get(uri)
+            .await
+            .map_err(LCUError::HyperClientError)?;
+        let tmp = request.body_mut();
+        let body = tmp
+            .collect()
+            .await
+            .map_err(LCUError::HyperError)?
+            .to_bytes();
+        serde_json::from_slice(&body).map_err(LCUError::SerdeJsonError)
     }
 
     async fn lcu_request<'a, T, R, S>(
