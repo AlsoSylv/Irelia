@@ -59,10 +59,11 @@ impl LCUClient {
     /// On Linux, this can happen well the client launches, but on windows
     /// it should be possible to connect well it spins up.
     pub fn new() -> Result<LCUClient, LCUError> {
-        let port_pass = get_running_client()?;
+        let (port, pass) = get_running_client()?;
+
         Ok(LCUClient {
-            url: port_pass.0,
-            auth_header: port_pass.1,
+            url: port,
+            auth_header: pass,
         })
     }
 
@@ -200,7 +201,7 @@ impl LCUClient {
             .await
     }
 
-    /// Fetches the schema from a remote endpoint, for example: 
+    /// Fetches the schema from a remote endpoint, for example:
     /// https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json
     pub async fn schema(
         &self,

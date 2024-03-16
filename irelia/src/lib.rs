@@ -30,9 +30,11 @@ pub enum LCUError {
     SerdeJsonError(serde_json::Error),
     #[cfg(feature = "ws")]
     WebsocketError(tokio_tungstenite::tungstenite::Error),
+    StdIo(std::io::Error),
     LCUProcessNotRunning,
     PortNotFound,
     AuthTokenNotFound,
+    LockFileNotFound,
 }
 
 impl std::fmt::Display for LCUError {
@@ -47,9 +49,13 @@ impl std::fmt::Display for LCUError {
             LCUError::SerdeJsonError(err) => err.to_string(),
             #[cfg(feature = "ws")]
             LCUError::WebsocketError(err) => err.to_string(),
+            LCUError::StdIo(err) => err.to_string(),
             LCUError::LCUProcessNotRunning => String::from("LCU Process is not running!"),
             LCUError::PortNotFound => String::from("Port Not Found!"),
             LCUError::AuthTokenNotFound => String::from("Auth Token Not Found!"),
+            LCUError::LockFileNotFound => {
+                String::from("Unable to the lock file, but the process was running!")
+            }
         };
         f.write_fmt(format_args!("LCU Error: {}", error))
     }

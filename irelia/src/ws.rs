@@ -2,16 +2,21 @@
 
 use std::{collections::HashSet, ops::ControlFlow, sync::Arc};
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
+use rustls::ClientConfig;
 use serde_json::Value;
 use tokio::{
+    net::TcpStream,
     sync::mpsc::{self, UnboundedSender},
     task::JoinHandle,
 };
 use tokio_tungstenite::{
     connect_async_tls_with_config,
-    tungstenite::{client::IntoClientRequest, http::HeaderValue},
-    Connector,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue, Message},
+    Connector, MaybeTlsStream, WebSocketStream,
 };
 
 use crate::{
@@ -56,6 +61,7 @@ pub struct LCUWebSocket {
     auth_header: String,
 }
 
+#[derive(PartialEq)]
 pub enum Flow {
     TryReconnect,
     Continue,
@@ -63,7 +69,9 @@ pub enum Flow {
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
-    pub async fn new(f: impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Send + 'static) -> Result<Self, LCUError> {
+    pub async fn new(
+        f: impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Send + 'static,
+    ) -> Result<Self, LCUError> {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
         let connector = Connector::Rustls(tls.clone());
@@ -85,7 +93,6 @@ impl LCUWebSocket {
             let str_req = str_req;
             let mut active_commands = HashSet::new();
             let (mut write, mut read) = stream.split();
-            let mut _last_err = None::<LCUError>;
 
             'outer: loop {
                 if let Ok((code, endpoint)) = ws_reciever.try_recv() {
@@ -121,28 +128,17 @@ impl LCUWebSocket {
 
                     if write.send(command.into()).await.is_err() {
                         let mut c = f(Err(LCUError::LCUProcessNotRunning));
-                        'res_loop: loop {
-                            match c {
-                                ControlFlow::Continue(v) => {
-                                    match v {
-                                        Flow::Continue => break 'res_loop,
-                                        Flow::TryReconnect => {
-                                            let req = str_req.as_str().into_client_request().unwrap();
-                                            let connector = Connector::Rustls(tls.clone());
-                                            let res = connect_async_tls_with_config(req, None, false, Some(connector)).await.map_err(LCUError::WebsocketError);
-                                            match res {
-                                                Ok((stream, _)) => {
-                                                    (write, read) = stream.split();
-                                                    break 'res_loop;
-                                                },
-                                                Err(e) => {
-                                                    c = f(Err(e));
-                                                }
-                                            }
-                                        }
-                                    }
+                        while c != ControlFlow::Continue(Flow::Continue) {
+                            if c == ControlFlow::Continue(Flow::TryReconnect) {
+                                let tls = tls.clone();
+                                let rec = reconnect(&str_req, tls, &mut write, &mut read).await;
+                                if let Err(e) = rec {
+                                    c = f(Err(e));
+                                } else {
+                                    break;
                                 }
-                                ControlFlow::Break(()) => break 'outer
+                            } else {
+                                break 'outer;
                             }
                         }
                     };
@@ -150,59 +146,28 @@ impl LCUWebSocket {
 
                 if let Some(Ok(data)) = read.next().await {
                     if let Ok(json) = &serde_json::from_slice::<Vec<Value>>(&data.into_data()) {
-                        if let Some(endpoint) = json[1].as_str() {
+                        let json = if let Some(endpoint) = json[1].as_str() {
                             if active_commands.contains(endpoint) {
-                                let mut c = f(Ok(&json));
-                                'res_loop: loop {
-                                    match c {
-                                        ControlFlow::Continue(v) => {
-                                            match v {
-                                                Flow::Continue => break 'res_loop,
-                                                Flow::TryReconnect => {
-                                                    let req = str_req.as_str().into_client_request().unwrap();
-                                                    let connector = Connector::Rustls(tls.clone());
-                                                    let res = connect_async_tls_with_config(req, None, false, Some(connector)).await.map_err(LCUError::WebsocketError);
-                                                    match res {
-                                                        Ok((stream, _)) => {
-                                                            (write, read) = stream.split();
-                                                            break 'res_loop;
-                                                        },
-                                                        Err(e) => {
-                                                            c = f(Err(e));
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        ControlFlow::Break(()) => break 'outer
-                                    }
-                                }
+                                json
+                            } else {
+                                continue;
                             }
                         } else {
-                            let mut c = f(Ok(&json));
-                            'res_loop: loop {
-                                match c {
-                                    ControlFlow::Continue(v) => {
-                                        match v {
-                                            Flow::Continue => break 'res_loop,
-                                            Flow::TryReconnect => {
-                                                let req = str_req.as_str().into_client_request().unwrap();
-                                                let connector = Connector::Rustls(tls.clone());
-                                                let res = connect_async_tls_with_config(req, None, false, Some(connector)).await.map_err(LCUError::WebsocketError);
-                                                match res {
-                                                    Ok((stream, _)) => {
-                                                        (write, read) = stream.split();
-                                                        break 'res_loop;
-                                                    },
-                                                    Err(e) => {
-                                                        c = f(Err(e));
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    ControlFlow::Break(()) => break 'outer
+                            json
+                        };
+
+                        let mut c = f(Ok(json));
+                        while c != ControlFlow::Continue(Flow::Continue) {
+                            if c == ControlFlow::Continue(Flow::TryReconnect) {
+                                let tls = tls.clone();
+                                let rec = reconnect(&str_req, tls, &mut write, &mut read).await;
+                                if let Err(e) = rec {
+                                    c = f(Err(e));
+                                } else {
+                                    break;
                                 }
+                            } else {
+                                break 'outer;
                             }
                         }
                     };
@@ -254,6 +219,23 @@ impl LCUWebSocket {
     }
 }
 
+async fn reconnect(
+    str_req: &str,
+    tls: Arc<ClientConfig>,
+    write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    read: &mut SplitStream<
+        WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    >,
+) -> Result<(), LCUError> {
+    let req = str_req.into_client_request().unwrap();
+    let connector = Connector::Rustls(tls.clone());
+    let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
+        .await
+        .map_err(LCUError::WebsocketError)?;
+    (*write, *read) = stream.split();
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use std::time::Duration;
@@ -262,13 +244,15 @@ mod test {
 
     use super::LCUWebSocket;
 
-    #[ignore = "This does not need to be run often"]
+    // #[ignore = "This does not need to be run often"]
     #[tokio::test]
     async fn it_inits() {
         let mut ws_client = LCUWebSocket::new(|values| {
             println!("{values:?}");
-            std::ops::ControlFlow::Break(())
-        }).await.unwrap();
+            std::ops::ControlFlow::Continue(crate::ws::Flow::Continue)
+        })
+        .await
+        .unwrap();
         ws_client.subscribe(crate::ws::EventType::OnJsonApiEvent);
 
         while !ws_client.is_finished() {
