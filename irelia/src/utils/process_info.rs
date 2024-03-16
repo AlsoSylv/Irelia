@@ -1,11 +1,11 @@
 //! This module uses sub-processes that are OS specific to get info
 //! from the League of Legneds client well it is running, or error
 //! if it is not. These sub-processes are derived from those found
-//! on Hextech docs here, as well as personal testing on Linux.
-//! <https://hextechdocs.dev/getting-started-with-the-lcu-websocket/>
+//! on Hextech docs.
+//! <https://hextechdocs.dev/getting-started-with-the-lcu-api/>
 
 //! This module also contains a list of constants for the different names
-//! of the processes for Linux, MacOS, and Windows
+//! of the processes for MacOS, and Windows
 
 use irelia_encoder::Encoder;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
@@ -70,9 +70,10 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     if client {
         let cmd = process.cmd();
 
+        // Assuming the order doesn't change (whihc I haven't seen it do)
+        // We can avoid a second iteration over the cmd args
         let mut iter = cmd.iter();
 
-        println!("{cmd:?}");
         /*
            Look for an auth key to put inside the header, otherwise return an error.
            If no auth key is found, but the LCU is running, something is probably wrong
