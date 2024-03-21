@@ -204,7 +204,6 @@ impl LCUClient {
     /// Fetches the schema from a remote endpoint, for example:
     /// https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json
     pub async fn schema(
-        &self,
         remote: &'static str,
         request_client: &RequestClient,
     ) -> Result<types::Schema, LCUError> {

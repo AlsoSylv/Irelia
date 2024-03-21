@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
