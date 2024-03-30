@@ -203,16 +203,19 @@ impl LCUClient {
 
     /// Fetches the schema from a remote endpoint, for example:
     /// https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json
-    pub async fn schema(
-        remote: &'static str,
-        request_client: &RequestClient,
-    ) -> Result<types::Schema, LCUError> {
+    pub async fn schema(remote: &'static str) -> Result<types::Schema, LCUError> {
         let uri = Uri::from_static(remote);
-        let mut request = request_client
-            .client
-            .get(uri)
-            .await
-            .map_err(LCUError::HyperClientError)?;
+        // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside of here
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .map_err(LCUError::StdIo)?
+            .https_only()
+            .enable_http1()
+            .build();
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build::<_, http_body_util::Full<hyper::body::Bytes>>(https);
+        let mut request = client.get(uri).await.map_err(LCUError::HyperClientError)?;
         let tmp = request.body_mut();
         let body = tmp
             .collect()
@@ -259,7 +262,7 @@ impl LCUClient {
 #[cfg(feature = "batched")]
 #[cfg(test)]
 mod tests {
-    use crate::RequestClient;
+    use crate::{rest::LCUClient, RequestClient};
 
     #[tokio::test]
     async fn batch_test() {
@@ -321,5 +324,14 @@ mod tests {
             )
             .await;
         println!("{:?}", a);
+    }
+
+    #[tokio::test]
+    async fn test_schema_des() {
+        let _schema = LCUClient::schema(
+            "https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json",
+        )
+        .await
+        .unwrap();
     }
 }

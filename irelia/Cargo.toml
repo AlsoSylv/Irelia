@@ -41,12 +41,12 @@ optional = true
 
 [dependencies.hyper]
 version = "1.1"
-features = ["client", "http1"]
+features = ["client", "http2"]
 optional = true
 
 [dependencies.hyper-util]
 version = "0.1"
-features = ["client-legacy", "http1", "tokio"]
+features = ["client-legacy", "http2", "tokio"]
 optional = true
 
 [dev-dependencies]
