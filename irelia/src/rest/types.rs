@@ -19,11 +19,11 @@ pub struct Components {
 #[serde(rename_all = "camelCase")]
 pub struct SchemaValue {
     #[serde(rename = "type")]
-    pub schema_type: Type,
+    pub schema_type: Option<Type>,
     pub description: Option<String>,
     #[serde(rename = "enum")]
     pub schema_enum: Option<Vec<String>>,
-    pub additional_properties: PropertyAdditionalProperties,
+    pub additional_properties: Option<PropertyAdditionalProperties>,
     pub properties: Option<HashMap<String, Property>>,
     pub required: Option<Vec<String>>,
 }
@@ -133,46 +133,13 @@ pub struct Content {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApplicationJson {
-    pub schema: Option<ApplicationJsonItems>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApplicationJsonItems {
-    #[serde(rename = "type")]
-    pub schema_type: Option<Type>,
-    pub additional_properties: Option<bool>,
-    #[serde(rename = "$ref")]
-    pub schema_ref: Option<String>,
-    pub format: Option<Format>,
-    pub minimum: Option<i64>,
-    pub items: Option<PurpleSchema>,
+    pub schema: Option<SchemaValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Responses {
-    #[serde(rename = "2XX")]
-    pub the_2_xx: Option<_2XX>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct _2XX {
     pub content: Option<Content>,
     pub description: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TentacledSchema {
-    #[serde(rename = "type")]
-    pub schema_type: Type,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AdditionalPropertiesClass {
-    #[serde(rename = "type")]
-    pub additional_properties_type: Option<Type>,
-    #[serde(rename = "$ref")]
-    pub additional_properties_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
