@@ -2,6 +2,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Schema {
     pub openapi: String,
     pub info: Info,
@@ -11,12 +12,14 @@ pub struct Schema {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Components {
     pub schemas: HashMap<String, SchemaValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)] 
 pub struct SchemaValue {
     #[serde(rename = "type")]
     pub schema_type: Option<Type>,
@@ -30,6 +33,7 @@ pub struct SchemaValue {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)] 
 pub struct Property {
     #[serde(rename = "type")]
     pub property_type: Option<Type>,
@@ -44,6 +48,7 @@ pub struct Property {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[serde(deny_unknown_fields)] 
 pub enum PropertyAdditionalProperties {
     Bool(bool),
     ItemsAdditionalProperties(Box<Property>),
@@ -51,6 +56,7 @@ pub enum PropertyAdditionalProperties {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)] 
 pub enum Format {
     Double,
     Float,
@@ -66,6 +72,7 @@ pub enum Format {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)] 
 pub enum Type {
     Array,
     Boolean,
@@ -76,6 +83,7 @@ pub enum Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Info {
     pub title: String,
     pub description: String,
@@ -84,6 +92,7 @@ pub struct Info {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)] 
 pub struct Operation {
     pub description: Option<String>,
     pub operation_id: String,
@@ -91,10 +100,11 @@ pub struct Operation {
     pub responses: Option<HashMap<String, Responses>>,
     pub summary: Option<String>,
     pub tags: Vec<String>,
-    pub request_body: Option<HashMap<String, RequestBody>>,
+    pub request_body: Option<RequestBody>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Parameter {
     #[serde(rename = "in")]
     pub parameter_in: In,
@@ -105,44 +115,40 @@ pub struct Parameter {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)] 
 pub enum In {
     Path,
     Query,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PurpleSchema {
-    #[serde(rename = "type")]
-    pub schema_type: Option<Type>,
-    pub format: Option<Format>,
-    pub minimum: Option<i64>,
-    #[serde(rename = "$ref")]
-    pub schema_ref: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct RequestBody {
     pub content: Option<Content>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Content {
     #[serde(rename = "application/json")]
     pub application_json: ApplicationJson,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct ApplicationJson {
-    pub schema: Option<SchemaValue>,
+    pub schema: Option<Property>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Responses {
     pub content: Option<Content>,
     pub description: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)] 
 pub struct Tag {
     pub name: String,
 }
