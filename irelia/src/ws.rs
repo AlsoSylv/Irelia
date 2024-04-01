@@ -239,9 +239,6 @@ async fn reconnect(
 #[cfg(test)]
 mod test {
     use std::time::Duration;
-
-    use tokio;
-
     use super::LCUWebSocket;
 
     // #[ignore = "This does not need to be run often"]
