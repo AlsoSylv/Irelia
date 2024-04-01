@@ -1,12 +1,12 @@
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashlink::LinkedHashMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)] 
 pub struct Schema {
     pub openapi: String,
     pub info: Info,
-    pub paths: HashMap<String, HashMap<String, Operation>>,
+    pub paths: LinkedHashMap<String, LinkedHashMap<String, Operation>>,
     pub components: Components,
     pub tags: Vec<Tag>,
 }
@@ -14,7 +14,7 @@ pub struct Schema {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)] 
 pub struct Components {
-    pub schemas: HashMap<String, SchemaValue>,
+    pub schemas: LinkedHashMap<String, SchemaValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -27,7 +27,7 @@ pub struct SchemaValue {
     #[serde(rename = "enum")]
     pub schema_enum: Option<Vec<String>>,
     pub additional_properties: Option<PropertyAdditionalProperties>,
-    pub properties: Option<HashMap<String, Property>>,
+    pub properties: Option<LinkedHashMap<String, Property>>,
     pub required: Option<Vec<String>>,
 }
 
@@ -94,10 +94,10 @@ pub struct Info {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)] 
 pub struct Operation {
-    pub description: Option<String>,
+    pub description: String,
     pub operation_id: String,
     pub parameters: Vec<Parameter>,
-    pub responses: Option<HashMap<String, Responses>>,
+    pub responses: Option<LinkedHashMap<String, Responses>>,
     pub summary: Option<String>,
     pub tags: Vec<String>,
     pub request_body: Option<RequestBody>,
@@ -124,7 +124,7 @@ pub enum In {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)] 
 pub struct RequestBody {
-    pub content: Option<Content>,
+    pub content: Content,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
