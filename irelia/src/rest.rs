@@ -56,8 +56,6 @@ impl<'a> BatchRequests<'a> {
 impl LCUClient {
     /// Attempts to create a connection to the LCU, errors if it fails
     /// to spin up the child process, or fails to get data from the client.
-    /// On Linux, this can happen well the client launches, but on windows
-    /// it should be possible to connect well it spins up.
     pub fn new() -> Result<LCUClient, LCUError> {
         let (port, pass) = get_running_client()?;
 
@@ -65,6 +63,15 @@ impl LCUClient {
             url: port,
             auth_header: pass,
         })
+    }
+
+    /// Creates a new LCU Client that implicitly trusts the port and auth string given,
+    /// Encoding them in a URL and header respectively
+    pub fn new_with_credentials(auth: &str, port: u16) -> LCUClient {
+        LCUClient {
+            url: format!("127.0.0.1:{}", port),
+            auth_header: format!("Basic {}", crate::utils::process_info::ENCODER.encode(format!("riot:{}", auth))),
+        }
     }
 
     /// Returns a reference to the URL in use
@@ -90,19 +97,19 @@ impl LCUClient {
     where
         R: DeserializeOwned,
     {
-        futures_util::stream::iter(requests.iter().map(|request| async move {
+        futures_util::stream::iter(requests.iter().map(|request| async {
             match &request.request_type {
-                RequestType::Delete => self.delete(&**request.endpoint, request_client).await,
-                RequestType::Get => self.get(&**request.endpoint, request_client).await,
-                RequestType::Head => self.head(&**request.endpoint, request_client).await,
+                RequestType::Delete => self.delete(request.endpoint.deref(), request_client).await,
+                RequestType::Get => self.get(request.endpoint.deref(), request_client).await,
+                RequestType::Head => self.head(request.endpoint.deref(), request_client).await,
                 RequestType::Patch(body) => {
-                    self.patch(&**request.endpoint, *body, request_client).await
+                    self.patch(request.endpoint.deref(), *body, request_client).await
                 }
                 RequestType::Post(body) => {
-                    self.post(&**request.endpoint, *body, request_client).await
+                    self.post(request.endpoint.deref(), *body, request_client).await
                 }
                 RequestType::Put(body) => {
-                    self.put(&**request.endpoint, *body, request_client).await
+                    self.put(request.endpoint.deref(), *body, request_client).await
                 }
             }
         }))
@@ -112,7 +119,7 @@ impl LCUClient {
     }
 
     /// Sends a delete request to the LCU
-    pub async fn delete<'a, R, S>(
+    pub async fn delete<R, S>(
         &self,
         endpoint: S,
         request_client: &RequestClient,
@@ -121,12 +128,12 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R, _>(endpoint, "DELETE", None, request_client)
+        self.lcu_request::<(), R>(endpoint.deref(), "DELETE", None, request_client)
             .await
     }
 
     /// Sends a get request to the LCU
-    pub async fn get<'a, R, S>(
+    pub async fn get<R, S>(
         &self,
         endpoint: S,
         request_client: &RequestClient,
@@ -135,12 +142,12 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R, _>(endpoint, "GET", None, request_client)
+        self.lcu_request::<(), R>(endpoint.deref(), "GET", None, request_client)
             .await
     }
 
     /// Sends a head request to the LCU
-    pub async fn head<'a, R, S>(
+    pub async fn head<R, S>(
         &self,
         endpoint: S,
         request_client: &RequestClient,
@@ -149,12 +156,12 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R, _>(endpoint, "HEAD", None, request_client)
+        self.lcu_request::<(), R>(endpoint.deref(), "HEAD", None, request_client)
             .await
     }
 
     /// Sends a patch request to the LCU
-    pub async fn patch<'a, T, R, S>(
+    pub async fn patch<T, R, S>(
         &self,
         endpoint: S,
         body: Option<T>,
@@ -165,12 +172,12 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request(endpoint, "PATCH", body, request_client)
+        self.lcu_request(endpoint.deref(), "PATCH", body, request_client)
             .await
     }
 
     /// Sends a post request to the LCU
-    pub async fn post<'a, T, R, S>(
+    pub async fn post<T, R, S>(
         &self,
         endpoint: S,
         body: Option<T>,
@@ -181,12 +188,12 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request(endpoint, "POST", body, request_client)
+        self.lcu_request(endpoint.deref(), "POST", body, request_client)
             .await
     }
 
     /// Sends a put request to the LCU
-    pub async fn put<'a, T, R, S>(
+    pub async fn put<T, R, S>(
         &self,
         endpoint: S,
         body: Option<T>,
@@ -197,7 +204,7 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request(endpoint, "PUT", body, request_client)
+        self.lcu_request(endpoint.deref(), "PUT", body, request_client)
             .await
     }
 
@@ -205,7 +212,7 @@ impl LCUClient {
     /// https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json
     pub async fn schema(remote: &'static str) -> Result<types::Schema, LCUError> {
         let uri = Uri::from_static(remote);
-        // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside of here
+        // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside here
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .map_err(LCUError::StdIo)?
@@ -225,9 +232,11 @@ impl LCUClient {
         serde_json::from_slice(&body).map_err(LCUError::SerdeJsonError)
     }
 
-    async fn lcu_request<'a, T, R, S>(
+    /// Makes a request to the LCU with an unspecified method, valid options being
+    /// "PUT", "GET", "POST", "HEAD", "DELETE"
+    pub async fn lcu_request<T, R>(
         &self,
-        endpoint: S,
+        endpoint: &str,
         method: &str,
         body: Option<T>,
         request_client: &RequestClient,
@@ -235,7 +244,6 @@ impl LCUClient {
     where
         T: Serialize,
         R: DeserializeOwned,
-        S: Deref<Target = str>,
     {
         request_client
             .request_template(

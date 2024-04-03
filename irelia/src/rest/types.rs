@@ -42,7 +42,7 @@ pub struct Property {
     #[serde(rename = "$ref")]
     pub property_ref: Option<String>,
     pub additional_properties: Option<PropertyAdditionalProperties>,
-    pub items: Option<Box<Property>>,
+    pub items: Option<AdditionalProperties>,
     pub required: Option<bool>,
 }
 
@@ -51,7 +51,23 @@ pub struct Property {
 #[serde(deny_unknown_fields)] 
 pub enum PropertyAdditionalProperties {
     Bool(bool),
-    ItemsAdditionalProperties(Box<Property>),
+    ItemsAdditionalProperties(AdditionalProperties),
+}
+
+// Avoid an alloc
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct AdditionalProperties {
+    #[serde(rename = "type")]
+    pub property_type: Option<Type>,
+    pub format: Option<Format>,
+    pub minimum: Option<i64>,
+    #[serde(rename = "$ref")]
+    pub property_ref: Option<String>,
+    pub additional_properties: Option<Box<PropertyAdditionalProperties>>,
+    pub items: Option<Box<PropertyAdditionalProperties>>,
+    pub required: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -110,7 +126,7 @@ pub struct Parameter {
     pub parameter_in: In,
     pub name: String,
     pub required: Option<bool>,
-    pub schema: Option<Box<Property>>,
+    pub schema: Option<AdditionalProperties>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

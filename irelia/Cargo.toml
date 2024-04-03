@@ -11,28 +11,29 @@ readme = "../README.md"
 
 [dependencies]
 # Required across all features
-serde_json = { version = "1.0" }
-rustls = "0.22"
-rustls-pemfile = "2.0"
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+rustls = { version = "0.22", default-features = false, features = [] }
+rustls-pemfile = { version = "2.1", default-features = false, features = ["std"] }
 irelia_encoder = { path = "../encoder", version = "0.1" }
 # Optional across some features
-hyper-rustls = { version = "0.26.0", optional = true }
+hyper-rustls = { version = "0.26.0", optional = true, default-features = false, features = ["http1", "rustls-native-certs", "ring"] }
 http-body-util = { version = "0.1.0", optional = true }
-sysinfo = { version = "0.30", optional = true }
+sysinfo = { version = "0.30", optional = true, default-features = false, features = [] }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 erased-serde = { version = "0.4", optional = true }
-hashlink = { version = "0.9.0", optional = true, features = ["serde_impl"]}
+hashlink = { version = "0.9.0", optional = true, features = ["serde_impl"] }
 
 [dependencies.futures-util]
 version = "0.3"
-features = ["std", "sink"]
+features = ["sink"]
 optional = true
 default-features = false
 
 [dependencies.tokio]
-version = "1.24"
-features = ["sync", "rt"]
+version = "1.37"
+default-features = false
+features = []
 optional = true
 
 [dependencies.tokio-tungstenite]
@@ -41,13 +42,15 @@ features = ["__rustls-tls"]
 optional = true
 
 [dependencies.hyper]
-version = "1.1"
-features = ["client", "http2"]
+version = "1.2"
+features = ["client", "http1"]
+default-features = false
 optional = true
 
 [dependencies.hyper-util]
 version = "0.1"
-features = ["client-legacy", "http2", "tokio"]
+features = ["client-legacy", "http1"]
+default-features = false
 optional = true
 
 [dev-dependencies]
@@ -55,7 +58,7 @@ rand = "0.8.5"
 base64 = "0.22.0"
 
 [dev-dependencies.tokio]
-version = "1.27"
+version = "1.37"
 features = ["sync", "rt", "macros"]
 
 [features]
@@ -72,10 +75,10 @@ full = [
 
 rest = [
     "dep:serde",
+    "dep:serde_derive",
     "dep:hyper", 
     "dep:hyper-util",
     "dep:http-body-util",
-    "dep:futures-util",
     "dep:hyper-rustls",
     "dep:sysinfo",
     "dep:hashlink"
@@ -95,10 +98,13 @@ ws = [
     "dep:tokio", 
     "dep:futures-util",
     "dep:sysinfo",
+    "tokio/sync",
+    "tokio/rt"
     ]
 
 batched = [
     "dep:erased-serde",
+    "dep:futures-util",
     "rest",
     ]
 

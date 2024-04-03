@@ -23,8 +23,18 @@ const GAME_PROCESS_NAME: &str = "League of Legends.exe";
 #[cfg(target_os = "macos")]
 const GAME_PROCESS_NAME: &str = "League of Legends";
 
+// These ONLY exist so that this will compile in a dev env
+// Linux support will not be re-added unless someone comes
+// up with a solution to running the game on Linux natively
+#[cfg(test)]
+#[cfg(target_os = "linux")]
+const CLIENT_PROCESS_NAME: &str = "";
+#[cfg(test)]
+#[cfg(target_os = "linux")]
+const GAME_PROCESS_NAME: &str = "";
+
 // Create a new instance of the encoder
-const ENCODER: Encoder = Encoder::new();
+pub(crate) const ENCODER: Encoder = Encoder::new();
 
 /// Gets the port and auth for the client via the process id
 /// This is done to avoid needing to find the lock file, but
@@ -46,7 +56,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     /*
         Iterate through all of the processes, using .values() because
         We don't need the PID. Try to find a process with the same name
-        as the constant for that platform, ohterwise return an error.
+        as the constant for that platform, otherwise return an error.
     */
     let process = system
         .processes()
@@ -70,7 +80,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     if client {
         let cmd = process.cmd();
 
-        // Assuming the order doesn't change (whihc I haven't seen it do)
+        // Assuming the order doesn't change (which I haven't seen it do)
         // We can avoid a second iteration over the cmd args
         let mut iter = cmd.iter();
 
@@ -100,7 +110,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
 
         lock_file = std::fs::read_to_string(path.join("lockfile")).map_err(LCUError::StdIo)?;
 
-        // Split the lock file on `:` which seperates the different fields
+        // Split the lock file on `:` which separates the different fields
         let mut split = lock_file.split(':');
 
         // Get the 3rd field
