@@ -471,16 +471,16 @@ mod tests {
         let lcu_client = LCUClient::new().unwrap();
 
         let request: serde_json::Value = lcu_client
-            .get("/lol-summoner/v2/current-summoner", &client)
+            .get("/lol-summoner/v1/current-summoner", &client)
             .await
             .unwrap()
             .unwrap();
-
+        
         let id = &request["summonerId"];
 
         let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
         let mut json: serde_json::Value = lcu_client.get(endpoint, &client).await.unwrap().unwrap();
-
+        
         json["itemSets"].as_array_mut().unwrap().push(page);
 
         let req = Request {
@@ -488,11 +488,11 @@ mod tests {
             endpoint: format!("/lol-item-sets/v1/item-sets/{id}/sets").into(),
         };
 
-        let res = lcu_client
+        let result = lcu_client
             .batched::<serde_json::Value>(&[req], 1, &client)
             .await;
 
-        println!("{:?}", res);
+        println!("{result:?}");
 
         let a = lcu_client
             .put::<_, serde_json::Value, _>(
@@ -501,7 +501,7 @@ mod tests {
                 &client,
             )
             .await;
-        println!("{:?}", a);
+        println!("{a:?}");
     }
 
     #[tokio::test]

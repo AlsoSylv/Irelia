@@ -2,7 +2,7 @@
 
 Irelia is a set of bindings to native LoL APIs built on top of Hyper.
 
-This crate provides support for Windows, with untested MacOS support.
+This crate provides support for Windows, with untested macOS support.
 
 Please note, League of Legends will not be playable on wine as of patch 14.5, and as such, the platform is no longer supported
 

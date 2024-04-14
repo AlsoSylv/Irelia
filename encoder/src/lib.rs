@@ -4,10 +4,10 @@
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
-//! It goes into detail about the entire thing, and why it works the way it does, and I hightly reccomend reading it
+//! It goes into detail about the entire thing, and why it works the way it does, and I highly recommend reading it
 //! Very big thanks to Tiemen for writing it!
 //!
-//! The usage of u64s as byte arrays is taken from the base64 crate, which is under the MIT licsense
+//! The usage of u64s as byte arrays is taken from the base64 crate, which is under the MIT license
 
 extern crate alloc;
 
@@ -29,11 +29,19 @@ pub struct Encoder {
     encode_table: [u8; 64],
 }
 
+impl Default for Encoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Encoder {
     /// Creates a new instance of the encoder using the default base64 alphabet
     ///
     /// # Examples
     /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
     /// const ENCODER: Encoder = Encoder::new();
     /// ```
     pub const fn new() -> Self {
@@ -53,6 +61,8 @@ impl Encoder {
     ///
     /// # Example:
     /// ```
+    /// use irelia_encoder::Encoder;
+    /// 
     /// const ALPHABET: [u8; 64] = [
     ///     b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
     ///     b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',
@@ -222,15 +232,15 @@ impl Encoder {
                 let lut: Simd<i8, 16> = Simd::from_array([
                     65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 0, 0,
                 ]);
-                let indicies = input.saturating_sub(Simd::splat(51));
+                let indices = input.saturating_sub(Simd::splat(51));
                 let mask = input
                     .simd_gt(Simd::splat(25))
                     .to_int()
                     .cast::<u8>();
 
-                let indicies = indicies - mask;
+                let indices = indices - mask;
 
-                let out = input.cast::<i8>() + swizzle_dyn(lut.cast::<u8>(), indicies).cast::<i8>();
+                let out = input.cast::<i8>() + swizzle_dyn(lut.cast::<u8>(), indices).cast::<i8>();
 
                 out.cast::<u8>()
             }
@@ -240,9 +250,9 @@ impl Encoder {
                 let buf = unsafe { slice::from_raw_parts(chunk.as_ptr(), 16) };
                 let vec: Simd<u8, 16> = Simd::from_slice(buf);
 
-                let indicies = unpack_with_bswap(vec);
+                let indices = unpack_with_bswap(vec);
 
-                let chars = enc_translate(indicies);
+                let chars = enc_translate(indices);
 
                 *out = chars.to_array();
 
@@ -350,6 +360,7 @@ impl Encoder {
     ///
     /// # Examples
     /// ```
+    /// use irelia_encoder::Encoder;
     /// const ENCODER: Encoder = Encoder::new();
     ///
     /// let base64_encoded = ENCODER.encode("Hello, World!");
@@ -369,6 +380,7 @@ impl Encoder {
     ///
     /// # Examples
     /// ```
+    /// use irelia_encoder::Encoder;
     /// const ENCODER: Encoder = Encoder::new();
     ///
     /// let base64_encoded = ENCODER.encode_with_ascii_check("Hello, World!");
@@ -392,6 +404,7 @@ impl Encoder {
     ///
     /// # Example:
     /// ```
+    /// use irelia_encoder::Encoder;
     /// const ENCODER: Encoder = Encoder::new();
     ///
     /// let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
@@ -417,6 +430,7 @@ impl Encoder {
     ///
     /// # Examples
     /// ```
+    /// use irelia_encoder::Encoder;
     /// const ENCODER: Encoder = Encoder::new();
     ///
     /// let base64_encoded = ENCODER.encode_without_padding("Hello, World!");
@@ -436,6 +450,7 @@ impl Encoder {
     ///
     /// # Example:
     /// ```
+    /// use irelia_encoder::Encoder;
     /// const ENCODER: Encoder = Encoder::new();
     ///
     /// let base64_encoded = unsafe { ENCODER.encode_unchecked("Hello, World!") };
@@ -620,7 +635,7 @@ where
 
 #[cfg(test)]
 /*
-These are the current benchmark results running on an Ryzen 9 7900x
+These are the current benchmark results running on a Ryzen 9 7900x
 Note: This was after recent changes to core::simd
 
 Simd Feature Enabled:
@@ -635,7 +650,7 @@ irelia_encoder             ... bench:   5,896,720 ns/iter (+/- 483,676)
 irelia_encoder_ascii_check ... bench:   5,613,385 ns/iter (+/- 478,652)
 irelia_encoder_unchecked   ... bench:   5,432,165 ns/iter (+/- 379,335)
 
-These are the current benchmark results running on an Ryzen 7 5700u
+These are the current benchmark results running on a Ryzen 7 5700u
 Note: This was before recent changes to core::simd
 
 Simd Feature Enabled:
@@ -704,10 +719,8 @@ mod test {
         let encoder = Encoder::new();
 
         b.iter(|| {
-            black_box({
-                for x in 0..10000 {
-                    black_box(encoder.encode(&strings[x]));
-                }
+            black_box(for x in 0..10000 {
+                black_box(encoder.encode(&strings[x]));
             });
         })
     }

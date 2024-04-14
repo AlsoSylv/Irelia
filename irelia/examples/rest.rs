@@ -12,5 +12,5 @@ async fn main() {
         .unwrap()
         .unwrap();
 
-    let value = &value["example_index"];
+    let _value = &value["example_index"];
 }

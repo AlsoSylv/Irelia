@@ -151,6 +151,6 @@ mod tests {
     #[test]
     fn test_process_info() {
         let (port, pass) = get_running_client().unwrap();
-        println!("{port} {pass}")
+        println!("{port} {pass}");
     }
 }

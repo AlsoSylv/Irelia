@@ -27,5 +27,5 @@ async fn main() {
     // Execute two requests at a time
     let with_buffer_size = with_request_client.with_buffer_size(2);
     let with_lcu_client = with_buffer_size.with_lcu_client(&lcu_client);
-    let _results = with_lcu_client.execute().await;
+    let _results = with_lcu_client.execute::<serde_json::Value>().await;
 }

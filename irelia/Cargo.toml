@@ -14,6 +14,7 @@ categories = ["riot", "league", "league of legends", "lcu", "riot-games"]
 # Required across all features
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 rustls = { version = "0.22", default-features = false }
+rustls-pemfile = { version = "2.1", default-features = false }
 irelia_encoder = { path = "../encoder", version = "0.1" }
 # Optional across some features
 http-body-util = { version = "0.1.0", optional = true }
