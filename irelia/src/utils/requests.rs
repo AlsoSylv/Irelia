@@ -1,17 +1,36 @@
 use crate::LCUError;
 
-use crate::RequestClient;
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::header::AUTHORIZATION;
 use hyper::http::uri;
 use hyper::Request;
+use hyper_rustls::HttpsConnector;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use super::setup_tls::setup_tls_connector;
 
+/// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
+///
+/// # Example
+/// ```rs
+/// use irelia::{RequestClient, rest::LCUClient};
+///
+/// fn main() {
+///     let client = RequestClient::new();
+///     
+///     let lcu_client = LCUClient::new();
+/// }
+/// ```
+pub struct RequestClient {
+    client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
+}
+
 impl RequestClient {
+    #[must_use]
     /// Creates a client to be passed to the LCU and in game structs
     pub fn new() -> RequestClient {
         let tls = setup_tls_connector();
@@ -21,8 +40,7 @@ impl RequestClient {
             .enable_http1()
             .build();
         let client =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                .build::<_, http_body_util::Full<Bytes>>(https);
+            Client::builder(hyper_util::rt::TokioExecutor::new()).build::<_, Full<Bytes>>(https);
 
         RequestClient { client }
     }
@@ -40,7 +58,7 @@ impl RequestClient {
         T: Serialize,
         R: DeserializeOwned,
     {
-        let uri = uri::Builder::new()
+        let built_uri = uri::Builder::new()
             .scheme("https")
             .authority(url.as_bytes())
             .path_and_query(endpoint)
@@ -52,26 +70,26 @@ impl RequestClient {
                 Ok(json) => Ok(http_body_util::Full::from(json.to_string())),
                 Err(err) => Err(LCUError::SerdeJsonError(err)),
             },
-            None => Ok(http_body_util::Full::new(Bytes::new())),
+            None => Ok(Full::new(Bytes::new())),
         }?;
 
-        let req = match auth_header {
+        let request = match auth_header {
             Some(header) => Request::builder()
                 .method(method)
-                .uri(uri)
+                .uri(built_uri)
                 .header(AUTHORIZATION, header)
                 .body(body),
-            None => Request::builder().method(method).uri(uri).body(body),
+            None => Request::builder().method(method).uri(built_uri).body(body),
         }
         .map_err(LCUError::HyperHttpError)?;
 
-        let mut res = self
+        let mut response = self
             .client
-            .request(req)
+            .request(request)
             .await
             .map_err(LCUError::HyperClientError)?;
 
-        let body = res.body_mut();
+        let body = response.body_mut();
 
         let bytes = body
             .collect()

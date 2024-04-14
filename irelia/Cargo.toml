@@ -8,21 +8,26 @@ repository = "https://github.com/AlsoSylv/Irelia"
 homepage = "https://github.com/AlsoSylv/Irelia"
 documentation = "https://docs.rs/irelia"
 readme = "../README.md"
+categories = ["riot", "league", "league of legends", "lcu", "riot-games"]
 
 [dependencies]
 # Required across all features
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-rustls = { version = "0.22", default-features = false, features = [] }
-rustls-pemfile = { version = "2.1", default-features = false, features = ["std"] }
+rustls = { version = "0.22", default-features = false }
 irelia_encoder = { path = "../encoder", version = "0.1" }
 # Optional across some features
-hyper-rustls = { version = "0.26.0", optional = true, default-features = false, features = ["http1", "rustls-native-certs", "ring"] }
 http-body-util = { version = "0.1.0", optional = true }
-sysinfo = { version = "0.30", optional = true, default-features = false, features = [] }
+sysinfo = { version = "0.30", optional = true, default-features = false }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 erased-serde = { version = "0.4", optional = true }
 hashlink = { version = "0.9.0", optional = true, features = ["serde_impl"] }
+
+[dependencies.hyper-rustls]
+version = "0.26.0"
+optional = true
+default-features = false
+features = ["http1", "rustls-native-certs", "ring"]
 
 [dependencies.futures-util]
 version = "0.3"
@@ -33,7 +38,6 @@ default-features = false
 [dependencies.tokio]
 version = "1.37"
 default-features = false
-features = []
 optional = true
 
 [dependencies.tokio-tungstenite]
@@ -43,7 +47,7 @@ optional = true
 
 [dependencies.hyper]
 version = "1.2"
-features = ["client", "http1"]
+features = ["http1"]
 default-features = false
 optional = true
 
@@ -59,7 +63,7 @@ base64 = "0.22.0"
 
 [dev-dependencies.tokio]
 version = "1.37"
-features = ["sync", "rt", "macros"]
+features = ["sync", "rt", "macros", "rt-multi-thread"]
 
 [features]
 default = [

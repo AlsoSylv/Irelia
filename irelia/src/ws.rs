@@ -1,5 +1,6 @@
 //! Module containing all the data on the websocket LCU bindings
 
+use std::borrow::Cow;
 use std::{collections::HashSet, ops::ControlFlow, sync::Arc};
 
 use futures_util::{
@@ -24,7 +25,7 @@ use crate::{
     LCUError,
 };
 
-/// Different LCU WebSocket request types
+/// Different LCU websocket request types
 #[derive(PartialEq, Clone)]
 pub enum RequestType {
     Welcome = 0,
@@ -53,6 +54,26 @@ pub enum EventType {
     OnLcdsEventCallback(String),
 }
 
+impl EventType {
+    fn to_string(&self) -> Cow<'static, str> {
+        match self {
+            EventType::OnJsonApiEvent => "OnJsonApiEvent".into(),
+            EventType::OnLcdsEvent => "OnLcdsEvent".into(),
+            EventType::OnLog => "OnLog".into(),
+            EventType::OnRegionLocaleChanged => "OnRegionLocaleChanged".into(),
+            EventType::OnServiceProxyAsyncEvent => "OnServiceProxyAsyncEvent".into(),
+            EventType::OnServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
+            EventType::OnServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
+            EventType::OnJsonApiEventCallback(callback) => {
+                format!("OnJsonApiEvent{}", callback.replace('/', "_")).into()
+            }
+            EventType::OnLcdsEventCallback(callback) => {
+                format!("OnLcdsEvent{}", callback.replace('/', "_")).into()
+            }
+        }
+    }
+}
+
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<(RequestType, EventType)>,
@@ -69,54 +90,44 @@ pub enum Flow {
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
+    ///
+    /// # Errors
+    /// This function will return an error if the LCU is not running,
+    /// or if it cannot connect to the websocket
+    ///
+    /// # Panics
+    ///
+    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
     pub async fn new(
-        f: impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Send + 'static,
+        f: impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Send + Sync + 'static,
     ) -> Result<Self, LCUError> {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
         let connector = Connector::Rustls(tls.clone());
         let (url, auth_header) = get_running_client()?;
-        let str_req = format!("wss://{}", url);
-        let mut req = str_req.as_str().into_client_request().unwrap();
-        req.headers_mut().insert(
+        let str_req = format!("wss://{url}");
+        let mut request = str_req
+            .as_str()
+            .into_client_request()
+            .map_err(LCUError::WebsocketError)?;
+        request.headers_mut().insert(
             "Authorization",
-            HeaderValue::from_str(&auth_header).unwrap(),
+            HeaderValue::from_str(&auth_header).expect("This is always a valid header"),
         );
 
-        let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
+        let (stream, _) = connect_async_tls_with_config(request, None, false, Some(connector))
             .await
             .map_err(LCUError::WebsocketError)?;
 
-        let (ws_sender, mut ws_reciever) = mpsc::unbounded_channel::<(RequestType, _)>();
+        let (ws_sender, mut ws_receiver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
 
         let handle = tokio::spawn(async move {
-            let str_req = str_req;
             let mut active_commands = HashSet::new();
             let (mut write, mut read) = stream.split();
 
-            'outer: loop {
-                if let Ok((code, endpoint)) = ws_reciever.try_recv() {
-                    let endpoint = match endpoint {
-                        EventType::OnJsonApiEvent => String::from("OnJsonApiEvent"),
-                        EventType::OnLcdsEvent => String::from("OnLcdsEvent"),
-                        EventType::OnLog => String::from("OnLog"),
-                        EventType::OnRegionLocaleChanged => String::from("OnRegionLocaleChanged"),
-                        EventType::OnServiceProxyAsyncEvent => {
-                            String::from("OnServiceProxyAsyncEvent")
-                        }
-                        EventType::OnServiceProxyMethodEvent => {
-                            String::from("OnServiceProxyMethodEvent")
-                        }
-                        EventType::OnServiceProxyUuidEvent => {
-                            String::from("OnServiceProxyUuidEvent")
-                        }
-                        EventType::OnJsonApiEventCallback(callback) => {
-                            format!("OnJsonApiEvent{}", callback.replace('/', "_"))
-                        }
-                        EventType::OnLcdsEventCallback(callback) => {
-                            format!("OnLcdsEvent{}", callback.replace('/', "_"))
-                        }
-                    };
+            loop {
+                if let Ok((code, endpoint)) = ws_receiver.try_recv() {
+                    let endpoint = endpoint.to_string();
 
                     let command = format!("[{}, \"{endpoint}\"]", code.clone() as u8);
 
@@ -128,19 +139,11 @@ impl LCUWebSocket {
 
                     if write.send(command.into()).await.is_err() {
                         let mut c = f(Err(LCUError::LCUProcessNotRunning));
-                        while c != ControlFlow::Continue(Flow::Continue) {
-                            if c == ControlFlow::Continue(Flow::TryReconnect) {
-                                let tls = tls.clone();
-                                let rec = reconnect(&str_req, tls, &mut write, &mut read).await;
-                                if let Err(e) = rec {
-                                    c = f(Err(e));
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                break 'outer;
-                            }
-                        }
+                        if !budget_recursive(&mut c, &str_req, &tls, &f, &mut write, &mut read)
+                            .await
+                        {
+                            break;
+                        };
                     };
                 };
 
@@ -157,19 +160,11 @@ impl LCUWebSocket {
                         };
 
                         let mut c = f(Ok(json));
-                        while c != ControlFlow::Continue(Flow::Continue) {
-                            if c == ControlFlow::Continue(Flow::TryReconnect) {
-                                let tls = tls.clone();
-                                let rec = reconnect(&str_req, tls, &mut write, &mut read).await;
-                                if let Err(e) = rec {
-                                    c = f(Err(e));
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                break 'outer;
-                            }
-                        }
+                        if !budget_recursive(&mut c, &str_req, &tls, &f, &mut write, &mut read)
+                            .await
+                        {
+                            break;
+                        };
                     };
                 };
             }
@@ -183,11 +178,13 @@ impl LCUWebSocket {
         })
     }
 
+    #[must_use]
     /// Returns a reference to the URL in use
     pub fn url(&self) -> &str {
         &self.url
     }
 
+    #[must_use]
     /// Returns a reference to the auth header in use
     pub fn auth_header(&self) -> &str {
         &self.auth_header
@@ -208,24 +205,48 @@ impl LCUWebSocket {
         self.handle.abort();
     }
 
+    #[must_use]
     pub fn is_finished(&self) -> bool {
         self.handle.is_finished()
     }
 
-    /// Allows you to make a gneric
+    /// Allows you to make a generic
     /// request to the websocket socket
     pub fn request(&mut self, code: RequestType, endpoint: EventType) {
         let _ = &self.ws_sender.send((code, endpoint));
     }
 }
 
+async fn budget_recursive(
+    c: &mut ControlFlow<(), Flow>,
+    str_req: &str,
+    tls: &Arc<ClientConfig>,
+    f: &(impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Sync + Send + 'static),
+    write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+) -> bool {
+    while *c != ControlFlow::Continue(Flow::Continue) {
+        if *c == ControlFlow::Continue(Flow::TryReconnect) {
+            let tls = tls.clone();
+            let rec = reconnect(str_req, tls, write, read).await;
+            if let Err(e) = rec {
+                *c = f(Err(e));
+            } else {
+                break;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    true
+}
+
 async fn reconnect(
     str_req: &str,
     tls: Arc<ClientConfig>,
     write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-    read: &mut SplitStream<
-        WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
-    >,
+    read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> Result<(), LCUError> {
     let req = str_req.into_client_request().unwrap();
     let connector = Connector::Rustls(tls.clone());
@@ -238,8 +259,8 @@ async fn reconnect(
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
     use super::LCUWebSocket;
+    use std::time::Duration;
 
     // #[ignore = "This does not need to be run often"]
     #[tokio::test]

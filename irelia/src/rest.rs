@@ -4,8 +4,6 @@ pub mod types;
 
 use std::ops::Deref;
 
-#[cfg(feature = "batched")]
-use futures_util::StreamExt;
 use http_body_util::BodyExt;
 use hyper::Uri;
 use serde::de::DeserializeOwned;
@@ -21,34 +19,198 @@ pub struct LCUClient {
 }
 
 #[cfg(feature = "batched")]
-/// Enum representing the different requests that can be sent to the LCU
-pub enum RequestType<'a> {
-    Delete,
-    Get,
-    Head,
-    Patch(Option<&'a dyn erased_serde::Serialize>),
-    Post(Option<&'a dyn erased_serde::Serialize>),
-    Put(Option<&'a dyn erased_serde::Serialize>),
-}
+pub mod batch {
+    use crate::rest::LCUClient;
+    use crate::{LCUError, RequestClient};
+    use futures_util::StreamExt;
+    use serde::de::DeserializeOwned;
+    use std::borrow::Cow;
 
-#[cfg(feature = "batched")]
-/// Struct representing a batched request, taking the
-/// request type and endpoint
-pub struct BatchRequests<'a> {
-    pub request_type: RequestType<'a>,
-    pub endpoint: &'a dyn Deref<Target = str>,
-}
+    /// Enum representing the different requests that can be sent to the LCU
+    pub enum RequestType<'a> {
+        Delete,
+        Get,
+        Head,
+        Patch(Option<&'a dyn erased_serde::Serialize>),
+        Post(Option<&'a dyn erased_serde::Serialize>),
+        Put(Option<&'a dyn erased_serde::Serialize>),
+    }
 
-#[cfg(feature = "batched")]
-impl<'a> BatchRequests<'a> {
-    /// Creates a new batched request, which can be wrapped in a slice and send to the LCU
-    pub fn new(
-        request_type: RequestType<'a>,
-        endpoint: &'a dyn Deref<Target = str>,
-    ) -> BatchRequests<'a> {
-        BatchRequests {
-            request_type,
-            endpoint,
+    /// Struct representing a batched request, taking the
+    /// request type and endpoint
+    pub struct Request<'a> {
+        pub request_type: RequestType<'a>,
+        pub endpoint: Cow<'static, str>,
+    }
+
+    impl<'a> Request<'a> {
+        /// Creates a new batched request, which can be wrapped in a slice and send to the LCU
+        pub fn new(request_type: RequestType<'a>, endpoint: impl Into<Cow<'static, str>>) -> Self {
+            Request {
+                request_type,
+                endpoint: endpoint.into(),
+            }
+        }
+
+        pub fn delete(endpoint: impl Into<Cow<'static, str>>) -> Self {
+            Self::new(RequestType::Delete, endpoint)
+        }
+
+        pub fn get(endpoint: impl Into<Cow<'static, str>>) -> Self {
+            Self::new(RequestType::Get, endpoint)
+        }
+
+        pub fn head(endpoint: impl Into<Cow<'static, str>>) -> Self {
+            Self::new(RequestType::Head, endpoint)
+        }
+
+        pub fn patch(endpoint: impl Into<Cow<'static, str>>, body: Option<&'a dyn erased_serde::Serialize>) -> Self {
+            Self::new(RequestType::Patch(body), endpoint)
+        }
+
+        pub fn put(endpoint: impl Into<Cow<'static, str>>, body: Option<&'a dyn erased_serde::Serialize>) -> Self {
+            Self::new(RequestType::Put(body), endpoint)
+        }
+
+        pub fn post(endpoint: impl Into<Cow<'static, str>>, body: Option<&'a dyn erased_serde::Serialize>) -> Self {
+            Self::new(RequestType::Post(body), endpoint)
+        }
+    }
+
+    impl LCUClient {
+        /// System for batching requests to the LCU by sending a slice
+        /// The buffer size is how many requests can be operated on at
+        /// the same time, returns a vector with all the replies
+        ///
+        /// # Errors
+        /// The value will be an error if the provided type is invalid, or the LCU API is not running
+        pub async fn batched<'a, R>(
+            &self,
+            requests: &[Request<'a>],
+            buffer_size: usize,
+            request_client: &RequestClient,
+        ) -> Vec<Result<Option<R>, LCUError>>
+        where
+            R: DeserializeOwned,
+        {
+            futures_util::stream::iter(requests.iter().map(|request| async {
+                let endpoint = &*request.endpoint;
+                match &request.request_type {
+                    RequestType::Delete => self.delete(endpoint, request_client).await,
+                    RequestType::Get => self.get(endpoint, request_client).await,
+                    RequestType::Head => self.head(endpoint, request_client).await,
+                    RequestType::Patch(body) => self.patch(endpoint, *body, request_client).await,
+                    RequestType::Post(body) => self.post(endpoint, *body, request_client).await,
+                    RequestType::Put(body) => self.put(endpoint, *body, request_client).await,
+                }
+            }))
+            .buffered(buffer_size)
+            .collect()
+            .await
+        }
+    }
+
+    pub struct Builder;
+
+    mod hidden {
+        use crate::rest::batch::Request;
+        use crate::rest::LCUClient;
+        use crate::RequestClient;
+
+        pub struct WithClient<'a> {
+            pub(super) request_client: &'a RequestClient,
+            pub(super) requests: Vec<Request<'a>>,
+        }
+
+        pub struct WithBufferSize<'a> {
+            pub(super) request_client: &'a RequestClient,
+            pub(super) requests: Vec<Request<'a>>,
+            pub(super) buffer_size: usize,
+        }
+
+        pub struct WithLcuClient<'a> {
+            pub(super) request_client: &'a RequestClient,
+            pub(super) requests: Vec<Request<'a>>,
+            pub(super) buffer_size: usize,
+            pub(super) lcu_client: &'a LCUClient,
+        }
+    }
+
+    use crate::rest::batch::hidden::WithLcuClient;
+    use hidden::{WithBufferSize, WithClient};
+
+    impl Builder {
+        #[must_use]
+        pub fn new() -> Self {
+            Self
+        }
+
+        #[must_use]
+        pub fn with_client(self, request_client: &RequestClient) -> WithClient {
+            WithClient {
+                request_client,
+                requests: Vec::new(),
+            }
+        }
+
+        #[must_use]
+        pub fn with_client_with_capacity(
+            self,
+            request_client: &RequestClient,
+            capacity: usize,
+        ) -> WithClient {
+            WithClient {
+                request_client,
+                requests: Vec::with_capacity(capacity),
+            }
+        }
+    }
+
+    impl Default for Builder {
+        fn default() -> Self {
+            Self
+        }
+    }
+
+    impl<'a> WithClient<'a> {
+        pub fn request(mut self, request: Request<'a>) -> Self {
+            self.add_request(request);
+
+            self
+        }
+
+        pub fn add_request(&mut self, request: Request<'a>) {
+            self.requests.push(request);
+        }
+
+        pub fn with_buffer_size(self, buffer_size: usize) -> WithBufferSize<'a> {
+            WithBufferSize {
+                requests: self.requests,
+                request_client: self.request_client,
+                buffer_size,
+            }
+        }
+    }
+
+    impl<'a> WithBufferSize<'a> {
+        pub fn with_lcu_client(self, lcu_client: &'a LCUClient) -> WithLcuClient<'a> {
+            WithLcuClient {
+                requests: self.requests,
+                request_client: self.request_client,
+                buffer_size: self.buffer_size,
+                lcu_client,
+            }
+        }
+    }
+
+    impl<'a> WithLcuClient<'a> {
+        pub async fn execute<R>(self) -> Vec<Result<Option<R>, LCUError>>
+        where
+            R: DeserializeOwned,
+        {
+            self.lcu_client
+                .batched(&self.requests, self.buffer_size, self.request_client)
+                .await
         }
     }
 }
@@ -56,7 +218,12 @@ impl<'a> BatchRequests<'a> {
 impl LCUClient {
     /// Attempts to create a connection to the LCU, errors if it fails
     /// to spin up the child process, or fails to get data from the client.
-    pub fn new() -> Result<LCUClient, LCUError> {
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, this can include
+    /// the client being down, the lock file being unable to be opened, or the LCU
+    /// not running at all
+    pub fn new() -> Result<Self, LCUError> {
         let (port, pass) = get_running_client()?;
 
         Ok(LCUClient {
@@ -65,60 +232,35 @@ impl LCUClient {
         })
     }
 
+    #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
     pub fn new_with_credentials(auth: &str, port: u16) -> LCUClient {
         LCUClient {
-            url: format!("127.0.0.1:{}", port),
-            auth_header: format!("Basic {}", crate::utils::process_info::ENCODER.encode(format!("riot:{}", auth))),
+            url: format!("127.0.0.1:{port}"),
+            auth_header: format!(
+                "Basic {}",
+                crate::utils::process_info::ENCODER.encode(format!("riot:{auth}"))
+            ),
         }
     }
 
+    #[must_use]
     /// Returns a reference to the URL in use
     pub fn url(&self) -> &str {
         &self.url
     }
 
+    #[must_use]
     /// Returns a reference to the auth header in use
     pub fn auth_header(&self) -> &str {
         &self.auth_header
     }
 
-    #[cfg(feature = "batched")]
-    /// System for batching requests to the LCU by sending a slice
-    /// The buffer size is how many requests can be operated on at
-    /// the same time, returns a vector with all the replies
-    pub async fn batched<'a, R>(
-        &self,
-        requests: &[BatchRequests<'a>],
-        buffer_size: usize,
-        request_client: &RequestClient,
-    ) -> Vec<Result<Option<R>, LCUError>>
-    where
-        R: DeserializeOwned,
-    {
-        futures_util::stream::iter(requests.iter().map(|request| async {
-            match &request.request_type {
-                RequestType::Delete => self.delete(request.endpoint.deref(), request_client).await,
-                RequestType::Get => self.get(request.endpoint.deref(), request_client).await,
-                RequestType::Head => self.head(request.endpoint.deref(), request_client).await,
-                RequestType::Patch(body) => {
-                    self.patch(request.endpoint.deref(), *body, request_client).await
-                }
-                RequestType::Post(body) => {
-                    self.post(request.endpoint.deref(), *body, request_client).await
-                }
-                RequestType::Put(body) => {
-                    self.put(request.endpoint.deref(), *body, request_client).await
-                }
-            }
-        }))
-        .buffered(buffer_size)
-        .collect()
-        .await
-    }
-
     /// Sends a delete request to the LCU
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type is invalid
     pub async fn delete<R, S>(
         &self,
         endpoint: S,
@@ -128,11 +270,20 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(endpoint.deref(), "DELETE", None, request_client)
+        self.lcu_request::<(), R>(&endpoint, "DELETE", None, request_client)
             .await
     }
 
     /// Sends a get request to the LCU
+    /// ```
+    /// let request_client = irelia::RequestClient::new();
+    /// let lcu_client = irelia::rest::LCUClient::new().unwrap();
+    ///
+    ///  let response = lcu_client.get("/example/endpoint/", &request_client).unwrap();
+    /// ```
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type is invalid
     pub async fn get<R, S>(
         &self,
         endpoint: S,
@@ -142,11 +293,14 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(endpoint.deref(), "GET", None, request_client)
+        self.lcu_request::<(), R>(&endpoint, "GET", None, request_client)
             .await
     }
 
     /// Sends a head request to the LCU
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type is invalid
     pub async fn head<R, S>(
         &self,
         endpoint: S,
@@ -156,11 +310,14 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(endpoint.deref(), "HEAD", None, request_client)
+        self.lcu_request::<(), R>(&endpoint, "HEAD", None, request_client)
             .await
     }
 
     /// Sends a patch request to the LCU
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     pub async fn patch<T, R, S>(
         &self,
         endpoint: S,
@@ -172,11 +329,14 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request(endpoint.deref(), "PATCH", body, request_client)
+        self.lcu_request(&endpoint, "PATCH", body, request_client)
             .await
     }
 
     /// Sends a post request to the LCU
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     pub async fn post<T, R, S>(
         &self,
         endpoint: S,
@@ -188,11 +348,14 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request(endpoint.deref(), "POST", body, request_client)
+        self.lcu_request(&endpoint, "POST", body, request_client)
             .await
     }
 
     /// Sends a put request to the LCU
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     pub async fn put<T, R, S>(
         &self,
         endpoint: S,
@@ -204,12 +367,17 @@ impl LCUClient {
         R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request(endpoint.deref(), "PUT", body, request_client)
+        self.lcu_request(&endpoint, "PUT", body, request_client)
             .await
     }
 
     /// Fetches the schema from a remote endpoint, for example:
-    /// https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json
+    /// <`https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json/`>
+    ///
+    /// # Errors
+    ///
+    /// This function will error if it fails to connect to the given remote,
+    /// or if the given remote cannot be deserialized to match the `Schema` type
     pub async fn schema(remote: &'static str) -> Result<types::Schema, LCUError> {
         let uri = Uri::from_static(remote);
         // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside here
@@ -234,6 +402,9 @@ impl LCUClient {
 
     /// Makes a request to the LCU with an unspecified method, valid options being
     /// "PUT", "GET", "POST", "HEAD", "DELETE"
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     pub async fn lcu_request<T, R>(
         &self,
         endpoint: &str,
@@ -248,7 +419,7 @@ impl LCUClient {
         request_client
             .request_template(
                 &self.url,
-                &endpoint,
+                endpoint,
                 method,
                 body,
                 Some(&self.auth_header),
@@ -274,7 +445,10 @@ mod tests {
 
     #[tokio::test]
     async fn batch_test() {
-        use crate::rest::{BatchRequests, LCUClient, RequestType};
+        use crate::rest::{
+            batch::{Request, RequestType},
+            LCUClient,
+        };
 
         let page = serde_json::json!(
             {
@@ -296,7 +470,7 @@ mod tests {
 
         let lcu_client = LCUClient::new().unwrap();
 
-        let request: &serde_json::Value = &lcu_client
+        let request: serde_json::Value = lcu_client
             .get("/lol-summoner/v2/current-summoner", &client)
             .await
             .unwrap()
@@ -305,17 +479,13 @@ mod tests {
         let id = &request["summonerId"];
 
         let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
-        let mut json = lcu_client
-            .get::<serde_json::Value, _>(endpoint, &client)
-            .await
-            .unwrap()
-            .unwrap();
+        let mut json: serde_json::Value = lcu_client.get(endpoint, &client).await.unwrap().unwrap();
 
         json["itemSets"].as_array_mut().unwrap().push(page);
 
-        let req = BatchRequests {
+        let req = Request {
             request_type: RequestType::Put(Some(&json)),
-            endpoint: &format!("/lol-item-sets/v1/item-sets/{id}/sets"),
+            endpoint: format!("/lol-item-sets/v1/item-sets/{id}/sets").into(),
         };
 
         let res = lcu_client

@@ -1,4 +1,4 @@
-//! Module for the LoL in_game API, docs have been copied from their [official counterparts](https://developer.riotgames.com/docs/lol#game-client-api)
+//! Module for the `LoL` `in_game` API, docs have been copied from their [official counterparts](https://developer.riotgames.com/docs/lol#game-client-api)
 //!
 //! All types are all generated from the official JSON snippets
 
@@ -8,29 +8,36 @@ use serde::de::DeserializeOwned;
 
 use crate::{LCUError, RequestClient};
 
-use self::types::*;
+use self::types::{
+    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
+    Scores, SummonerSpells, TeamID,
+};
 
-#[derive(Default)]
-/// Struct that represents a connection to the in_game client
-pub struct InGameClient {
-    url: &'static str,
-}
+pub const URL: &str = "127.0.0.1:2999";
 
-impl InGameClient {
-    pub fn new() -> InGameClient {
-        InGameClient {
-            url: "127.0.0.1:2999",
-        }
+/// Struct that represents a connection to the in game api client
+/// Because the URL is constant, this is a zero sized struct to help organize code
+pub struct GameClient;
+
+impl GameClient {
+    #[must_use]
+    pub fn new() -> GameClient {
+        GameClient
     }
 
+    #[must_use]
     /// Returns the url, which is currently static
     pub fn url(&self) -> &str {
-        self.url
+        URL
     }
 
+    //noinspection SpellCheckingInspection
     /// Get all available data.
     ///
     /// A sample response can be found [here](https://static.developer.riotgames.com/docs/lol/liveclientdata_sample.json).
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn all_game_data(
         &self,
         request_client: &RequestClient,
@@ -38,7 +45,11 @@ impl InGameClient {
         self.live_client("allgamedata", None, request_client).await
     }
 
+    //noinspection SpellCheckingInspection
     /// Get all data about the active player.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn active_player(
         &self,
         request_client: &RequestClient,
@@ -46,7 +57,11 @@ impl InGameClient {
         self.live_client("activeplayer", None, request_client).await
     }
 
+    //noinspection SpellCheckingInspection
     /// Returns the player name.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn active_player_name(
         &self,
         request_client: &RequestClient,
@@ -55,7 +70,11 @@ impl InGameClient {
             .await
     }
 
-    /// Get Abilities for the active player.
+    //noinspection SpellCheckingInspection
+    /// Get Abilities for the active player.    
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn active_player_abilities(
         &self,
         request_client: &RequestClient,
@@ -64,7 +83,11 @@ impl InGameClient {
             .await
     }
 
+    //noinspection SpellCheckingInspection
     /// Retrieve the full list of runes for the active player.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn active_player_runes(
         &self,
         request_client: &RequestClient,
@@ -73,7 +96,11 @@ impl InGameClient {
             .await
     }
 
+    //noinspection SpellCheckingInspection
     /// Retrieve the list of heroes in the game and their stats.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn player_list(
         &self,
         team: Option<TeamID>,
@@ -90,11 +117,15 @@ impl InGameClient {
             },
         );
 
-        let endpoint = format!("playerlist{}", team);
+        let endpoint = format!("playerlist{team}");
         self.live_client(&endpoint, None, request_client).await
     }
 
+    //noinspection SpellCheckingInspection
     /// Retrieve the list of the current scores for the player.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn player_scores(
         &self,
         summoner: &str,
@@ -104,7 +135,11 @@ impl InGameClient {
             .await
     }
 
+    //noinspection SpellCheckingInspection
     /// Retrieve the list of the summoner spells for the player.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn player_summoner_spells(
         &self,
         summoner: &str,
@@ -114,7 +149,11 @@ impl InGameClient {
             .await
     }
 
+    //noinspection SpellCheckingInspection
     /// Retrieve the basic runes of any player.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn player_main_runes(
         &self,
         summoner: &str,
@@ -124,7 +163,11 @@ impl InGameClient {
             .await
     }
 
+    //noinspection SpellCheckingInspection
     /// Retrieve the list of items for the player.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn player_items(
         &self,
         summoner: &str,
@@ -134,25 +177,35 @@ impl InGameClient {
             .await
     }
 
+    //noinspection SpellCheckingInspection
     /// Get a list of events that have occurred in the game.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn event_data(
         &self,
         event_id: Option<i32>,
         request_client: &RequestClient,
     ) -> Result<Events, LCUError> {
-        let event_id = match event_id {
-            Some(id) => format!("?eventID={}", id),
-            None => "".to_owned(),
+        let event_id = if let Some(id) = event_id {
+            format!("?eventID={id}")
+        } else {
+            String::new()
         };
-        let endpoint = format!("eventdata{}", event_id);
+        let endpoint = format!("eventdata{event_id}");
         self.live_client(&endpoint, None, request_client).await
     }
 
+    //noinspection SpellCheckingInspection
     /// Basic data about the game.
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
     pub async fn game_stats(&self, request_client: &RequestClient) -> Result<GameData, LCUError> {
         self.live_client("gamestats", None, request_client).await
     }
 
+    //noinspection SpellCheckingInspection
     async fn live_client<R>(
         &self,
         endpoint: &str,
@@ -162,15 +215,22 @@ impl InGameClient {
     where
         R: DeserializeOwned,
     {
-        let endpoint = match summoner {
-            Some(summoner) => format!("/liveclientdata/{}?summonerName={}", endpoint, summoner),
-            None => format!("/liveclientdata/{}", endpoint),
+        let endpoint = if let Some(summoner) = summoner {
+            format!("/liveclientdata/{endpoint}?summonerName={summoner}")
+        } else {
+            format!("/liveclientdata/{endpoint}")
         };
 
         request_client
-            .request_template(self.url, &endpoint, "GET", None::<()>, None, |bytes| {
+            .request_template(URL, &endpoint, "GET", None::<()>, None, |bytes| {
                 serde_json::from_slice(&bytes).map_err(LCUError::SerdeJsonError)
             })
             .await
+    }
+}
+
+impl Default for GameClient {
+    fn default() -> Self {
+        GameClient
     }
 }

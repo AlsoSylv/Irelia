@@ -1,11 +1,11 @@
+#![warn(clippy::pedantic)]
+
 //! Irelia is an async set of bindings to the LCU API
 //!
 //! Features are broken down as follows:
-//! - in_game: Allows connections to the in_game API, return types are auto generated
-//! - rest: Allows connections to the LCU rest API, providing basic get/post functionality
-//! - ws: Allows connections to the LCU websocket API, providing all functionality needed
-//!
-//! Irelia is currently nightly only, as it relies on the lazy_cell feature internally
+//! - `in_game`: Allows connections to the `in_game` API, return types are auto generated
+//! - `rest`: Allows connections to the LCU `rest` API, providing basic get/post functionality
+//! - `ws`: Allows connections to the LCU websocket API, providing all functionality needed
 pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
@@ -18,7 +18,7 @@ pub mod ws;
 
 /// Errors that can be produced by the LCU API
 ///
-/// This contians errors from serde_json, hyper and tungstenite
+/// This contains errors from `serde_json`, `hyper` and `tungstenite`
 #[derive(Debug)]
 pub enum LCUError {
     #[cfg(any(feature = "in_game", feature = "rest"))]
@@ -57,7 +57,7 @@ impl std::fmt::Display for LCUError {
                 String::from("Unable to the lock file, but the process was running!")
             }
         };
-        f.write_fmt(format_args!("LCU Error: {}", error))
+        f.write_fmt(format_args!("LCU Error: {error}"))
     }
 }
 
@@ -69,26 +69,9 @@ impl serde::Serialize for LCUError {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(self.to_string().as_str())
+        serializer.serialize_str(&self.to_string())
     }
 }
 
-#[cfg(any(feature = "in_game", feature = "rest"))]
-/// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
-///
-/// # Example
-/// ```rs
-/// use irelia::{RequestClient, rest::LCUClient};
-///
-/// fn main() {
-///     let client = RequestClient::new();
-///     
-///     let lcu_client = LCUClient::new();
-/// }
-/// ```
-pub struct RequestClient {
-    client: hyper_util::client::legacy::Client<
-        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        http_body_util::Full<hyper::body::Bytes>,
-    >,
-}
+#[cfg(any(feature = "rest", feature = "in_game"))]
+pub use utils::requests::RequestClient;

@@ -1,11 +1,8 @@
-//! This module uses sub-processes that are OS specific to get info
-//! from the League of Legneds client well it is running, or error
-//! if it is not. These sub-processes are derived from those found
-//! on Hextech docs.
+//! Constants, as well as the schema for the lock file can be found here
 //! <https://hextechdocs.dev/getting-started-with-the-lcu-api/>
 
 //! This module also contains a list of constants for the different names
-//! of the processes for MacOS, and Windows
+//! of the processes for `macOS`, and `Windows`
 
 use irelia_encoder::Encoder;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
@@ -26,23 +23,31 @@ const GAME_PROCESS_NAME: &str = "League of Legends";
 // These ONLY exist so that this will compile in a dev env
 // Linux support will not be re-added unless someone comes
 // up with a solution to running the game on Linux natively
-#[cfg(test)]
+#[cfg(debug_assertions)]
 #[cfg(target_os = "linux")]
 const CLIENT_PROCESS_NAME: &str = "";
-#[cfg(test)]
+#[cfg(debug_assertions)]
 #[cfg(target_os = "linux")]
 const GAME_PROCESS_NAME: &str = "";
 
-// Create a new instance of the encoder
+/// const copy of the encoder
 pub(crate) const ENCODER: Encoder = Encoder::new();
 
 /// Gets the port and auth for the client via the process id
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
 /// that you can get the exe location, and go backwards.
+/// 
+/// # Errors
+/// This will return an error if the LCU is truly not running,
+/// or the lock file is inaccessibly for some reason.
+/// If it returns an error for any other reason, this code 
+/// likely needs the client and game process names updated.
 pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     // Get the current list of processes
     let system = System::new_with_specifics(
+        // This creates a new instance of `system` every time, so this only
+        //  needs to be updated if it's not set
         RefreshKind::new().with_processes(
             ProcessRefreshKind::new()
                 .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
@@ -54,7 +59,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     let mut client = false;
 
     /*
-        Iterate through all of the processes, using .values() because
+        Iterate through all the processes, using .values() because
         We don't need the PID. Try to find a process with the same name
         as the constant for that platform, otherwise return an error.
     */
@@ -62,17 +67,22 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
         .processes()
         .values()
         .find(|process| {
+            // Get the name of the process
             let name = process.name();
+            // If it matches the name of the client,
+            // set the flag, and return it
             if name == CLIENT_PROCESS_NAME {
                 client = true;
                 client
+                // Otherwise return if it matches the game name process
             } else {
                 name == GAME_PROCESS_NAME
             }
         })
         .ok_or(LCUError::LCUProcessNotRunning)?;
 
-    // Move these to an earlier scope to avoid an allocation and
+    // Move these to an earlier scope to avoid an allocation
+    // And deduplicate some code later on
     let lock_file: String;
     let port: &str;
     let auth: &str;
@@ -85,7 +95,7 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
         let mut iter = cmd.iter();
 
         /*
-           Look for an auth key to put inside the header, otherwise return an error.
+           Look for an auth key to put inside the command line, otherwise return an error.
            If no auth key is found, but the LCU is running, something is probably wrong
            with the constant, or the code itself
         */
@@ -101,6 +111,8 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
             .find_map(|s| s.strip_prefix("--app-port="))
             .ok_or(LCUError::PortNotFound)?;
     } else {
+        // We have to walk back twice to get the path of the lock file relative to the path of the game
+        // This can only be None on Linux according to the docs, so we should be fine everywhere else
         let path = process.exe().ok_or(LCUError::LockFileNotFound)?;
         let path = path
             .parent()
@@ -108,21 +120,26 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
             .parent()
             .ok_or(LCUError::LockFileNotFound)?;
 
+        // Read the lock file, initialize the lock_file var with the value
         lock_file = std::fs::read_to_string(path.join("lockfile")).map_err(LCUError::StdIo)?;
 
         // Split the lock file on `:` which separates the different fields
+        // Because lock_file is from a higher scope, we can split the string here
+        // and return two string references later on
         let mut split = lock_file.split(':');
 
-        // Get the 3rd field
+        // Get the 3rd field, which should be the port
         port = split.nth(2).ok_or(LCUError::PortNotFound)?;
         // We moved the cursor, so the fourth element is the very next one
+        // Which should be the auth string
         auth = split.next().ok_or(LCUError::AuthTokenNotFound)?;
     }
 
-    // Format the port and header so that they can be used properly
+    // Format the port and header so that they can be used as headers
+    // For the LCU API
     Ok((
-        format!("127.0.0.1:{}", port),
-        format!("Basic {}", ENCODER.encode(format!("riot:{}", auth))),
+        format!("127.0.0.1:{port}"),
+        format!("Basic {}", ENCODER.encode(format!("riot:{auth}"))),
     ))
 }
 
