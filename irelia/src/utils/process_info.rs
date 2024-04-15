@@ -37,11 +37,11 @@ pub(crate) const ENCODER: Encoder = Encoder::new();
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
 /// that you can get the exe location, and go backwards.
-/// 
+///
 /// # Errors
 /// This will return an error if the LCU is truly not running,
 /// or the lock file is inaccessibly for some reason.
-/// If it returns an error for any other reason, this code 
+/// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
 pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
     // Get the current list of processes

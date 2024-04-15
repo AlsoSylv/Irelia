@@ -41,7 +41,7 @@ impl Encoder {
     /// # Examples
     /// ```
     /// use irelia_encoder::Encoder;
-    /// 
+    ///
     /// const ENCODER: Encoder = Encoder::new();
     /// ```
     pub const fn new() -> Self {
@@ -62,7 +62,7 @@ impl Encoder {
     /// # Example:
     /// ```
     /// use irelia_encoder::Encoder;
-    /// 
+    ///
     /// const ALPHABET: [u8; 64] = [
     ///     b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
     ///     b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',

@@ -1,10 +1,10 @@
 use crate::LCUError;
 
 use http_body_util::{BodyExt, Full};
-use hyper::body::Bytes;
+use hyper::body::{Bytes, Incoming};
 use hyper::header::AUTHORIZATION;
 use hyper::http::uri;
-use hyper::Request;
+use hyper::{Request, Response};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
@@ -45,18 +45,16 @@ impl RequestClient {
         RequestClient { client }
     }
 
-    pub(crate) async fn request_template<T, R>(
+    pub(crate) async fn raw_request_template<T>(
         &self,
         url: &str,
         endpoint: &str,
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        return_logic: fn(bytes: Bytes) -> Result<R, LCUError>,
-    ) -> Result<R, LCUError>
+    ) -> Result<Response<Incoming>, LCUError>
     where
         T: Serialize,
-        R: DeserializeOwned,
     {
         let built_uri = uri::Builder::new()
             .scheme("https")
@@ -83,11 +81,28 @@ impl RequestClient {
         }
         .map_err(LCUError::HyperHttpError)?;
 
-        let mut response = self
-            .client
+        self.client
             .request(request)
             .await
-            .map_err(LCUError::HyperClientError)?;
+            .map_err(LCUError::HyperClientError)
+    }
+
+    pub(crate) async fn request_template<T, R>(
+        &self,
+        url: &str,
+        endpoint: &str,
+        method: &str,
+        body: Option<T>,
+        auth_header: Option<&str>,
+        return_logic: fn(bytes: Bytes) -> Result<R, LCUError>,
+    ) -> Result<R, LCUError>
+    where
+        T: Serialize,
+        R: DeserializeOwned,
+    {
+        let mut response = self
+            .raw_request_template(url, endpoint, method, body, auth_header)
+            .await?;
 
         let body = response.body_mut();
 

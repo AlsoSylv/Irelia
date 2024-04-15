@@ -30,7 +30,7 @@ pub mod batch {
     pub enum RequestType<'a> {
         Delete,
         Get,
-        Head,
+        // Head,
         Patch(Option<&'a dyn erased_serde::Serialize>),
         Post(Option<&'a dyn erased_serde::Serialize>),
         Put(Option<&'a dyn erased_serde::Serialize>),
@@ -60,19 +60,28 @@ pub mod batch {
             Self::new(RequestType::Get, endpoint)
         }
 
-        pub fn head(endpoint: impl Into<Cow<'static, str>>) -> Self {
-            Self::new(RequestType::Head, endpoint)
-        }
+        // pub fn head(endpoint: impl Into<Cow<'static, str>>) -> Self {
+        //     Self::new(RequestType::Head, endpoint)
+        // }
 
-        pub fn patch(endpoint: impl Into<Cow<'static, str>>, body: Option<&'a dyn erased_serde::Serialize>) -> Self {
+        pub fn patch(
+            endpoint: impl Into<Cow<'static, str>>,
+            body: Option<&'a dyn erased_serde::Serialize>,
+        ) -> Self {
             Self::new(RequestType::Patch(body), endpoint)
         }
 
-        pub fn put(endpoint: impl Into<Cow<'static, str>>, body: Option<&'a dyn erased_serde::Serialize>) -> Self {
+        pub fn put(
+            endpoint: impl Into<Cow<'static, str>>,
+            body: Option<&'a dyn erased_serde::Serialize>,
+        ) -> Self {
             Self::new(RequestType::Put(body), endpoint)
         }
 
-        pub fn post(endpoint: impl Into<Cow<'static, str>>, body: Option<&'a dyn erased_serde::Serialize>) -> Self {
+        pub fn post(
+            endpoint: impl Into<Cow<'static, str>>,
+            body: Option<&'a dyn erased_serde::Serialize>,
+        ) -> Self {
             Self::new(RequestType::Post(body), endpoint)
         }
     }
@@ -98,7 +107,6 @@ pub mod batch {
                 match &request.request_type {
                     RequestType::Delete => self.delete(endpoint, request_client).await,
                     RequestType::Get => self.get(endpoint, request_client).await,
-                    RequestType::Head => self.head(endpoint, request_client).await,
                     RequestType::Patch(body) => self.patch(endpoint, *body, request_client).await,
                     RequestType::Post(body) => self.post(endpoint, *body, request_client).await,
                     RequestType::Put(body) => self.put(endpoint, *body, request_client).await,
@@ -297,22 +305,24 @@ impl LCUClient {
             .await
     }
 
+    // Head requests are not supported, and as such I have no reason to expose them
+    /*
     /// Sends a head request to the LCU
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type is invalid
-    pub async fn head<R, S>(
+    pub async fn head<S>(
         &self,
         endpoint: S,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, LCUError>
+    ) -> Result<Response<Incoming>, LCUError>
     where
-        R: DeserializeOwned,
         S: Deref<Target = str>,
     {
-        self.lcu_request::<(), R>(&endpoint, "HEAD", None, request_client)
+        request_client.raw_request_template::<()>(&self.url, &endpoint, "HEAD", None, Some(&self.auth_header))
             .await
     }
+     */
 
     /// Sends a patch request to the LCU
     ///
@@ -475,12 +485,17 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        
+
         let id = &request["summonerId"];
 
         let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
-        let mut json: serde_json::Value = lcu_client.get(endpoint, &client).await.unwrap().unwrap();
-        
+
+        let mut json: serde_json::Value = lcu_client
+            .get(endpoint.as_str(), &client)
+            .await
+            .unwrap()
+            .unwrap();
+
         json["itemSets"].as_array_mut().unwrap().push(page);
 
         let req = Request {
