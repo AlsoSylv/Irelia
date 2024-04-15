@@ -5,20 +5,21 @@
 //! of the processes for `macOS`, and `Windows`
 
 use irelia_encoder::Encoder;
+use std::path::Path;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
-use crate::LCUError;
+use crate::Error;
 
 // Linux will be unplayable soon, so support has been removed
 #[cfg(target_os = "windows")]
-const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
+pub const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
 #[cfg(target_os = "macos")]
-const CLIENT_PROCESS_NAME: &str = "LeagueClientUx";
+pub const CLIENT_PROCESS_NAME: &str = "LeagueClientUx";
 
 #[cfg(target_os = "windows")]
-const GAME_PROCESS_NAME: &str = "League of Legends.exe";
+pub const GAME_PROCESS_NAME: &str = "League of Legends.exe";
 #[cfg(target_os = "macos")]
-const GAME_PROCESS_NAME: &str = "League of Legends";
+pub const GAME_PROCESS_NAME: &str = "League of Legends";
 
 // These ONLY exist so that this will compile in a dev env
 // Linux support will not be re-added unless someone comes
@@ -43,26 +44,32 @@ pub(crate) const ENCODER: Encoder = Encoder::new();
 /// or the lock file is inaccessibly for some reason.
 /// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
-pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
+///
+pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Error> {
+    // If we always read the lock file, we never need to get the command line of the process
+    let cmd = if force_lock_file {
+        sysinfo::UpdateKind::Never
+    } else {
+        sysinfo::UpdateKind::OnlyIfNotSet
+    };
+    // No matter what, the path to the process is required
+    let refresh_kind = ProcessRefreshKind::new()
+        .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
+        .with_cmd(cmd);
+
     // Get the current list of processes
     let system = System::new_with_specifics(
         // This creates a new instance of `system` every time, so this only
         //  needs to be updated if it's not set
-        RefreshKind::new().with_processes(
-            ProcessRefreshKind::new()
-                .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
-                .with_cmd(sysinfo::UpdateKind::OnlyIfNotSet),
-        ),
+        RefreshKind::new().with_processes(refresh_kind),
     );
 
     // Is the client running, or is it the game?
     let mut client = false;
 
-    /*
-        Iterate through all the processes, using .values() because
-        We don't need the PID. Try to find a process with the same name
-        as the constant for that platform, otherwise return an error.
-    */
+    // Iterate through all the processes, using .values() because
+    // We don't need the PID. Look for a process with the same name
+    // as the constant for that platform, otherwise return an error.
     let process = system
         .processes()
         .values()
@@ -79,68 +86,84 @@ pub(crate) fn get_running_client() -> Result<(String, String), LCUError> {
                 name == GAME_PROCESS_NAME
             }
         })
-        .ok_or(LCUError::LCUProcessNotRunning)?;
+        .ok_or_else(|| Error::LCUProcessNotRunning)?;
 
     // Move these to an earlier scope to avoid an allocation
     // And deduplicate some code later on
-    let lock_file: String;
+    let mut lock_file: String = String::new();
     let port: &str;
     let auth: &str;
 
     if client {
-        let cmd = process.cmd();
+        if force_lock_file {
+            // Get the client location
+            let path = process.exe().ok_or_else(|| Error::LockFileNotFound)?;
+            // Walk back once, being in the folder
+            let path = path.parent().ok_or_else(|| Error::LockFileNotFound)?;
+            // Read and init the path and auth
+            (port, auth) = read_and_parse_lock(path, &mut lock_file)?;
+        } else {
+            let cmd = process.cmd();
 
-        // Assuming the order doesn't change (which I haven't seen it do)
-        // We can avoid a second iteration over the cmd args
-        let mut iter = cmd.iter();
+            // Assuming the order doesn't change (which I haven't seen it do)
+            // we can avoid a second iteration over the cmd args
+            let mut iter = cmd.iter();
 
-        /*
-           Look for an auth key to put inside the command line, otherwise return an error.
-           If no auth key is found, but the LCU is running, something is probably wrong
-           with the constant, or the code itself
-        */
-        auth = iter
-            .find_map(|s| s.strip_prefix("--remoting-auth-token="))
-            .ok_or(LCUError::AuthTokenNotFound)?;
-        /*
-           Look for a port to connect to the LCU with, otherwise return an error.
-           If no port is found, but the LCU is running, something is probably wrong
-           with the constant, or the code itself
-        */
-        port = iter
-            .find_map(|s| s.strip_prefix("--app-port="))
-            .ok_or(LCUError::PortNotFound)?;
+            // Look for an auth key to put inside the command line, otherwise return an error.
+            auth = iter
+                .find_map(|s| s.strip_prefix("--remoting-auth-token="))
+                .ok_or(Error::AuthTokenNotFound)?;
+
+            // Look for a port to connect to the LCU with, otherwise return an error.
+            port = iter
+                .find_map(|s| s.strip_prefix("--app-port="))
+                .ok_or(Error::PortNotFound)?;
+        }
     } else {
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
-        let path = process.exe().ok_or(LCUError::LockFileNotFound)?;
+        let path = process.exe().ok_or_else(|| Error::LockFileNotFound)?;
+        // Sadly, we're relying on how the client structures things here
+        // Walking back a whole folder in order to get the lock file
         let path = path
             .parent()
-            .ok_or(LCUError::LockFileNotFound)?
+            .ok_or_else(|| Error::LockFileNotFound)?
             .parent()
-            .ok_or(LCUError::LockFileNotFound)?;
+            .ok_or_else(|| Error::LockFileNotFound)?;
 
-        // Read the lock file, initialize the lock_file var with the value
-        lock_file = std::fs::read_to_string(path.join("lockfile")).map_err(LCUError::StdIo)?;
-
-        // Split the lock file on `:` which separates the different fields
-        // Because lock_file is from a higher scope, we can split the string here
-        // and return two string references later on
-        let mut split = lock_file.split(':');
-
-        // Get the 3rd field, which should be the port
-        port = split.nth(2).ok_or(LCUError::PortNotFound)?;
-        // We moved the cursor, so the fourth element is the very next one
-        // Which should be the auth string
-        auth = split.next().ok_or(LCUError::AuthTokenNotFound)?;
+        (port, auth) = read_and_parse_lock(path, &mut lock_file)?;
     }
+    
+    // The auth header has to be base64 encoded, so that's happens here
+    let auth_header = ENCODER.encode(format!("riot:{auth}"));
 
     // Format the port and header so that they can be used as headers
     // For the LCU API
     Ok((
         format!("127.0.0.1:{port}"),
-        format!("Basic {}", ENCODER.encode(format!("riot:{auth}"))),
+        format!("Basic {auth_header}", ),
     ))
+}
+
+fn read_and_parse_lock<'a>(
+    path: &Path,
+    lock_file: &'a mut String,
+) -> Result<(&'a str, &'a str), Error> {
+    // Read the lock file, putting the value in a higher scope
+    *lock_file = std::fs::read_to_string(path.join("lockfile")).map_err(Error::StdIo)?;
+
+    // Split the lock file on `:` which separates the different fields
+    // Because lock_file is from a higher scope, we can split the string here
+    // and return two string references later on
+    let mut split = lock_file.split(':');
+
+    // Get the 3rd field, which should be the port
+    let port = split.nth(2).ok_or(Error::PortNotFound)?;
+    // We moved the cursor, so the fourth element is the very next one
+    // Which should be the auth string
+    let auth = split.next().ok_or(Error::AuthTokenNotFound)?;
+
+    Ok((port, auth))
 }
 
 #[cfg(test)]
@@ -150,7 +173,7 @@ mod tests {
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
     #[test]
     fn test_process_info() {
-        let (port, pass) = get_running_client().unwrap();
+        let (port, pass) = get_running_client(false).unwrap();
         println!("{port} {pass}");
     }
 }

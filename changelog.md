@@ -1,15 +1,32 @@
+## Irelia 0.6
+- Update batching system
+- Provide proper usage examples
+- Rename `LCUError` to `Error`
+- Make `process_info.rs` public
+- Allow the user to always read the lockfile
+- Functions now take `AsRef<str>` rather than `Deref<Target = str>`
+- The InGame struct is now zero-sized
+- The LCU can now be refreshed, takes `&mut self`
+- Rename `LCUClient` to `LcuClient`
+- `LcuClient::new()` now takes `force_lock_file`
+- `Head` requests now return a raw hyper `Response<Incoming>`
+- `Head` requests can no longer be batched
+- Constants for the game and client name are now public
+- General code cleanup
+- A number of functions have been marked with `#[must_us]`
+
 ## Irelia 0.4.2
 - Instead of being public, in game types now have getters
-- Updated to the latest version of all depedencies
+- Updated to the latest version of all dependencies
 - Fixed simd encoder on latest nightly toolchain
 
 ## Irelia 0.4.0
 - Rework the request client system
-- General imrpovements to the API usability
+- General improvements to the API usability
 - Remove a global lock
 - General code cleanup
 - Implement std::error::Error for LCU Error
-- Implement Searialize for LCU Error
+- Implement Serialize for LCU Error
 - Allow batching system to take multiple types
 
 ## Irelia 0.3.0
@@ -27,7 +44,7 @@
 
 - Updated Websocket System
 - Websocket now implements stream
-- Websocket now has proper encapsalation
+- Websocket now has proper encapsulation
 - Websocket makes use of enums to represent callbacks
 - Implement batching system for LCU requests
 - Improve docs

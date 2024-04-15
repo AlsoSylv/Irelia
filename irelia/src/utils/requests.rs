@@ -1,4 +1,4 @@
-use crate::LCUError;
+use crate::Error;
 
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
@@ -33,14 +33,16 @@ impl RequestClient {
     #[must_use]
     /// Creates a client to be passed to the LCU and in game structs
     pub fn new() -> RequestClient {
+        // Get a client config using the riotgames.pem file
         let tls = setup_tls_connector();
+        // Set up an HTTPS only client, with just the client config
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(tls)
-            .https_or_http()
+            .https_only()
             .enable_http1()
             .build();
-        let client =
-            Client::builder(hyper_util::rt::TokioExecutor::new()).build::<_, Full<Bytes>>(https);
+        // Make the new client
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https);
 
         RequestClient { client }
     }
@@ -52,7 +54,7 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-    ) -> Result<Response<Incoming>, LCUError>
+    ) -> Result<Response<Incoming>, Error>
     where
         T: Serialize,
     {
@@ -60,31 +62,26 @@ impl RequestClient {
             .scheme("https")
             .authority(url.as_bytes())
             .path_and_query(endpoint)
-            .build()
-            .map_or_else(|err| Err(LCUError::HyperHttpError(err)), Ok)?;
+            .build()?;
 
-        let body = match body {
-            Some(body) => match serde_json::value::to_value(body) {
-                Ok(json) => Ok(http_body_util::Full::from(json.to_string())),
-                Err(err) => Err(LCUError::SerdeJsonError(err)),
-            },
-            None => Ok(Full::new(Bytes::new())),
-        }?;
+        let body = if let Some(body) = &body {
+            let json = serde_json::value::to_value(body)?;
+            Full::from(json.to_string())
+        } else {
+            Full::default()
+        };
 
-        let request = match auth_header {
-            Some(header) => Request::builder()
-                .method(method)
-                .uri(built_uri)
-                .header(AUTHORIZATION, header)
-                .body(body),
-            None => Request::builder().method(method).uri(built_uri).body(body),
-        }
-        .map_err(LCUError::HyperHttpError)?;
+        let builder = Request::builder().method(method).uri(built_uri);
 
-        self.client
-            .request(request)
-            .await
-            .map_err(LCUError::HyperClientError)
+        let builder = if let Some(header) = auth_header {
+            builder.header(AUTHORIZATION, header)
+        } else {
+            builder
+        };
+
+        let request = builder.body(body)?;
+
+        Ok(self.client.request(request).await?)
     }
 
     pub(crate) async fn request_template<T, R>(
@@ -94,8 +91,8 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        return_logic: fn(bytes: Bytes) -> Result<R, LCUError>,
-    ) -> Result<R, LCUError>
+        return_logic: fn(bytes: Bytes) -> Result<R, Error>,
+    ) -> Result<R, Error>
     where
         T: Serialize,
         R: DeserializeOwned,
@@ -106,11 +103,7 @@ impl RequestClient {
 
         let body = response.body_mut();
 
-        let bytes = body
-            .collect()
-            .await
-            .map_err(LCUError::HyperError)?
-            .to_bytes();
+        let bytes = body.collect().await?.to_bytes();
 
         return_logic(bytes)
     }

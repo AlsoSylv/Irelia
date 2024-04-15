@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic)]
+#![forbid(unsafe_code)]
 
 //! Irelia is an async set of bindings to the LCU API
 //!
@@ -20,51 +21,92 @@ pub mod ws;
 ///
 /// This contains errors from `serde_json`, `hyper` and `tungstenite`
 #[derive(Debug)]
-pub enum LCUError {
+pub enum Error {
     #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperHttpError(hyper::http::Error),
     #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperClientError(hyper_util::client::legacy::Error),
     #[cfg(any(feature = "in_game", feature = "rest"))]
     HyperError(hyper::Error),
-    SerdeJsonError(serde_json::Error),
     #[cfg(feature = "ws")]
     WebsocketError(tokio_tungstenite::tungstenite::Error),
+    #[cfg(any(feature = "ws", feature = "rest"))]
     StdIo(std::io::Error),
+    SerdeJsonError(serde_json::Error),
     LCUProcessNotRunning,
     PortNotFound,
     AuthTokenNotFound,
     LockFileNotFound,
 }
 
-impl std::fmt::Display for LCUError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let error = match self {
-            #[cfg(any(feature = "in_game", feature = "rest"))]
-            LCUError::HyperHttpError(err) => err.to_string(),
-            #[cfg(any(feature = "in_game", feature = "rest"))]
-            LCUError::HyperError(err) => err.to_string(),
-            #[cfg(any(feature = "in_game", feature = "rest"))]
-            LCUError::HyperClientError(err) => err.to_string(),
-            LCUError::SerdeJsonError(err) => err.to_string(),
-            #[cfg(feature = "ws")]
-            LCUError::WebsocketError(err) => err.to_string(),
-            LCUError::StdIo(err) => err.to_string(),
-            LCUError::LCUProcessNotRunning => String::from("LCU Process is not running!"),
-            LCUError::PortNotFound => String::from("Port Not Found!"),
-            LCUError::AuthTokenNotFound => String::from("Auth Token Not Found!"),
-            LCUError::LockFileNotFound => {
-                String::from("Unable to the lock file, but the process was running!")
-            }
-        };
-        f.write_fmt(format_args!("LCU Error: {error}"))
+#[cfg(any(feature = "in_game", feature = "rest"))]
+impl From<hyper::http::Error> for Error {
+    fn from(value: hyper::http::Error) -> Self {
+        Self::HyperHttpError(value)
     }
 }
 
-impl std::error::Error for LCUError {}
+#[cfg(any(feature = "in_game", feature = "rest"))]
+impl From<hyper_util::client::legacy::Error> for Error {
+    fn from(value: hyper_util::client::legacy::Error) -> Self {
+        Self::HyperClientError(value)
+    }
+}
+
+#[cfg(any(feature = "in_game", feature = "rest"))]
+impl From<hyper::Error> for Error {
+    fn from(value: hyper::Error) -> Self {
+        Self::HyperError(value)
+    }
+}
+
+#[cfg(feature = "ws")]
+impl From<tokio_tungstenite::tungstenite::Error> for Error {
+    fn from(value: tokio_tungstenite::tungstenite::Error) -> Self {
+        Self::WebsocketError(value)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::SerdeJsonError(value)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Self::StdIo(value)
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let error = match self {
+            #[cfg(any(feature = "in_game", feature = "rest"))]
+            Error::HyperHttpError(err) => err.to_string(),
+            #[cfg(any(feature = "in_game", feature = "rest"))]
+            Error::HyperError(err) => err.to_string(),
+            #[cfg(any(feature = "in_game", feature = "rest"))]
+            Error::HyperClientError(err) => err.to_string(),
+            Error::SerdeJsonError(err) => err.to_string(),
+            #[cfg(feature = "ws")]
+            Error::WebsocketError(err) => err.to_string(),
+            Error::StdIo(err) => err.to_string(),
+            Error::LCUProcessNotRunning => String::from("LCU Process is not running!"),
+            Error::PortNotFound => String::from("Port Not Found!"),
+            Error::AuthTokenNotFound => String::from("Auth Token Not Found!"),
+            Error::LockFileNotFound => {
+                String::from("Unable to the lock file, but the process was running!")
+            }
+        };
+        f.write_str(&error)
+    }
+}
+
+impl std::error::Error for Error {}
 
 #[cfg(feature = "tauri")]
-impl serde::Serialize for LCUError {
+impl serde::Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

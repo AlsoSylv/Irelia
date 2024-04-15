@@ -22,7 +22,7 @@ use tokio_tungstenite::{
 
 use crate::{
     utils::{process_info::get_running_client, setup_tls::setup_tls_connector},
-    LCUError,
+    Error,
 };
 
 /// Different LCU websocket request types
@@ -99,17 +99,17 @@ impl LCUWebSocket {
     ///
     /// If the auth header returned is somehow invalid (though I have not seen this in practice)
     pub async fn new(
-        f: impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Send + Sync + 'static,
-    ) -> Result<Self, LCUError> {
+        f: impl Fn(Result<&[Value], Error>) -> ControlFlow<(), Flow> + Send + Sync + 'static,
+    ) -> Result<Self, Error> {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
         let connector = Connector::Rustls(tls.clone());
-        let (url, auth_header) = get_running_client()?;
+        let (url, auth_header) = get_running_client(false)?;
         let str_req = format!("wss://{url}");
         let mut request = str_req
             .as_str()
             .into_client_request()
-            .map_err(LCUError::WebsocketError)?;
+            .map_err(Error::WebsocketError)?;
         request.headers_mut().insert(
             "Authorization",
             HeaderValue::from_str(&auth_header).expect("This is always a valid header"),
@@ -117,7 +117,7 @@ impl LCUWebSocket {
 
         let (stream, _) = connect_async_tls_with_config(request, None, false, Some(connector))
             .await
-            .map_err(LCUError::WebsocketError)?;
+            .map_err(Error::WebsocketError)?;
 
         let (ws_sender, mut ws_receiver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
 
@@ -138,7 +138,7 @@ impl LCUWebSocket {
                     };
 
                     if write.send(command.into()).await.is_err() {
-                        let mut c = f(Err(LCUError::LCUProcessNotRunning));
+                        let mut c = f(Err(Error::LCUProcessNotRunning));
                         if !budget_recursive(&mut c, &str_req, &tls, &f, &mut write, &mut read)
                             .await
                         {
@@ -221,7 +221,7 @@ async fn budget_recursive(
     c: &mut ControlFlow<(), Flow>,
     str_req: &str,
     tls: &Arc<ClientConfig>,
-    f: &(impl Fn(Result<&[Value], LCUError>) -> ControlFlow<(), Flow> + Sync + Send + 'static),
+    f: &(impl Fn(Result<&[Value], Error>) -> ControlFlow<(), Flow> + Sync + Send + 'static),
     write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> bool {
@@ -247,12 +247,12 @@ async fn reconnect(
     tls: Arc<ClientConfig>,
     write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-) -> Result<(), LCUError> {
+) -> Result<(), Error> {
     let req = str_req.into_client_request().unwrap();
     let connector = Connector::Rustls(tls.clone());
     let (stream, _) = connect_async_tls_with_config(req, None, false, Some(connector))
         .await
-        .map_err(LCUError::WebsocketError)?;
+        .map_err(Error::WebsocketError)?;
     (*write, *read) = stream.split();
     Ok(())
 }

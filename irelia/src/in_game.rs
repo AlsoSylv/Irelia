@@ -6,13 +6,14 @@ pub mod types;
 
 use serde::de::DeserializeOwned;
 
-use crate::{LCUError, RequestClient};
+use crate::{Error, RequestClient};
 
 use self::types::{
     Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
     Scores, SummonerSpells, TeamID,
 };
 
+/// The only url the in game API can be used on
 pub const URL: &str = "127.0.0.1:2999";
 
 /// Struct that represents a connection to the in game api client
@@ -41,7 +42,7 @@ impl GameClient {
     pub async fn all_game_data(
         &self,
         request_client: &RequestClient,
-    ) -> Result<AllGameData, LCUError> {
+    ) -> Result<AllGameData, Error> {
         self.live_client("allgamedata", None, request_client).await
     }
 
@@ -53,7 +54,7 @@ impl GameClient {
     pub async fn active_player(
         &self,
         request_client: &RequestClient,
-    ) -> Result<ActivePlayer, LCUError> {
+    ) -> Result<ActivePlayer, Error> {
         self.live_client("activeplayer", None, request_client).await
     }
 
@@ -65,7 +66,7 @@ impl GameClient {
     pub async fn active_player_name(
         &self,
         request_client: &RequestClient,
-    ) -> Result<String, LCUError> {
+    ) -> Result<String, Error> {
         self.live_client("activeplayername", None, request_client)
             .await
     }
@@ -78,7 +79,7 @@ impl GameClient {
     pub async fn active_player_abilities(
         &self,
         request_client: &RequestClient,
-    ) -> Result<Abilities, LCUError> {
+    ) -> Result<Abilities, Error> {
         self.live_client("activeplayerabilities", None, request_client)
             .await
     }
@@ -91,7 +92,7 @@ impl GameClient {
     pub async fn active_player_runes(
         &self,
         request_client: &RequestClient,
-    ) -> Result<FullRunes, LCUError> {
+    ) -> Result<FullRunes, Error> {
         self.live_client("activeplayerrunes", None, request_client)
             .await
     }
@@ -105,7 +106,7 @@ impl GameClient {
         &self,
         team: Option<TeamID>,
         request_client: &RequestClient,
-    ) -> Result<Vec<AllPlayer>, LCUError> {
+    ) -> Result<Vec<AllPlayer>, Error> {
         let team = team.map_or_else(
             || "",
             |team| match team {
@@ -130,7 +131,7 @@ impl GameClient {
         &self,
         summoner: &str,
         request_client: &RequestClient,
-    ) -> Result<Scores, LCUError> {
+    ) -> Result<Scores, Error> {
         self.live_client("playerscores", Some(summoner), request_client)
             .await
     }
@@ -144,7 +145,7 @@ impl GameClient {
         &self,
         summoner: &str,
         request_client: &RequestClient,
-    ) -> Result<SummonerSpells, LCUError> {
+    ) -> Result<SummonerSpells, Error> {
         self.live_client("playersummonerspells", Some(summoner), request_client)
             .await
     }
@@ -158,7 +159,7 @@ impl GameClient {
         &self,
         summoner: &str,
         request_client: &RequestClient,
-    ) -> Result<Runes, LCUError> {
+    ) -> Result<Runes, Error> {
         self.live_client("playermainrunes", Some(summoner), request_client)
             .await
     }
@@ -172,7 +173,7 @@ impl GameClient {
         &self,
         summoner: &str,
         request_client: &RequestClient,
-    ) -> Result<Vec<Item>, LCUError> {
+    ) -> Result<Vec<Item>, Error> {
         self.live_client("playeritems", Some(summoner), request_client)
             .await
     }
@@ -186,7 +187,7 @@ impl GameClient {
         &self,
         event_id: Option<i32>,
         request_client: &RequestClient,
-    ) -> Result<Events, LCUError> {
+    ) -> Result<Events, Error> {
         let event_id = if let Some(id) = event_id {
             format!("?eventID={id}")
         } else {
@@ -201,7 +202,7 @@ impl GameClient {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    pub async fn game_stats(&self, request_client: &RequestClient) -> Result<GameData, LCUError> {
+    pub async fn game_stats(&self, request_client: &RequestClient) -> Result<GameData, Error> {
         self.live_client("gamestats", None, request_client).await
     }
 
@@ -211,7 +212,7 @@ impl GameClient {
         endpoint: &str,
         summoner: Option<&str>,
         request_client: &RequestClient,
-    ) -> Result<R, LCUError>
+    ) -> Result<R, Error>
     where
         R: DeserializeOwned,
     {
@@ -223,7 +224,7 @@ impl GameClient {
 
         request_client
             .request_template(URL, &endpoint, "GET", None::<()>, None, |bytes| {
-                serde_json::from_slice(&bytes).map_err(LCUError::SerdeJsonError)
+                serde_json::from_slice(&bytes).map_err(Error::SerdeJsonError)
             })
             .await
     }

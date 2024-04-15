@@ -9,7 +9,7 @@ async fn main() {
 
     // Create the required clients
     let request_client = irelia::RequestClient::new();
-    let lcu_client = irelia::rest::LCUClient::new().unwrap();
+    let lcu_client = irelia::rest::LcuClient::new(false).unwrap();
 
     // Create a handful of requests
     let request_1 = Request::get("/example/endpoint/");
