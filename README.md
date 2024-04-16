@@ -18,8 +18,9 @@ By default, this crate only ships with the rest feature enabled.
 - `["full"]` - enables support for all APIs
 - `["ws"]` - enables support for the LCU websocket
 - `["in_game"]` - enables support for the native in game API
-- `["tauri]` - derives searialize on errors
+- `["tauri]` - derives serialize on errors
 - `["batched"]` - enabled the batched request system
+- `["replay"]` - enables the replay API interface
 
 
 #

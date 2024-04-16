@@ -10,9 +10,15 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 #[allow(clippy::module_name_repetitions)]
+#[derive(Default)]
 pub struct ReplayClient;
 
 impl ReplayClient {
+    #[must_use] 
+    pub fn new() -> Self {
+        Self
+    }
+    
     /// Information about the game client process.
     ///
     /// # Errors
@@ -155,6 +161,8 @@ impl ReplayClient {
 
         request_client
             .request_template(URL, &endpoint, method, body, None, |bytes| {
+                let value = serde_json::from_slice::<serde_json::Value>(&bytes);
+                println!("{value:?}");
                 serde_json::from_slice(&bytes).map_err(Error::SerdeJsonError)
             })
             .await
