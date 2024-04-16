@@ -146,8 +146,12 @@ impl GameClient {
         summoner: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<SummonerSpells, Error> {
-        self.live_client("playersummonerspells", Some(summoner.as_ref()), request_client)
-            .await
+        self.live_client(
+            "playersummonerspells",
+            Some(summoner.as_ref()),
+            request_client,
+        )
+        .await
     }
 
     //noinspection SpellCheckingInspection
