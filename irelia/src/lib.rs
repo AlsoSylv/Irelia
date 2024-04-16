@@ -11,13 +11,13 @@ pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
 pub mod in_game;
+#[cfg(feature = "replay")]
+pub mod replay;
 #[cfg(feature = "rest")]
 pub mod rest;
 pub mod utils;
 #[cfg(feature = "ws")]
 pub mod ws;
-#[cfg(feature = "replay")]
-pub mod replay;
 
 /// Errors that can be produced by the LCU API
 ///
