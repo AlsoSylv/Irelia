@@ -14,11 +14,11 @@ use serde::Serialize;
 pub struct ReplayClient;
 
 impl ReplayClient {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Information about the game client process.
     ///
     /// # Errors
@@ -161,8 +161,6 @@ impl ReplayClient {
 
         request_client
             .request_template(URL, &endpoint, method, body, None, |bytes| {
-                let value = serde_json::from_slice::<serde_json::Value>(&bytes);
-                println!("{value:?}");
                 serde_json::from_slice(&bytes).map_err(Error::SerdeJsonError)
             })
             .await
