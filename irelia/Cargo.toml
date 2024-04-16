@@ -107,6 +107,10 @@ ws = [
     "tokio/rt"
     ]
 
+replay = [
+    "in_game",
+    ]
+
 batched = [
     "dep:erased-serde",
     "dep:futures-util",

@@ -224,7 +224,7 @@ impl GameClient {
 
         request_client
             .request_template(URL, &endpoint, "GET", None::<()>, None, |bytes| {
-                serde_json::from_slice(&bytes).map_err(Error::SerdeJsonError)
+                Ok(serde_json::from_slice(&bytes)?)
             })
             .await
     }

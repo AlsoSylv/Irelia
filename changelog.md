@@ -14,6 +14,7 @@
 - Constants for the game and client name are now public
 - General code cleanup
 - A number of functions have been marked with `#[must_us]`
+- Replay API Wrapper (disabled by default)
 
 ## Irelia 0.4.2
 - Instead of being public, in game types now have getters

@@ -133,16 +133,13 @@ pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Err
 
         (port, auth) = read_and_parse_lock(path, &mut lock_file)?;
     }
-    
+
     // The auth header has to be base64 encoded, so that's happens here
     let auth_header = ENCODER.encode(format!("riot:{auth}"));
 
     // Format the port and header so that they can be used as headers
     // For the LCU API
-    Ok((
-        format!("127.0.0.1:{port}"),
-        format!("Basic {auth_header}", ),
-    ))
+    Ok((format!("127.0.0.1:{port}"), format!("Basic {auth_header}",)))
 }
 
 fn read_and_parse_lock<'a>(

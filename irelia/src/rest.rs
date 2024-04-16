@@ -216,9 +216,9 @@ impl LcuClient {
     /// Attempts to create a connection to the LCU, errors if it fails
     /// to spin up the child process, or fails to get data from the client.
     ///
-    /// force_lock_file will read the lock file regardless of whether the client
+    /// `force_lock_file` will read the lock file regardless of whether the client
     /// or the game is running at the time
-    /// 
+    ///
     /// # Errors
     /// This will return an error if the LCU API is not running, this can include
     /// the client being down, the lock file being unable to be opened, or the LCU
@@ -311,7 +311,7 @@ impl LcuClient {
         self.lcu_request::<(), R>(endpoint.as_ref(), "GET", None, request_client)
             .await
     }
-    
+
     /// Sends a head request to the LCU
     ///
     /// # Errors
@@ -320,9 +320,15 @@ impl LcuClient {
         &self,
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
-    ) -> Result<hyper::Response<hyper::body::Incoming>, Error>
-    {
-        request_client.raw_request_template::<()>(&self.url, endpoint.as_ref(), "HEAD", None, Some(&self.auth_header))
+    ) -> Result<hyper::Response<hyper::body::Incoming>, Error> {
+        request_client
+            .raw_request_template::<()>(
+                &self.url,
+                endpoint.as_ref(),
+                "HEAD",
+                None,
+                Some(&self.auth_header),
+            )
             .await
     }
 

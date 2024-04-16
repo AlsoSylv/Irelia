@@ -16,6 +16,8 @@ pub mod rest;
 pub mod utils;
 #[cfg(feature = "ws")]
 pub mod ws;
+#[cfg(feature = "replay")]
+pub mod replay;
 
 /// Errors that can be produced by the LCU API
 ///
