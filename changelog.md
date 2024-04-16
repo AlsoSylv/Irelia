@@ -15,6 +15,7 @@
 - General code cleanup
 - A number of functions have been marked with `#[must_us]`
 - Replay API Wrapper (disabled by default)
+- In Game endpoints that take `summoner` name take `AsRef<str>`
 
 ## Irelia 0.4.2
 - Instead of being public, in game types now have getters

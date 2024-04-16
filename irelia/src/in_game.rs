@@ -129,10 +129,10 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_scores(
         &self,
-        summoner: &str,
+        summoner: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Scores, Error> {
-        self.live_client("playerscores", Some(summoner), request_client)
+        self.live_client("playerscores", Some(summoner.as_ref()), request_client)
             .await
     }
 
@@ -143,10 +143,10 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_summoner_spells(
         &self,
-        summoner: &str,
+        summoner: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<SummonerSpells, Error> {
-        self.live_client("playersummonerspells", Some(summoner), request_client)
+        self.live_client("playersummonerspells", Some(summoner.as_ref()), request_client)
             .await
     }
 
@@ -157,10 +157,10 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_main_runes(
         &self,
-        summoner: &str,
+        summoner: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Runes, Error> {
-        self.live_client("playermainrunes", Some(summoner), request_client)
+        self.live_client("playermainrunes", Some(summoner.as_ref()), request_client)
             .await
     }
 
@@ -171,10 +171,10 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_items(
         &self,
-        summoner: &str,
+        summoner: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Vec<Item>, Error> {
-        self.live_client("playeritems", Some(summoner), request_client)
+        self.live_client("playeritems", Some(summoner.as_ref()), request_client)
             .await
     }
 
