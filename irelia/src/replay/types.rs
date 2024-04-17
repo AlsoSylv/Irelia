@@ -1,9 +1,22 @@
+use crate::replay::types::hidden::KeyFrameValue;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 pub use serde_derive::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-#[derive(Serialize, Deserialize, Debug)]
+mod hidden {
+    use crate::replay::types::{ColorValue, Vector3f};
+
+    /// This is a specific bound, only applied to valid schema types
+    pub trait KeyFrameValue {}
+    impl KeyFrameValue for String {}
+    impl KeyFrameValue for f32 {}
+    impl KeyFrameValue for ColorValue {}
+    impl KeyFrameValue for Vector3f {}
+    impl KeyFrameValue for bool {}
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum AVContainer {
     Webm,
@@ -11,7 +24,7 @@ pub enum AVContainer {
     PngAndDepth,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 /// Ability Resource
 pub enum AbilityResource {
@@ -45,7 +58,7 @@ pub struct ColorValue {
     pub a: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Blending options for interpolating time between keyframes
 pub enum EasingType {
@@ -86,13 +99,13 @@ pub enum EasingType {
 }
 
 /// Process identifier for this game
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Game {
     #[serde(rename = "processID")]
     pub process_id: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum HudCameraMode {
     Top,
@@ -102,15 +115,15 @@ pub enum HudCameraMode {
     Path,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct KeyFrameT<T: Serialize + Debug> {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KeyFrameT<T: Debug + Serialize + Clone + KeyFrameValue> {
     pub blend: EasingType,
     pub time: f32,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
 }
 
-impl<T: Serialize + Debug + DeserializeOwned> KeyFrameT<T> {
+impl<T: Debug + Serialize + Clone + KeyFrameValue + DeserializeOwned> KeyFrameT<T> {
     /// Creates a new generic keyframe with the time and value
     /// Defaults to `EasingType::Linear`
     fn new(time: f32, value: T) -> Self {
@@ -128,7 +141,7 @@ pub type KeyFrameColor = KeyFrameT<ColorValue>;
 pub type KeyFrameFloat = KeyFrameT<f32>;
 pub type KeyFrameVector3 = KeyFrameT<Vector3f>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 /// Playback state
 pub struct Playback {
     /// Total length of the replay in seconds
@@ -143,7 +156,7 @@ pub struct Playback {
     pub time: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Recording State
 pub struct Recording {
@@ -175,7 +188,7 @@ pub struct Recording {
 }
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Render State
 pub struct Render {
@@ -301,7 +314,7 @@ pub struct Render {
     pub sun_direction: Vector3f,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Sequence {
     /// Keyframe track for Render.cameraPosition
