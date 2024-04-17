@@ -377,8 +377,46 @@ pub struct Sequence {
     pub sun_direction: Option<Vec<KeyFrameVector3>>,
 }
 
-impl Default for Sequence {
-    fn default() -> Self {
+impl Sequence {
+    #[must_use]
+    /// This is intended for clearing the sequence entirely
+    pub fn none() -> Self {
+        Self {
+            camera_position: None,
+            camera_rotation: None,
+            depth_fog_color: None,
+            depth_fog_enabled: None,
+            depth_fog_end: None,
+            depth_fog_intensity: None,
+            depth_fog_start: None,
+            depth_of_field_circle: None,
+            depth_of_field_enabled: None,
+            depth_of_field_far: None,
+            depth_of_field_mid: None,
+            depth_of_field_near: None,
+            depth_of_field_width: None,
+            far_clip: None,
+            field_of_view: None,
+            height_fog_color: None,
+            height_fog_enabled: None,
+            height_fog_end: None,
+            height_fog_intensity: None,
+            height_fog_start: None,
+            nav_grid_offset: None,
+            near_clip: None,
+            playback_speed: None,
+            selection_name: None,
+            selection_offset: None,
+            skybox_offset: None,
+            skybox_radius: None,
+            skybox_rotation: None,
+            sun_direction: None,
+        }
+    }
+    
+    #[must_use]
+    /// This creates a new empty sequence
+    pub fn empty() -> Self {
         Self {
             camera_position: Some(Vec::default()),
             camera_rotation: Some(Vec::default()),
@@ -411,9 +449,7 @@ impl Default for Sequence {
             sun_direction: Some(Vec::default()),
         }
     }
-}
-
-impl Sequence {
+    
     pub fn from_render_time(name: &impl ToString, render: &Render, current_time: f32) -> Self {
         Self {
             camera_position: Some(vec![KeyFrameVector3::new(
