@@ -8,6 +8,7 @@ repository = "https://github.com/AlsoSylv/Irelia"
 homepage = "https://github.com/AlsoSylv/Irelia"
 documentation = "https://docs.rs/irelia"
 readme = "../README.md"
+categories = ["api-bindings", "asynchronous"]
 keywords = ["riot", "league", "league-of-legends", "lcu", "riot-games"]
 
 [dependencies]
