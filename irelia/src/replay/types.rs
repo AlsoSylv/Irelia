@@ -167,9 +167,9 @@ pub struct Recording {
 /// Render State
 pub struct Render {
     /// Display banners on the map
-    pub banners: bool,
+    pub banners: Option<bool>,
     /// True if the camera is attached to an object in the game
-    pub camera_attached: bool,
+    pub camera_attached: Option<bool>,
     /// Mouse look speed of the camera when in FPS mode (higher is faster)
     pub camera_look_speed: f32,
     /// Camera movement mode such as first person or third person
@@ -181,11 +181,11 @@ pub struct Render {
     /// Rotation of the camera in Euler degrees (yaw, pitch, roll)
     pub camera_rotation: Vector3f,
     /// Display champions and minions
-    pub characters: bool,
+    pub characters: Option<bool>,
     /// Depth fog color specified in RGBA
     pub depth_fog_color: ColorValue,
     /// Display depth based fog
-    pub depth_fog_enabled: bool,
+    pub depth_fog_enabled: Option<bool>,
     /// Distance from the camera to the end of the fog
     pub depth_fog_end: f32,
     /// Depth fog intensity (opacity from 0.0 to 1.0
@@ -195,9 +195,9 @@ pub struct Render {
     /// Adjusts the shape and strength of the blur effect
     pub depth_of_field_circle: f32,
     /// Render a debug display to visualize depth of field distances
-    pub depth_of_field_debug: bool,
+    pub depth_of_field_debug: Option<bool>,
     /// Display depth of field post-processing
-    pub depth_of_field_enabled: bool,
+    pub depth_of_field_enabled: Option<bool>,
     /// Furthest distance from the camera in full blur
     pub depth_of_field_far: f32,
     /// Distance to the center of the depth of field effect, the point that will be the most in focus
@@ -207,29 +207,29 @@ pub struct Render {
     /// Distance around the middle point that should be in focus
     pub depth_of_field_width: f32,
     /// Display the level environment
-    pub environment: bool,
+    pub environment: Option<bool>,
     /// Far camera clipping distance
     pub far_clip: f32,
     /// Camera field of view in degrees (default 45)
     pub field_of_view: f32,
     /// Display text notifications over the top of champions
-    pub floating_text: bool,
+    pub floating_text: Option<bool>,
     /// Display fog of war
-    pub fog_of_war: bool,
+    pub fog_of_war: Option<bool>,
     /// Display health bars on champions
-    pub health_bar_champions: bool,
+    pub health_bar_champions: Option<bool>,
     /// Display health bars on minions
-    pub health_bar_minions: bool,
+    pub health_bar_minions: Option<bool>,
     /// Display health bars on champion pets
-    pub health_bar_pets: bool,
+    pub health_bar_pets: Option<bool>,
     /// Display health bars on structure and towers
-    pub health_bar_structures: bool,
+    pub health_bar_structures: Option<bool>,
     /// Display health bars on wards
-    pub health_bar_wards: bool,
+    pub health_bar_wards: Option<bool>,
     /// Height fog color specified in RGBA
     pub height_fog_color: ColorValue,
     /// Display height based fog
-    pub height_fog_enabled: bool,
+    pub height_fog_enabled: Option<bool>,
     /// Vertical height at the end of the fog
     pub height_fog_end: f32,
     /// Height fog intensity (opacity from 0.0 to 1.0)
@@ -237,41 +237,41 @@ pub struct Render {
     /// Vertical height at the start of the fog
     pub height_fog_start: f32,
     /// Display all the user interface
-    pub interface_all: bool,
+    pub interface_all: Option<bool>,
     /// Display game announcements (center of the window)
-    pub interface_announce: bool,
+    pub interface_announce: Option<bool>,
     /// Display the chat window
-    pub interface_chat: bool,
+    pub interface_chat: Option<bool>,
     /// Display the champion frames (sides of the window)
-    pub interface_frames: bool,
+    pub interface_frames: Option<bool>,
     /// Display kill callouts
-    pub interface_kill_callouts: bool,
+    pub interface_kill_callouts: Option<bool>,
     /// Display the game minimap (bottom right corner)
-    pub interface_minimap: bool,
+    pub interface_minimap: Option<bool>,
     /// Display neutral objective timers
-    pub interface_neutral_timers: bool,
+    pub interface_neutral_timers: Option<bool>,
     /// Display quests
     pub interface_quests: Option<bool>,
     /// Display the replay HUD with camera options
-    pub interface_replay: bool,
+    pub interface_replay: Option<bool>,
     /// Display the replay score interface (top of the window)
-    pub interface_score: bool,
+    pub interface_score: Option<bool>,
     /// Display the replay scoreboard (bottom of the window)
-    pub interface_scoreboard: bool,
+    pub interface_scoreboard: Option<bool>,
     /// Display the target selection window
-    pub interface_target: bool,
+    pub interface_target: Option<bool>,
     /// Display the replay timeline (bottom of the window)
-    pub interface_timeline: bool,
+    pub interface_timeline: Option<bool>,
     /// Adjusts the height that champions and minions walk over the environment
     pub nav_grid_offset: f32,
     /// Near camera clipping distance
     pub near_clip: f32,
     /// Display outlines on champions when the mouse is hovered over
-    pub outline_hover: bool,
+    pub outline_hover: Option<bool>,
     /// Display outlines on champions when selected
-    pub outline_select: bool,
+    pub outline_select: Option<bool>,
     /// Display particles
-    pub particles: bool,
+    pub particles: Option<bool>,
     /// Sets the selection to the given name, case-insensitive
     pub selection_name: String,
     /// Sets the camera location to the selection's location adding the given offset
