@@ -413,7 +413,7 @@ impl Sequence {
             sun_direction: None,
         }
     }
-    
+
     #[must_use]
     /// This creates a new empty sequence
     pub fn empty() -> Self {
@@ -449,7 +449,7 @@ impl Sequence {
             sun_direction: Some(Vec::default()),
         }
     }
-    
+
     pub fn from_render_time(name: &impl ToString, render: &Render, current_time: f32) -> Self {
         Self {
             camera_position: Some(vec![KeyFrameVector3::new(
@@ -555,8 +555,11 @@ impl Sequence {
         render: &Render,
         recording: &Recording,
     ) -> Self {
-        let mut sequence = Self::from_render_time(name, render, recording.current_time);
-        sequence.playback_speed.as_mut_slice()[0][0].value = recording.replay_speed;
+        let current_time = recording.current_time;
+        let mut sequence = Self::from_render_time(name, render, current_time);
+        if let Some(value) = sequence.playback_speed.as_mut() {
+            value[0].value = current_time;
+        }
         sequence
     }
 
