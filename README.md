@@ -26,36 +26,52 @@ By default, this crate only ships with the rest feature enabled.
 #
 ### Examples
 ```rust
-use irelia::{RequestClient, rest::LCUClient};
+use irelia::{Error, RequestClient, rest::LcuClient};
 use serde_json::Value;
 
 /// Get the player from the client API
-async fn get_summoner() -> Result<Option<Value>, LCUError> {
+async fn get_summoner() -> Result<Option<Value>, Error> {
     // Create a new general request client
     let client = RequestClient::new();
 
-    // Pass the client to the LCU connection
-    let lcu_client = LCUClient::new()?;
+    // Read the lock file regardless of any running client or game
+    let lcu_client = LcuClient::new(true)?;
 
     // The return type must be defined
     // And can be any struct that implements serde::Deserialize
-    client.get("/lol-summoner/v1/current-summoner", &client).await
+    lcu_client
+        .get("/lol-summoner/v1/current-summoner", &client)
+        .await
 }
 ```
 
 ```rust
-use irelia::{RequestClient, in_game::InGameClient};
-use serde_json::Value;
+use irelia::{RequestClient, in_game::{GameClient, types::ActivePlayer}};
 
 /// Get the player from the in game API
-async fn get_in_game_summoner() -> Result<ActivePlayer, LCUError> {
+async fn get_in_game_summoner() -> Result<ActivePlayer, Error> {
     // Create a new general request client
     let client = RequestClient::new();
 
-    // Pass the client to the LCU connection
-    let game_client = InGameClient::new()?;
+    // Create a connection to the game client
+    let game_client = GameClient::new();
 
-    game_client.active_player(&client)
+    game_client.active_player(&client).await
 }
 
+```
+
+```rust
+use irelia::{RequestClient, replay::{ReplayClient, types::Playback}};
+
+/// Get the playback status from the replay API
+async fn get_replay_playback() -> Result<Playback, Error> {
+    // Create a new general request client
+    let client = RequestClient::new();
+
+    // Create a replay connection
+    let replay_client = ReplayClient::new();
+
+    replay_client.get_playback(&client).await
+}
 ```
