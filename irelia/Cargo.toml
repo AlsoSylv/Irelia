@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.6.5"
+version = "0.6.6"
 edition = "2021"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
@@ -124,4 +124,4 @@ encoder_nightly = ["irelia_encoder/nightly"]
 encoder_simd = ["irelia_encoder/simd"]
 
 [package.metadata.docs.rs]
-features = ["full"]
+features = ["full", "replay"]
