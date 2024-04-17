@@ -5,7 +5,6 @@
 //! of the processes for `macOS`, and `Windows`
 
 use irelia_encoder::Encoder;
-use std::path::Path;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 use crate::Error;
@@ -81,7 +80,6 @@ pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Err
             if name == CLIENT_PROCESS_NAME {
                 client = true;
                 client
-                // Otherwise return if it matches the game name process
             } else {
                 name == GAME_PROCESS_NAME
             }
@@ -90,48 +88,53 @@ pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Err
 
     // Move these to an earlier scope to avoid an allocation
     // And deduplicate some code later on
-    let mut lock_file: String = String::new();
+    let lock_file: String;
     let port: &str;
     let auth: &str;
 
-    if client {
-        if force_lock_file {
-            // Get the client location
-            let path = process.exe().ok_or_else(|| Error::LockFileNotFound)?;
-            // Walk back once, being in the folder
-            let path = path.parent().ok_or_else(|| Error::LockFileNotFound)?;
-            // Read and init the path and auth
-            (port, auth) = read_and_parse_lock(path, &mut lock_file)?;
-        } else {
-            let cmd = process.cmd();
+    if client && !force_lock_file {
+        let cmd = process.cmd();
+        // Assuming the order doesn't change (which I haven't seen it do)
+        // we can avoid a second iteration over the cmd args
+        let mut iter = cmd.iter();
 
-            // Assuming the order doesn't change (which I haven't seen it do)
-            // we can avoid a second iteration over the cmd args
-            let mut iter = cmd.iter();
+        // Look for an auth key to put inside the command line, otherwise return an error.
+        auth = iter
+            .find_map(|s| s.strip_prefix("--remoting-auth-token="))
+            .ok_or(Error::AuthTokenNotFound)?;
 
-            // Look for an auth key to put inside the command line, otherwise return an error.
-            auth = iter
-                .find_map(|s| s.strip_prefix("--remoting-auth-token="))
-                .ok_or(Error::AuthTokenNotFound)?;
-
-            // Look for a port to connect to the LCU with, otherwise return an error.
-            port = iter
-                .find_map(|s| s.strip_prefix("--app-port="))
-                .ok_or(Error::PortNotFound)?;
-        }
+        // Look for a port to connect to the LCU with, otherwise return an error.
+        port = iter
+            .find_map(|s| s.strip_prefix("--app-port="))
+            .ok_or(Error::PortNotFound)?;
     } else {
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
         let path = process.exe().ok_or_else(|| Error::LockFileNotFound)?;
+        let dir = path.parent().ok_or_else(|| Error::LockFileNotFound)?;
         // Sadly, we're relying on how the client structures things here
         // Walking back a whole folder in order to get the lock file
-        let path = path
-            .parent()
-            .ok_or_else(|| Error::LockFileNotFound)?
-            .parent()
-            .ok_or_else(|| Error::LockFileNotFound)?;
+        let base_dir = if client {
+            // If it IS the client, we're in the right dir
+            dir
+        } else {
+            // Otherwise it is the game, and we need to go back once
+            dir.parent().ok_or_else(|| Error::LockFileNotFound)?
+        };
 
-        (port, auth) = read_and_parse_lock(path, &mut lock_file)?;
+        // Read the lock file, putting the value in a higher scope
+        lock_file = std::fs::read_to_string(base_dir.join("lockfile")).map_err(Error::StdIo)?;
+
+        // Split the lock file on `:` which separates the different fields
+        // Because lock_file is from a higher scope, we can split the string here
+        // and return two string references later on
+        let mut split = lock_file.split(':');
+
+        // Get the 3rd field, which should be the port
+        port = split.nth(2).ok_or(Error::PortNotFound)?;
+        // We moved the cursor, so the fourth element is the very next one
+        // Which should be the auth string
+        auth = split.next().ok_or(Error::AuthTokenNotFound)?;
     }
 
     // The auth header has to be base64 encoded, so that's happens here
@@ -140,27 +143,6 @@ pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Err
     // Format the port and header so that they can be used as headers
     // For the LCU API
     Ok((format!("127.0.0.1:{port}"), format!("Basic {auth_header}",)))
-}
-
-fn read_and_parse_lock<'a>(
-    path: &Path,
-    lock_file: &'a mut String,
-) -> Result<(&'a str, &'a str), Error> {
-    // Read the lock file, putting the value in a higher scope
-    *lock_file = std::fs::read_to_string(path.join("lockfile")).map_err(Error::StdIo)?;
-
-    // Split the lock file on `:` which separates the different fields
-    // Because lock_file is from a higher scope, we can split the string here
-    // and return two string references later on
-    let mut split = lock_file.split(':');
-
-    // Get the 3rd field, which should be the port
-    let port = split.nth(2).ok_or(Error::PortNotFound)?;
-    // We moved the cursor, so the fourth element is the very next one
-    // Which should be the auth string
-    let auth = split.next().ok_or(Error::AuthTokenNotFound)?;
-
-    Ok((port, auth))
 }
 
 #[cfg(test)]

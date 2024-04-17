@@ -289,7 +289,7 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request::<(), R>(endpoint.as_ref(), "DELETE", None, request_client)
+        self.lcu_request(endpoint.as_ref(), "DELETE", None::<()>, request_client)
             .await
     }
 
@@ -308,7 +308,7 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request::<(), R>(endpoint.as_ref(), "GET", None, request_client)
+        self.lcu_request(endpoint.as_ref(), "GET", None::<()>, request_client)
             .await
     }
 

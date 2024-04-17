@@ -18,6 +18,8 @@ pub const URL: &str = "127.0.0.1:2999";
 
 /// Struct that represents a connection to the in game api client
 /// Because the URL is constant, this is a zero sized struct to help organize code
+/// Please note, well this is currently 0 sized, it could change
+/// So it is advised to use `GameClient::new()` instead
 pub struct GameClient;
 
 impl GameClient {
@@ -211,6 +213,7 @@ impl GameClient {
     }
 
     //noinspection SpellCheckingInspection
+    /// Makes a request to a liveclientdata endpoint
     async fn live_client<R>(
         &self,
         endpoint: &str,

@@ -47,6 +47,10 @@ impl RequestClient {
         RequestClient { client }
     }
 
+    /// returns a raw hyper response, URIs always use HTTPS,
+    /// 
+    /// # Errors
+    /// if the body is invalid JSON, otherwise in any way hyper would normally
     pub(crate) async fn raw_request_template<T>(
         &self,
         url: &str,
@@ -84,6 +88,7 @@ impl RequestClient {
         Ok(self.client.request(request).await?)
     }
 
+    /// Makes a request, collects the bytes, and passes them to `return_logic` for handling
     pub(crate) async fn request_template<T, R>(
         &self,
         url: &str,
