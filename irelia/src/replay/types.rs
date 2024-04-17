@@ -288,7 +288,7 @@ pub struct Render {
     pub sun_direction: Vector3f,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Sequence {
     /// Keyframe track for Render.cameraPosition
@@ -349,6 +349,42 @@ pub struct Sequence {
     pub skybox_rotation: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.sunDirection
     pub sun_direction: Option<Vec<KeyFrameVector3>>,
+}
+
+impl Default for Sequence {
+    fn default() -> Self {
+        Self {
+            camera_position: Some(Vec::default()),
+            camera_rotation: Some(Vec::default()),
+            depth_fog_color: Some(Vec::default()),
+            depth_fog_enabled: Some(Vec::default()),
+            depth_fog_end: Some(Vec::default()),
+            depth_fog_intensity: Some(Vec::default()),
+            depth_fog_start: Some(Vec::default()),
+            depth_of_field_enabled: Some(Vec::default()),
+            depth_of_field_width: Some(Vec::default()),
+            depth_of_field_circle: Some(Vec::default()),
+            depth_of_field_far: Some(Vec::default()),
+            depth_of_field_mid: Some(Vec::default()),
+            depth_of_field_near: Some(Vec::default()),
+            far_clip: Some(Vec::default()),
+            field_of_view: Some(Vec::default()),
+            height_fog_color: Some(Vec::default()),
+            height_fog_enabled: Some(Vec::default()),
+            height_fog_end: Some(Vec::default()),
+            height_fog_intensity: Some(Vec::default()),
+            height_fog_start: Some(Vec::default()),
+            nav_grid_offset: Some(Vec::default()),
+            near_clip: Some(Vec::default()),
+            playback_speed: Some(Vec::default()),
+            selection_name: Some(Vec::default()),
+            selection_offset: Some(Vec::default()),
+            skybox_offset: Some(Vec::default()),
+            skybox_radius: Some(Vec::default()),
+            skybox_rotation: Some(Vec::default()),
+            sun_direction: Some(Vec::default()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
