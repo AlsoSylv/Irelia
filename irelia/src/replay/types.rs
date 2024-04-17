@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 pub use serde_derive::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -32,7 +33,7 @@ pub enum AbilityResource {
     Max,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ColorValue {
     /// Red channel value (0-255)
     pub r: f32,
@@ -107,6 +108,18 @@ pub struct KeyFrameT<T: Serialize + Debug> {
     pub time: f32,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
+}
+
+impl<T: Serialize + Debug + DeserializeOwned> KeyFrameT<T> {
+    /// Creates a new generic keyframe with the time and value
+    /// Defaults to `EasingType::Linear`
+    fn new(time: f32, value: T) -> Self {
+        Self {
+            blend: EasingType::Linear,
+            time,
+            value,
+        }
+    }
 }
 
 pub type KeyFrameAString = KeyFrameT<String>;
@@ -188,7 +201,7 @@ pub struct Render {
     pub depth_fog_enabled: Option<bool>,
     /// Distance from the camera to the end of the fog
     pub depth_fog_end: f32,
-    /// Depth fog intensity (opacity from 0.0 to 1.0
+    /// Depth fog intensity (opacity from 0.0 to 1.0)
     pub depth_fog_intensity: f32,
     /// Distance from the camera to the start of the fog
     pub depth_fog_start: f32,
@@ -387,7 +400,123 @@ impl Default for Sequence {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+impl Sequence {
+    pub fn from_render_time(name: &impl ToString, render: &Render, current_time: f32) -> Self {
+        Self {
+            camera_position: Some(vec![KeyFrameVector3::new(
+                current_time,
+                render.camera_position,
+            )]),
+            camera_rotation: Some(vec![KeyFrameVector3::new(
+                current_time,
+                render.camera_rotation,
+            )]),
+            depth_fog_color: Some(vec![KeyFrameColor::new(
+                current_time,
+                render.depth_fog_color.clone(),
+            )]),
+            depth_fog_enabled: Some(vec![KeyFrameBool::new(
+                current_time,
+                render.depth_fog_enabled.unwrap_or_default(),
+            )]),
+            depth_fog_end: Some(vec![KeyFrameFloat::new(current_time, render.depth_fog_end)]),
+            depth_fog_intensity: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_fog_intensity,
+            )]),
+            depth_fog_start: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_fog_start,
+            )]),
+            depth_of_field_circle: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_of_field_circle,
+            )]),
+            depth_of_field_enabled: Some(vec![KeyFrameBool::new(
+                current_time,
+                render.depth_of_field_enabled.unwrap_or_default(),
+            )]),
+            depth_of_field_far: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_of_field_far,
+            )]),
+            depth_of_field_mid: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_of_field_mid,
+            )]),
+            depth_of_field_near: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_of_field_near,
+            )]),
+            depth_of_field_width: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.depth_of_field_width,
+            )]),
+            far_clip: Some(vec![KeyFrameFloat::new(current_time, render.far_clip)]),
+            field_of_view: Some(vec![KeyFrameFloat::new(current_time, render.field_of_view)]),
+            height_fog_color: Some(vec![KeyFrameColor::new(
+                current_time,
+                render.height_fog_color.clone(),
+            )]),
+            height_fog_enabled: Some(vec![KeyFrameBool::new(
+                current_time,
+                render.height_fog_enabled.unwrap_or_default(),
+            )]),
+            height_fog_end: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.height_fog_end,
+            )]),
+            height_fog_intensity: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.height_fog_intensity,
+            )]),
+            height_fog_start: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.height_fog_start,
+            )]),
+            nav_grid_offset: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.nav_grid_offset,
+            )]),
+            near_clip: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.nav_grid_offset,
+            )]),
+            playback_speed: Some(vec![KeyFrameFloat::new(current_time, 1.0)]),
+            selection_name: Some(vec![KeyFrameAString::new(current_time, name.to_string())]),
+            selection_offset: Some(vec![KeyFrameVector3::new(
+                current_time,
+                render.selection_offset,
+            )]),
+            skybox_offset: Some(vec![KeyFrameFloat::new(current_time, render.skybox_offset)]),
+            skybox_radius: Some(vec![KeyFrameFloat::new(current_time, render.skybox_radius)]),
+            skybox_rotation: Some(vec![KeyFrameFloat::new(
+                current_time,
+                render.skybox_rotation,
+            )]),
+            sun_direction: Some(vec![KeyFrameVector3::new(
+                current_time,
+                render.sun_direction,
+            )]),
+        }
+    }
+
+    pub fn from_render_recording(
+        name: &impl ToString,
+        render: &Render,
+        recording: &Recording,
+    ) -> Self {
+        let mut sequence = Self::from_render_time(name, render, recording.current_time);
+        sequence.playback_speed.as_mut_slice()[0][0].value = recording.replay_speed;
+        sequence
+    }
+
+    pub fn from_render(name: &impl ToString, render: &Render) -> Self {
+        Self::from_render_time(name, render, 0.0)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Vector3f {
     pub x: f32,
     pub y: f32,
