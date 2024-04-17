@@ -292,63 +292,63 @@ pub struct Render {
 #[serde(rename_all = "camelCase")]
 pub struct Sequence {
     /// Keyframe track for Render.cameraPosition
-    pub camera_position: Vec<KeyFrameVector3>,
+    pub camera_position: Option<Vec<KeyFrameVector3>>,
     /// Keyframe track for Render.cameraRotation
-    pub camera_rotation: Vec<KeyFrameVector3>,
+    pub camera_rotation: Option<Vec<KeyFrameVector3>>,
     /// Keyframe track for Render.depthFogColor
-    pub depth_fog_color: Vec<KeyFrameColor>,
+    pub depth_fog_color: Option<Vec<KeyFrameColor>>,
     /// Keyframe track for Render.depthFogEnabled
-    pub depth_fog_enabled: Vec<KeyFrameBool>,
+    pub depth_fog_enabled: Option<Vec<KeyFrameBool>>,
     /// Keyframe track for Render.depthFogEnd
-    pub depth_fog_end: Vec<KeyFrameFloat>,
+    pub depth_fog_end: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthFogIntensity
-    pub depth_fog_intensity: Vec<KeyFrameFloat>,
+    pub depth_fog_intensity: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthFogStart
-    pub depth_fog_start: Vec<KeyFrameFloat>,
+    pub depth_fog_start: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthOfFieldCircle
-    pub depth_of_field_circle: Vec<KeyFrameFloat>,
+    pub depth_of_field_circle: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthOfFieldEnabled
-    pub depth_of_field_enabled: Vec<KeyFrameBool>,
+    pub depth_of_field_enabled: Option<Vec<KeyFrameBool>>,
     /// Keyframe track for Render.depthOfFieldFar
-    pub depth_of_field_far: Vec<KeyFrameFloat>,
+    pub depth_of_field_far: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthOfFieldMid
-    pub depth_of_field_mid: Vec<KeyFrameFloat>,
+    pub depth_of_field_mid: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthOfFieldNear
-    pub depth_of_field_near: Vec<KeyFrameFloat>,
+    pub depth_of_field_near: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.depthOfFieldWidth
-    pub depth_of_field_width: Vec<KeyFrameFloat>,
+    pub depth_of_field_width: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.farClip
-    pub far_clip: Vec<KeyFrameFloat>,
+    pub far_clip: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.fieldOfView
-    pub field_of_view: Vec<KeyFrameFloat>,
+    pub field_of_view: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.heightFogColor
-    pub height_fog_color: Vec<KeyFrameColor>,
+    pub height_fog_color: Option<Vec<KeyFrameColor>>,
     /// Keyframe track for Render.heightFogEnabled
-    pub height_fog_enabled: Vec<KeyFrameBool>,
+    pub height_fog_enabled: Option<Vec<KeyFrameBool>>,
     /// Keyframe track for Render.heightFogEnd
-    pub height_fog_end: Vec<KeyFrameFloat>,
+    pub height_fog_end: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.heightFogIntensity
-    pub height_fog_intensity: Vec<KeyFrameFloat>,
+    pub height_fog_intensity: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.heightFogStart
-    pub height_fog_start: Vec<KeyFrameFloat>,
+    pub height_fog_start: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.navGridOffset
-    pub nav_grid_offset: Vec<KeyFrameFloat>,
+    pub nav_grid_offset: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.nearClip
-    pub near_clip: Vec<KeyFrameFloat>,
+    pub near_clip: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Playback.speed
-    pub playback_speed: Vec<KeyFrameFloat>,
+    pub playback_speed: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.selectionName
-    pub selection_name: Vec<KeyFrameAString>,
+    pub selection_name: Option<Vec<KeyFrameAString>>,
     /// Keyframe track for Render.selectionOffset
-    pub selection_offset: Vec<KeyFrameVector3>,
+    pub selection_offset: Option<Vec<KeyFrameVector3>>,
     /// Keyframe track for Render.skyboxOffset
-    pub skybox_offset: Vec<KeyFrameFloat>,
+    pub skybox_offset: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.skyboxRadius
-    pub skybox_radius: Vec<KeyFrameFloat>,
+    pub skybox_radius: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.skyboxRotation
-    pub skybox_rotation: Vec<KeyFrameFloat>,
+    pub skybox_rotation: Option<Vec<KeyFrameFloat>>,
     /// Keyframe track for Render.sunDirection
-    pub sun_direction: Vec<KeyFrameVector3>,
+    pub sun_direction: Option<Vec<KeyFrameVector3>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
