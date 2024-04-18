@@ -1,14 +1,13 @@
 use crate::Error;
 
 use http_body_util::{BodyExt, Full};
-use hyper::body::{Bytes, Incoming};
+use hyper::body::{Buf, Bytes, Incoming};
 use hyper::header::AUTHORIZATION;
 use hyper::http::uri;
 use hyper::{Request, Response};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use super::setup_tls::setup_tls_connector;
@@ -48,7 +47,7 @@ impl RequestClient {
     }
 
     /// returns a raw hyper response, URIs always use HTTPS,
-    /// 
+    ///
     /// # Errors
     /// if the body is invalid JSON, otherwise in any way hyper would normally
     pub(crate) async fn raw_request_template<T>(
@@ -89,18 +88,16 @@ impl RequestClient {
     }
 
     /// Makes a request, collects the bytes, and passes them to `return_logic` for handling
-    pub(crate) async fn request_template<T, R>(
+    pub(crate) async fn request_template<T>(
         &self,
         url: &str,
         endpoint: &str,
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        return_logic: fn(bytes: Bytes) -> Result<R, Error>,
-    ) -> Result<R, Error>
+    ) -> Result<impl Buf + Sized, Error>
     where
         T: Serialize,
-        R: DeserializeOwned,
     {
         let mut response = self
             .raw_request_template(url, endpoint, method, body, auth_header)
@@ -108,9 +105,7 @@ impl RequestClient {
 
         let body = response.body_mut();
 
-        let bytes = body.collect().await?.to_bytes();
-
-        return_logic(bytes)
+        Ok(body.collect().await?.aggregate())
     }
 }
 

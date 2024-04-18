@@ -423,24 +423,19 @@ impl LcuClient {
         body: Option<T>,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        request_client
-            .request_template(
-                &self.url,
-                endpoint,
-                method,
-                body,
-                Some(&self.auth_header),
-                |bytes| {
-                    let body = if bytes.is_empty() {
-                        None
-                    } else {
-                        Some(serde_json::from_slice(&bytes)?)
-                    };
+        use hyper::body::Buf;
 
-                    Ok(body)
-                },
-            )
-            .await
+        let buf = request_client
+            .request_template(&self.url, endpoint, method, body, Some(&self.auth_header))
+            .await?;
+
+        let body = if buf.has_remaining() {
+            Some(serde_json::from_reader(buf.reader())?)
+        } else {
+            None
+        };
+
+        Ok(body)
     }
 }
 

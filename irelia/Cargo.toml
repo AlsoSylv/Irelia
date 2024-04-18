@@ -13,7 +13,7 @@ keywords = ["riot", "league", "league-of-legends", "lcu", "riot-games"]
 
 [dependencies]
 # Required across all features
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc", "std"] }
 rustls = { version = "0.22", default-features = false }
 rustls-pemfile = { version = "2.1", default-features = false }
 irelia_encoder = { path = "../encoder", version = "0.1" }

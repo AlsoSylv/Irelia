@@ -214,26 +214,25 @@ impl GameClient {
 
     //noinspection SpellCheckingInspection
     /// Makes a request to a liveclientdata endpoint
-    async fn live_client<R>(
+    async fn live_client<R: DeserializeOwned>(
         &self,
         endpoint: &str,
         summoner: Option<&str>,
         request_client: &RequestClient,
-    ) -> Result<R, Error>
-    where
-        R: DeserializeOwned,
-    {
+    ) -> Result<R, Error> {
+        use hyper::body::Buf;
+
         let endpoint = if let Some(summoner) = summoner {
             format!("/liveclientdata/{endpoint}?summonerName={summoner}")
         } else {
             format!("/liveclientdata/{endpoint}")
         };
 
-        request_client
-            .request_template(URL, &endpoint, "GET", None::<()>, None, |bytes| {
-                Ok(serde_json::from_slice(&bytes)?)
-            })
-            .await
+        let buffer = request_client
+            .request_template(URL, &endpoint, "GET", None::<()>, None)
+            .await?;
+
+        Ok(serde_json::from_reader(buffer.reader())?)
     }
 }
 
