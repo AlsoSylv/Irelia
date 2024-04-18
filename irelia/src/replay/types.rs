@@ -1,3 +1,4 @@
+use crate::in_game::types::{AllPlayer, Events, GameData};
 use crate::replay::types::hidden::KeyFrameValue;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -14,6 +15,14 @@ mod hidden {
     impl KeyFrameValue for ColorValue {}
     impl KeyFrameValue for Vector3f {}
     impl KeyFrameValue for bool {}
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayGameData {
+    all_players: Box<[AllPlayer]>,
+    events: Events,
+    game_data: GameData,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
