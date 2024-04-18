@@ -1,4 +1,7 @@
 //! This is a module for the League replay API, it's still WIP, and documentation is done on a best effort basis
+//! 
+//! Please note, well most `in_game` endpoints will work when using the `replay` API, riot does not support
+//! using the `active_player` endpoints, and as such, they are expected to return errors instead
 pub mod types;
 
 /// The `replay` and `in_game` API use the same URL
