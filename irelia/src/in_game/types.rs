@@ -178,7 +178,7 @@ pub struct ChampionStats {
     attack_speed: f64,
     bonus_armor_penetration_percent: f64,
     bonus_magic_penetration_percent: f64,
-    cooldown_reduction: f64,
+    ability_haste: f64,
     crit_chance: f64,
     crit_damage: f64,
     current_health: f64,
@@ -237,8 +237,8 @@ impl ChampionStats {
         self.bonus_magic_penetration_percent
     }
     #[must_use]
-    pub fn cooldown_reduction(&self) -> f64 {
-        self.cooldown_reduction
+    pub fn ability_haste(&self) -> f64 {
+        self.ability_haste
     }
     #[must_use]
     pub fn crit_chance(&self) -> f64 {
