@@ -25,6 +25,21 @@ pub struct ReplayGameData {
     game_data: GameData,
 }
 
+impl ReplayGameData {
+    #[must_use]
+    pub fn all_players(&self) -> &[AllPlayer] {
+        &self.all_players
+    }
+    #[must_use]
+    pub fn events(&self) -> &Events {
+        &self.events
+    }
+    #[must_use]
+    pub fn game_data(&self) -> &GameData {
+        &self.game_data
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum AVContainer {
