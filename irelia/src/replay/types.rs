@@ -1,7 +1,6 @@
 use crate::in_game::types::{AllPlayer, Events, GameData};
 use crate::replay::types::hidden::KeyFrameValue;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
 pub use serde_derive::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -9,7 +8,7 @@ mod hidden {
     use crate::replay::types::{ColorValue, Vector3f};
 
     /// This is a specific bound, only applied to valid schema types
-    pub trait KeyFrameValue {}
+    pub trait KeyFrameValue: serde::Serialize {}
     impl KeyFrameValue for String {}
     impl KeyFrameValue for f32 {}
     impl KeyFrameValue for ColorValue {}
@@ -40,15 +39,16 @@ impl ReplayGameData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AVContainer {
+    #[default]
     Webm,
     Png,
     PngAndDepth,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 /// Ability Resource
 pub enum AbilityResource {
@@ -66,11 +66,11 @@ pub enum AbilityResource {
     Wind,
     Ammo,
     MoonLight,
-    Other,
     Max,
+    Other,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColorValue {
     /// Red channel value (0-255)
     pub r: f32,
@@ -82,10 +82,11 @@ pub struct ColorValue {
     pub a: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Blending options for interpolating time between keyframes
 pub enum EasingType {
+    #[default]
     Linear,
     Snap,
     SmoothStep,
@@ -123,15 +124,16 @@ pub enum EasingType {
 }
 
 /// Process identifier for this game
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Game {
     #[serde(rename = "processID")]
     pub process_id: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HudCameraMode {
+    #[default]
     Top,
     Fps,
     Tps,
@@ -139,15 +141,15 @@ pub enum HudCameraMode {
     Path,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct KeyFrameT<T: Debug + Serialize + Clone + KeyFrameValue> {
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
     pub time: f32,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
 }
 
-impl<T: Debug + Serialize + Clone + KeyFrameValue + DeserializeOwned> KeyFrameT<T> {
+impl<T: KeyFrameValue + DeserializeOwned> KeyFrameT<T> {
     /// Creates a new generic keyframe with the time and value
     /// Defaults to `EasingType::Linear`
     fn new(time: f32, value: T) -> Self {
@@ -165,7 +167,7 @@ pub type KeyFrameColor = KeyFrameT<ColorValue>;
 pub type KeyFrameFloat = KeyFrameT<f32>;
 pub type KeyFrameVector3 = KeyFrameT<Vector3f>;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Playback state
 pub struct Playback {
     /// Total length of the replay in seconds
@@ -180,7 +182,7 @@ pub struct Playback {
     pub time: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Recording State
 pub struct Recording {
@@ -211,8 +213,7 @@ pub struct Recording {
     pub width: i32,
 }
 
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Render State
 pub struct Render {
@@ -338,7 +339,7 @@ pub struct Render {
     pub sun_direction: Vector3f,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sequence {
     /// Keyframe track for Render.cameraPosition
@@ -592,7 +593,7 @@ impl Sequence {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector3f {
     pub x: f32,
     pub y: f32,
