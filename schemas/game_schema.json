@@ -1,0 +1,1283 @@
+{
+	"components": {
+		"schemas": {
+			"AbilityResource": {
+				"description": "Ability Resource",
+				"enum": [
+					"MANA",
+					"ENERGY",
+					"NONE",
+					"SHIELD",
+					"BATTLEFURY",
+					"DRAGONFURY",
+					"RAGE",
+					"HEAT",
+					"GNARFURY",
+					"FEROCITY",
+					"BLOODWELL",
+					"WIND",
+					"AMMO",
+					"MOONLIGHT",
+					"OTHER",
+					"MAX"
+				],
+				"type": "string"
+			},
+			"BindingAsyncCancelEvent": {
+				"description": "Represents a cancelled asynchronous operation.",
+				"properties": {
+					"asyncToken": {
+						"description": "Asynchronous operation token",
+						"format": "int32",
+						"type": "integer"
+					}
+				},
+				"type": "object"
+			},
+			"BindingAsyncFailureEvent": {
+				"description": "Represents a failed asynchronous operation.",
+				"properties": {
+					"asyncToken": {
+						"description": "Asynchronous operation token",
+						"format": "int32",
+						"type": "integer"
+					},
+					"error": {
+						"description": "Error message",
+						"type": "string"
+					}
+				},
+				"type": "object"
+			},
+			"BindingAsyncState": {
+				"description": "Possible states of an asynchronous operation.",
+				"enum": [
+					"None",
+					"Running",
+					"Cancelling",
+					"Cancelled",
+					"Succeeded",
+					"Failed"
+				],
+				"type": "string"
+			},
+			"BindingCallbackEvent": {
+				"description": "Represents the parameters of a call to a provided callback.",
+				"properties": {
+					"id": {
+						"description": "ID of the callback being invoked",
+						"format": "int32",
+						"type": "integer"
+					},
+					"parameters": {
+						"description": "Callback parameters",
+						"items": {
+							"additionalProperties": true,
+							"type": "object"
+						},
+						"type": "array"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullApiHelp": {
+				"description": "Describes the exposed native API.",
+				"properties": {
+					"events": {
+						"items": {
+							"$ref": "#/components/schemas/BindingFullEventHelp"
+						},
+						"type": "array"
+					},
+					"functions": {
+						"items": {
+							"$ref": "#/components/schemas/BindingFullFunctionHelp"
+						},
+						"type": "array"
+					},
+					"types": {
+						"items": {
+							"$ref": "#/components/schemas/BindingFullTypeHelp"
+						},
+						"type": "array"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullArgumentHelp": {
+				"description": "Describes a function parameter.",
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"optional": {
+						"type": "boolean"
+					},
+					"type": {
+						"$ref": "#/components/schemas/BindingFullTypeIdentifier"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullEnumValueHelp": {
+				"description": "Describes an enumerator.",
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"value": {
+						"format": "int32",
+						"type": "integer"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullEventHelp": {
+				"description": "Describes an event.",
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"nameSpace": {
+						"type": "string"
+					},
+					"tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": {
+						"$ref": "#/components/schemas/BindingFullTypeIdentifier"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullFieldHelp": {
+				"description": "Describes a member of a struct.",
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"offset": {
+						"format": "int32",
+						"type": "integer"
+					},
+					"optional": {
+						"type": "boolean"
+					},
+					"type": {
+						"$ref": "#/components/schemas/BindingFullTypeIdentifier"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullFunctionHelp": {
+				"description": "Describes a function.",
+				"properties": {
+					"arguments": {
+						"items": {
+							"$ref": "#/components/schemas/BindingFullArgumentHelp"
+						},
+						"type": "array"
+					},
+					"async": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"help": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"nameSpace": {
+						"type": "string"
+					},
+					"returns": {
+						"$ref": "#/components/schemas/BindingFullTypeIdentifier"
+					},
+					"tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"threadSafe": {
+						"type": "boolean"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullTypeHelp": {
+				"description": "Describes a struct or enum type.",
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"fields": {
+						"items": {
+							"$ref": "#/components/schemas/BindingFullFieldHelp"
+						},
+						"type": "array"
+					},
+					"name": {
+						"type": "string"
+					},
+					"nameSpace": {
+						"type": "string"
+					},
+					"size": {
+						"format": "int32",
+						"type": "integer"
+					},
+					"tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"values": {
+						"items": {
+							"$ref": "#/components/schemas/BindingFullEnumValueHelp"
+						},
+						"type": "array"
+					}
+				},
+				"type": "object"
+			},
+			"BindingFullTypeIdentifier": {
+				"description": "Describes the type of a value.",
+				"properties": {
+					"elementType": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
+					}
+				},
+				"type": "object"
+			},
+			"BindingGenericAsyncEvent": {
+				"description": "Represents generic data for an asynchronous event.",
+				"properties": {
+					"asyncToken": {
+						"description": "Asynchronous operation token",
+						"format": "int32",
+						"type": "integer"
+					},
+					"data": {
+						"additionalProperties": true,
+						"description": "Event data",
+						"type": "object"
+					}
+				},
+				"type": "object"
+			},
+			"BindingGenericEvent": {
+				"description": "Represents generic data for an event.",
+				"properties": {
+					"data": {
+						"additionalProperties": true,
+						"description": "Event data",
+						"type": "object"
+					}
+				},
+				"type": "object"
+			},
+			"BindingHelpFormat": {
+				"description": "Help format for binding functions and types.",
+				"enum": [
+					"Full",
+					"Epytext"
+				],
+				"type": "string"
+			},
+			"Color": {
+				"description": "Color",
+				"properties": {
+					"a": {
+						"type": "integer"
+					},
+					"b": {
+						"type": "integer"
+					},
+					"g": {
+						"type": "integer"
+					},
+					"r": {
+						"type": "integer"
+					}
+				},
+				"type": "object"
+			},
+			"RemotingHelpFormat": {
+				"description": "Help format for remoting functions and types.",
+				"enum": [
+					"Full",
+					"Epytext",
+					"Brief",
+					"Console"
+				],
+				"type": "string"
+			},
+			"RemotingPrivilege": {
+				"description": "Well-known privilege levels for bindable functions.",
+				"enum": [
+					"None",
+					"User",
+					"Admin",
+					"Local"
+				],
+				"type": "string"
+			},
+			"RemotingSerializedFormat": {
+				"description": "Serialization format for remoting requests and results.",
+				"enum": [
+					"JSON",
+					"YAML",
+					"MsgPack"
+				],
+				"type": "string"
+			},
+			"TeamID": {
+				"description": "Team identification",
+				"enum": [
+					"ALL",
+					"UNKNOWN",
+					"ORDER",
+					"CHAOS",
+					"NEUTRAL"
+				],
+				"type": "string"
+			},
+			"Vector2f": {
+				"description": "2D vector",
+				"properties": {
+					"x": {
+						"format": "float",
+						"type": "number"
+					},
+					"y": {
+						"format": "float",
+						"type": "number"
+					}
+				},
+				"type": "object"
+			},
+			"Vector3f": {
+				"description": "3D vector",
+				"properties": {
+					"x": {
+						"format": "float",
+						"type": "number"
+					},
+					"y": {
+						"format": "float",
+						"type": "number"
+					},
+					"z": {
+						"format": "float",
+						"type": "number"
+					}
+				},
+				"type": "object"
+			},
+			"Vector4f": {
+				"description": "4D vector",
+				"properties": {
+					"w": {
+						"format": "float",
+						"type": "number"
+					},
+					"x": {
+						"format": "float",
+						"type": "number"
+					},
+					"y": {
+						"format": "float",
+						"type": "number"
+					},
+					"z": {
+						"format": "float",
+						"type": "number"
+					}
+				},
+				"type": "object"
+			}
+		}
+	},
+	"info": {
+		"description": "League of Legends Game Client",
+		"title": "LoLClient",
+		"version": "1.0.0"
+	},
+	"openapi": "3.0.0",
+	"paths": {
+		"/AsyncDelete": {
+			"post": {
+				"operationId": "AsyncDelete",
+				"parameters": [
+					{
+						"description": "ID of the asynchronous operation to remove",
+						"in": "query",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Cancels the asynchronous operation or removes its completion status.",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/AsyncResult": {
+			"post": {
+				"operationId": "AsyncResult",
+				"parameters": [
+					{
+						"description": "ID of the asynchronous operation to check",
+						"in": "query",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves the result of a completed asynchronous operation.",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/AsyncStatus": {
+			"post": {
+				"operationId": "AsyncStatus",
+				"parameters": [
+					{
+						"description": "ID of the asynchronous operation to check",
+						"in": "query",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves details on the current state of an asynchronous operation.",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/Cancel": {
+			"post": {
+				"operationId": "Cancel",
+				"parameters": [
+					{
+						"description": "Operation to cancel",
+						"in": "query",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Attempts to cancel an asynchronous operation",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/Exit": {
+			"post": {
+				"operationId": "Exit",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Closes the connection.",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/Help": {
+			"post": {
+				"description": "With no arguments, returns a list of all available functions and types along with a short description. If a function or type is specified, returns detailed information about it.",
+				"operationId": "Help",
+				"parameters": [
+					{
+						"description": "Name of the function or type to describe",
+						"in": "query",
+						"name": "target",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"description": "Format for returned information",
+						"in": "query",
+						"name": "format",
+						"required": false,
+						"schema": {
+							"enum": [
+								"Full",
+								"Epytext",
+								"Brief",
+								"Console"
+							],
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Returns information on available functions and types",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/Subscribe": {
+			"post": {
+				"operationId": "Subscribe",
+				"parameters": [
+					{
+						"description": "Name of the event to subscribe to",
+						"in": "query",
+						"name": "eventName",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}					},
+					{
+						"description": "Desired format to receive events in. If unspecified, events will be sent in the active result format at the time.",
+						"in": "query",
+						"name": "format",
+						"required": false,
+						"schema": {
+							"enum": [
+								"JSON",
+								"YAML",
+								"MsgPack"
+							],
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Subscribes to a given event",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/Unsubscribe": {
+			"post": {
+				"operationId": "Unsubscribe",
+				"parameters": [
+					{
+						"description": "Name of the event to unsubscribe from",
+						"in": "query",
+						"name": "eventName",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Unsubscribes from a given event",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/async/v1/result/{asyncToken}": {
+			"get": {
+				"operationId": "HttpAsyncResult",
+				"parameters": [
+					{
+						"description": "ID of the asynchronous operation to check",
+						"in": "path",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves the result of a completed asynchronous operation.",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/async/v1/status/{asyncToken}": {
+			"delete": {
+				"operationId": "HttpAsyncDelete",
+				"parameters": [
+					{
+						"description": "ID of the asynchronous operation to remove",
+						"in": "path",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Cancels the asynchronous operation or removes its completion status.",
+				"tags": [
+					"builtin"
+				]
+			},
+			"get": {
+				"operationId": "HttpAsyncStatus",
+				"parameters": [
+					{
+						"description": "ID of the asynchronous operation to check",
+						"in": "path",
+						"name": "asyncToken",
+						"required": true,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves details on the current state of an asynchronous operation.",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/liveclientdata/activeplayer": {
+			"get": {
+				"operationId": "GetLiveclientdataActiveplayer",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Get all data about the active player",
+				"tags": [
+					"champions",
+					"activePlayer"
+				]
+			}
+		},
+		"/liveclientdata/activeplayerabilities": {
+			"get": {
+				"operationId": "GetLiveclientdataActiveplayerabilities",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Get Abilities for the active player",
+				"tags": [
+					"champions",
+					"abilities",
+					"activePlayer"
+				]
+			}
+		},
+		"/liveclientdata/activeplayername": {
+			"get": {
+				"operationId": "GetLiveclientdataActiveplayername",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Returns the player name",
+				"tags": [
+					"activePlayer"
+				]
+			}
+		},
+		"/liveclientdata/activeplayerrunes": {
+			"get": {
+				"operationId": "GetLiveclientdataActiveplayerrunes",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieve the full list of runes for the active player",
+				"tags": [
+					"runes",
+					"activePlayer"
+				]
+			}
+		},
+		"/liveclientdata/allgamedata": {
+			"get": {
+				"operationId": "GetLiveclientdataAllgamedata",
+				"parameters": [
+					{
+						"description": "ID of the next event you expect to see",
+						"in": "query",
+						"name": "eventID",
+						"required": false,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Get all available data",
+				"tags": [
+					"all"
+				]
+			}
+		},
+		"/liveclientdata/eventdata": {
+			"get": {
+				"operationId": "GetLiveclientdataEventdata",
+				"parameters": [
+					{
+						"description": "ID of the next event you expect to see",
+						"in": "query",
+						"name": "eventID",
+						"required": false,
+						"schema": {
+							"format": "int32",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Get a list of events that have occurred in the game",
+				"tags": [
+					"champions",
+					"events"
+				]
+			}
+		},
+		"/liveclientdata/gamestats": {
+			"get": {
+				"operationId": "GetLiveclientdataGamestats",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Basic data about the game",
+				"tags": [
+					"game"
+				]
+			}
+		},
+		"/liveclientdata/playeritems": {
+			"get": {
+				"operationId": "GetLiveclientdataPlayeritems",
+				"parameters": [
+					{
+						"description": "Summoner name of player",
+						"in": "query",
+						"name": "summonerName",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieve the list of items for the player",
+				"tags": [
+					"items",
+					"allPlayers"
+				]
+			}
+		},
+		"/liveclientdata/playerlist": {
+			"get": {
+				"operationId": "GetLiveclientdataPlayerlist",
+				"parameters": [
+					{
+						"description": "Heroes team ID. Optional, returns all players on all teams if null. ",
+						"in": "query",
+						"name": "teamID",
+						"required": false,
+						"schema": {
+							"enum": [
+								"ALL",
+								"UNKNOWN",
+								"ORDER",
+								"CHAOS",
+								"NEUTRAL"
+							],
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieve the list of heroes in the game and their stats",
+				"tags": [
+					"champions",
+					"units",
+					"allPlayers"
+				]
+			}
+		},
+		"/liveclientdata/playermainrunes": {
+			"get": {
+				"operationId": "GetLiveclientdataPlayermainrunes",
+				"parameters": [
+					{
+						"description": "Summoner name of player",
+						"in": "query",
+						"name": "summonerName",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieve the basic runes of any player",
+				"tags": [
+					"allPlayers",
+					"runes"
+				]
+			}
+		},
+		"/liveclientdata/playerscores": {
+			"get": {
+				"operationId": "GetLiveclientdataPlayerscores",
+				"parameters": [
+					{
+						"description": "Summoner name of player",
+						"in": "query",
+						"name": "summonerName",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieve the list of the current scores for the player",
+				"tags": [
+					"allPlayers",
+					"scores"
+				]
+			}
+		},
+		"/liveclientdata/playersummonerspells": {
+			"get": {
+				"operationId": "GetLiveclientdataPlayersummonerspells",
+				"parameters": [
+					{
+						"description": "Summoner name of player",
+						"in": "query",
+						"name": "summonerName",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieve the list of the summoner spells for the player",
+				"tags": [
+					"allPlayers"
+				]
+			}
+		},
+		"/swagger/v1/api-docs": {
+			"get": {
+				"operationId": "HttpApiDocsV1",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves the API documentation resource listing",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/swagger/v1/api-docs/{api}": {
+			"get": {
+				"operationId": "HttpApiDeclarationV1",
+				"parameters": [
+					{
+						"description": "API to get a declaration for",
+						"in": "path",
+						"name": "api",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves the API declaration for a supported API",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/swagger/v2/swagger.json": {
+			"get": {
+				"operationId": "HttpApiDocsV2",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves the API documentation",
+				"tags": [
+					"builtin"
+				]
+			}
+		},
+		"/swagger/v3/openapi.json": {
+			"get": {
+				"operationId": "HttpApiDocsV3",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": true,
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful response"
+					}
+				},
+				"summary": "Retrieves the API documentation",
+				"tags": [
+					"builtin"
+				]
+			}
+		}
+	}
+}

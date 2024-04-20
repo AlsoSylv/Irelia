@@ -316,17 +316,17 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running
-    pub async fn head<S>(
+    pub async fn head(
         &self,
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<hyper::Response<hyper::body::Incoming>, Error> {
         request_client
-            .raw_request_template::<()>(
+            .raw_request_template(
                 &self.url,
                 endpoint.as_ref(),
                 "HEAD",
-                None,
+                None::<()>,
                 Some(&self.auth_header),
             )
             .await
@@ -336,17 +336,13 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn patch<T, R>(
+    pub async fn patch<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str>,
         body: Option<T>,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error>
-    where
-        T: Serialize,
-        R: DeserializeOwned,
-    {
-        self.lcu_request(endpoint.as_ref(), "PATCH", body, request_client)
+    ) -> Result<Option<R>, Error> {
+        self.lcu_request(endpoint.as_ref(), "PATCH", Some(body), request_client)
             .await
     }
 
@@ -354,17 +350,13 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn post<T, R>(
+    pub async fn post<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str>,
         body: Option<T>,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error>
-    where
-        T: Serialize,
-        R: DeserializeOwned,
-    {
-        self.lcu_request(endpoint.as_ref(), "POST", body, request_client)
+    ) -> Result<Option<R>, Error> {
+        self.lcu_request(endpoint.as_ref(), "POST", Some(body), request_client)
             .await
     }
 
@@ -372,17 +364,13 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn put<T, R>(
+    pub async fn put<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str>,
         body: Option<T>,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error>
-    where
-        T: Serialize,
-        R: DeserializeOwned,
-    {
-        self.lcu_request(endpoint.as_ref(), "PUT", body, request_client)
+    ) -> Result<Option<R>, Error> {
+        self.lcu_request(endpoint.as_ref(), "PUT", Some(body), request_client)
             .await
     }
 

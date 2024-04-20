@@ -475,7 +475,8 @@ impl Sequence {
         }
     }
 
-    pub fn from_render_time(name: &impl ToString, render: &Render, current_time: f32) -> Self {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn from_render_time(name: impl ToString, render: &Render, current_time: f32) -> Self {
         Self {
             camera_position: Some(vec![KeyFrameVector3::new(
                 current_time,
@@ -576,7 +577,7 @@ impl Sequence {
     }
 
     pub fn from_render_recording(
-        name: &impl ToString,
+        name: impl ToString,
         render: &Render,
         recording: &Recording,
     ) -> Self {
@@ -588,7 +589,7 @@ impl Sequence {
         sequence
     }
 
-    pub fn from_render(name: &impl ToString, render: &Render) -> Self {
+    pub fn from_render(name: impl ToString, render: &Render) -> Self {
         Self::from_render_time(name, render, 0.0)
     }
 }
