@@ -24,6 +24,7 @@ use crate::{
     utils::{process_info::get_running_client, setup_tls::setup_tls_connector},
     Error,
 };
+use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 
 /// Different LCU websocket request types
 #[derive(PartialEq, Clone)]
@@ -104,7 +105,7 @@ impl LCUWebSocket {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
         let connector = Connector::Rustls(tls.clone());
-        let (url, auth_header) = get_running_client(false)?;
+        let (url, auth_header) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false)?;
         let str_req = format!("wss://{url}");
         let mut request = str_req
             .as_str()

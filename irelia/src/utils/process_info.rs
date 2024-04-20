@@ -44,7 +44,7 @@ pub(crate) const ENCODER: Encoder = Encoder::new();
 /// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
 ///
-pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Error> {
+pub fn get_running_client(client_process_name: &str, game_process_name: &str, force_lock_file: bool) -> Result<(String, String), Error> {
     // If we always read the lock file, we never need to get the command line of the process
     let cmd = if force_lock_file {
         sysinfo::UpdateKind::Never
@@ -77,11 +77,11 @@ pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Err
             let name = process.name();
             // If it matches the name of the client,
             // set the flag, and return it
-            if name == CLIENT_PROCESS_NAME {
+            if name == client_process_name {
                 client = true;
                 client
             } else {
-                name == GAME_PROCESS_NAME
+                name == game_process_name
             }
         })
         .ok_or_else(|| Error::LCUProcessNotRunning)?;
@@ -147,12 +147,12 @@ pub fn get_running_client(force_lock_file: bool) -> Result<(String, String), Err
 
 #[cfg(test)]
 mod tests {
-    use super::get_running_client;
+    use super::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, get_running_client};
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
     #[test]
     fn test_process_info() {
-        let (port, pass) = get_running_client(false).unwrap();
+        let (port, pass) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false).unwrap();
         println!("{port} {pass}");
     }
 }

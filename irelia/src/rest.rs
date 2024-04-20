@@ -2,12 +2,15 @@
 
 pub mod types;
 
+use std::borrow::Cow;
 use http_body_util::BodyExt;
 use hyper::Uri;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::rest::request_builder::RequestBuilder;
 use crate::{utils::process_info::get_running_client, Error, RequestClient};
+use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
@@ -224,7 +227,7 @@ impl LcuClient {
     /// the client being down, the lock file being unable to be opened, or the LCU
     /// not running at all
     pub fn new(force_lock_file: bool) -> Result<Self, Error> {
-        let (port, pass) = get_running_client(force_lock_file)?;
+        let (port, pass) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
 
         Ok(LcuClient {
             url: port,
@@ -251,7 +254,7 @@ impl LcuClient {
     /// This will return an error if the lock file is inaccessible, or if
     /// the LCU is not running
     pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
-        let (port, pass) = get_running_client(force_lock_file)?;
+        let (port, pass) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
         self.url = port;
         self.auth_header = pass;
         Ok(())
@@ -399,6 +402,28 @@ impl LcuClient {
         serde_json::from_slice(&body).map_err(Error::SerdeJsonError)
     }
 
+    /// Makes a `Request` to the LCU client, using the details entered
+    ///
+    /// # Errors
+    /// This will return an error if:
+    /// - The body is not valid JSON
+    /// - If the provided return type is invalid
+    /// - It is unable to connect to the LCU
+    /// - The LCU does not have the endpoint specified  
+    pub async fn request<T: Serialize, R: DeserializeOwned>(
+        &self,
+        request: Request<'_, T>,
+        request_client: &RequestClient,
+    ) -> Result<Option<R>, Error> {
+        self.lcu_request(
+            request.endpoint.as_ref(),
+            request.method.as_str(),
+            request.body,
+            request_client,
+        )
+        .await
+    }
+
     /// Makes a request to the LCU with an unspecified method, valid options being
     /// "PUT", "GET", "POST", "HEAD", "DELETE"
     ///
@@ -427,9 +452,101 @@ impl LcuClient {
     }
 }
 
+mod request_builder {
+    use crate::rest::Method;
+    use serde::Serialize;
+    use std::borrow::Cow;
+
+    pub struct RequestBuilder<'a, T> {
+        pub(super) method: Option<Method>,
+        pub(super) endpoint: Option<Cow<'a, str>>,
+        pub(super) body: Option<T>,
+    }
+
+    impl<'a, T: Serialize> RequestBuilder<'a, T> {
+        pub fn endpoint(mut self, endpoint: impl Into<Cow<'a, str>>) -> Self {
+            self.endpoint = Some(endpoint.into());
+
+            self
+        }
+
+        pub fn body(mut self, body: T) -> Self {
+            self.body = Some(body);
+
+            self
+        }
+
+        pub fn method(mut self, method: Method) -> Self {
+            self.method = Some(method);
+
+            self
+        }
+
+        pub fn build(self) -> super::Request<'a, T> {
+            super::Request {
+                method: self.method.expect("Must enter a valid method"),
+                body: self.body,
+                endpoint: self.endpoint.expect("Must enter a valid endpoint here"),
+            }
+        }
+    }
+}
+
+pub enum Method {
+    Delete,
+    Get,
+    Head,
+    Patch,
+    Post,
+    Put,
+}
+
+impl Method {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Method::Delete => "DELETE",
+            Method::Get => "GET",
+            Method::Head => "HEAD",
+            Method::Patch => "PATCH",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+        }
+    }
+}
+
+pub struct Request<'a, T> {
+    method: Method,
+    endpoint: Cow<'a, str>,
+    body: Option<T>,
+}
+
+impl<'a> Request<'a, ()> {
+    #[must_use]
+    pub fn new(endpoint: impl Into<Cow<'a, str>>, method: Method) -> Self {
+        Self {
+            method,
+            body: None::<()>,
+            endpoint: endpoint.into(),
+        }
+    }
+}
+
+impl<'a, T: Serialize> Request<'a, T> {
+    #[must_use]
+    pub fn builder() -> RequestBuilder<'a, T> {
+        RequestBuilder {
+            method: None,
+            endpoint: None,
+            body: None,
+        }
+    }
+}
+
 #[cfg(feature = "batched")]
 #[cfg(test)]
 mod tests {
+    use crate::rest::Method;
     use crate::{rest::LcuClient, RequestClient};
 
     #[tokio::test]
@@ -488,13 +605,16 @@ mod tests {
 
         println!("{result:?}");
 
+        let request = super::Request::builder()
+            .method(Method::Post)
+            .endpoint(format!("/lol-item-sets/v1/item-sets/{id}/sets"))
+            .body(&json)
+            .build();
+
         let a = lcu_client
-            .put::<_, serde_json::Value>(
-                format!("/lol-item-sets/v1/item-sets/{id}/sets"),
-                Some(json),
-                &client,
-            )
+            .request::<_, serde_json::Value>(request, &client)
             .await;
+
         println!("{a:?}");
     }
 
