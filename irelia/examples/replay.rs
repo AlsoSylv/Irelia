@@ -1,7 +1,6 @@
 extern crate irelia;
 extern crate tokio;
 
-use irelia::replay::types::Sequence;
 use irelia::replay::ReplayClient;
 use irelia::RequestClient;
 
@@ -23,14 +22,4 @@ async fn main() {
     let renderer = replay_client.post_render(renderer, &request_client).await;
 
     println!("{renderer:?}");
-
-    let sequence = Sequence::default();
-
-    let sequence = replay_client.post_sequence(sequence, &request_client).await;
-
-    println!("{sequence:?}");
-
-    let sequence = replay_client.get_sequence(&request_client).await;
-
-    println!("{sequence:?}");
 }

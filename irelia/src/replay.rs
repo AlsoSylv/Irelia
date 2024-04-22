@@ -1,3 +1,7 @@
+//! This is a module for the League replay API, it's still WIP, and documentation is done on a best effort basis
+//!
+//! Please note, well most `in_game` endpoints will work when using the `replay` API, riot does not support
+//! using the `active_player` endpoints, and as such, they are expected to return errors instead
 pub mod types;
 
 /// The `replay` and `in_game` API use the same URL
@@ -25,6 +29,24 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn game(&self, request_client: &RequestClient) -> Result<types::Game, Error> {
         self.replay("game", "GET", None::<()>, request_client).await
+    }
+
+    /// Get all available data.
+    ///
+    /// A sample response can be found [here](https://static.developer.riotgames.com/docs/lol/liveclientdata_sample.json).
+    /// The key difference is that there is no active player when using the replay API, so no active player data can be returned
+    ///
+    /// # Errors
+    /// This will return an error if the game API is not running
+    pub async fn all_game_data(
+        &self,
+        request_client: &RequestClient,
+    ) -> Result<types::ReplayGameData, Error> {
+        use hyper::body::Buf;
+        let buffer = request_client
+            .request_template(URL, "/liveclientdata/allgamedata", "GET", None::<()>, None)
+            .await?;
+        Ok(serde_json::from_reader(buffer.reader())?)
     }
 
     /// Information about particle visibility.
@@ -157,12 +179,14 @@ impl ReplayClient {
     where
         R: DeserializeOwned,
     {
+        use hyper::body::Buf;
+
         let endpoint = format!("/replay/{endpoint}");
 
-        request_client
-            .request_template(URL, &endpoint, method, body, None, |bytes| {
-                serde_json::from_slice(&bytes).map_err(Error::SerdeJsonError)
-            })
-            .await
+        let buffer = request_client
+            .request_template(URL, &endpoint, method, body, None)
+            .await?;
+
+        Ok(serde_json::from_reader(buffer.reader())?)
     }
 }

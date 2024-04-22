@@ -4,6 +4,8 @@
 
 pub mod types;
 
+use hyper::body::Incoming;
+use hyper::Response;
 use serde::de::DeserializeOwned;
 
 use crate::{Error, RequestClient};
@@ -32,6 +34,24 @@ impl GameClient {
     /// Returns the url, which is currently static
     pub fn url(&self) -> &str {
         URL
+    }
+
+    /// This makes a head request to the in game API
+    ///
+    /// Please note, when using invalid methods (such as `HEAD`) with an Operation ID
+    /// The API will always return 200 with an empty body, at least in my testing
+    /// This can be used to see if the API is alive and if you're outside the loading screen
+    ///
+    /// # Errors
+    /// This will return an error if it is unable to connect to the server
+    pub async fn head(
+        &self,
+        endpoint: &str,
+        request_client: &RequestClient,
+    ) -> Result<Response<Incoming>, Error> {
+        request_client
+            .raw_request_template(URL, endpoint, "HEAD", None::<()>, None)
+            .await
     }
 
     //noinspection SpellCheckingInspection
