@@ -11,7 +11,7 @@ use futures_util::{
 use rustls::ClientConfig;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_derive::{Deserialize};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{
     net::TcpStream,
@@ -32,7 +32,7 @@ use crate::{
 
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
-    ws_sender: UnboundedSender<(RequestType, EventType)>,
+    ws_sender: UnboundedSender<(RequestType, EventKind)>,
     handle: JoinHandle<()>,
     url: String,
     auth_header: String,
@@ -44,8 +44,16 @@ pub enum Flow {
     Continue,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Event(pub RequestType, pub EventType, pub Value);
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Event(pub RequestType, pub EventKind, pub Value);
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventData {
+    pub data: Value,
+    pub event_type: String,
+    pub uri: String,
+}
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
@@ -74,7 +82,7 @@ impl LCUWebSocket {
 
         let (stream, _) = connect_async_tls_with_config(request, None, false, connector).await?;
 
-        let (ws_sender, mut ws_receiver) = mpsc::unbounded_channel::<(RequestType, EventType)>();
+        let (ws_sender, mut ws_receiver) = mpsc::unbounded_channel::<(RequestType, EventKind)>();
 
         let handle = tokio::spawn(async move {
             let (mut write, mut read) = stream.split();
@@ -95,7 +103,7 @@ impl LCUWebSocket {
 
                 if let Some(Ok(message)) = read.next().await {
                     let data = message.into_data();
-                    let maybe_json = serde_json::from_slice::<Event>(&data).map_err(Error::from);
+                    let maybe_json = serde_json::from_slice(&data).map_err(Error::from);
                     let mut c = f(maybe_json);
                     if !budget_recursive(&mut c, &tls, &f, &mut write, &mut read).await {
                         break;
@@ -125,7 +133,7 @@ impl LCUWebSocket {
     }
 
     /// Subscribe to a new API event
-    pub fn subscribe(&mut self, endpoint: EventType) {
+    pub fn subscribe(&mut self, endpoint: EventKind) {
         self.request(RequestType::Subscribe, endpoint);
     }
 
@@ -133,7 +141,7 @@ impl LCUWebSocket {
     ///
     /// Note: Just because you unsubscribe doesn't mean
     /// You will immediately stop receiving these events
-    pub fn unsubscribe(&mut self, endpoint: EventType) {
+    pub fn unsubscribe(&mut self, endpoint: EventKind) {
         self.request(RequestType::Unsubscribe, endpoint);
     }
 
@@ -149,7 +157,7 @@ impl LCUWebSocket {
 
     /// Allows you to make a generic
     /// request to the websocket socket
-    pub fn request(&mut self, code: RequestType, endpoint: EventType) {
+    pub fn request(&mut self, code: RequestType, endpoint: EventKind) {
         let _ = &self.ws_sender.send((code, endpoint));
     }
 }
@@ -183,7 +191,7 @@ async fn reconnect(
     write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> Result<(), Error> {
-    let (url, auth) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false)?;
+    let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
     let str_req = format!("wss://{url}");
 
     let auth_header = HeaderValue::from_str(&auth).unwrap();
@@ -200,7 +208,7 @@ async fn reconnect(
 
 
 /// Different LCU websocket request types
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RequestType {
     Welcome = 0,
     Prefix = 1,
@@ -262,10 +270,10 @@ impl Serialize for RequestType {
     }
 }
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 /// Different event types that can be passed to the
 /// subscribe and unsubscribe methods.
-pub enum EventType {
+pub enum EventKind {
     OnJsonApiEvent,
     OnLcdsEvent,
     OnLog,
@@ -277,7 +285,7 @@ pub enum EventType {
     OnLcdsEventCallback(String),
 }
 
-impl<'de> Deserialize<'de> for EventType {
+impl<'de> Deserialize<'de> for EventKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
@@ -285,7 +293,7 @@ impl<'de> Deserialize<'de> for EventType {
         struct StringVisitor;
 
         impl<'de> Visitor<'de> for StringVisitor {
-            type Value = EventType;
+            type Value = EventKind;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 formatter.write_str("Expecting an LCU Event")
@@ -296,17 +304,17 @@ impl<'de> Deserialize<'de> for EventType {
                     E: serde::de::Error,
             {
                 if let Some((event, callback)) = v.split_once('_') {
-                    match EventType::from_str(event) {
-                        EventType::OnJsonApiEvent => {
-                            Ok(EventType::OnJsonApiEventCallback(callback.to_string()))
+                    match EventKind::from_str(event) {
+                        EventKind::OnJsonApiEvent => {
+                            Ok(EventKind::OnJsonApiEventCallback(callback.to_string()))
                         }
-                        EventType::OnLcdsEvent => {
-                            Ok(EventType::OnLcdsEventCallback(callback.to_string()))
+                        EventKind::OnLcdsEvent => {
+                            Ok(EventKind::OnLcdsEventCallback(callback.to_string()))
                         }
                         _ => unreachable!(),
                     }
                 } else {
-                    Ok(EventType::from_str(v))
+                    Ok(EventKind::from_str(v))
                 }
             }
         }
@@ -315,7 +323,7 @@ impl<'de> Deserialize<'de> for EventType {
     }
 }
 
-impl Serialize for EventType {
+impl Serialize for EventKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -324,34 +332,34 @@ impl Serialize for EventType {
     }
 }
 
-impl EventType {
+impl EventKind {
     fn to_string(&self) -> Cow<'static, str> {
         match self {
-            EventType::OnJsonApiEvent => "OnJsonApiEvent".into(),
-            EventType::OnLcdsEvent => "OnLcdsEvent".into(),
-            EventType::OnLog => "OnLog".into(),
-            EventType::OnRegionLocaleChanged => "OnRegionLocaleChanged".into(),
-            EventType::OnServiceProxyAsyncEvent => "OnServiceProxyAsyncEvent".into(),
-            EventType::OnServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
-            EventType::OnServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
-            EventType::OnJsonApiEventCallback(callback) => {
+            EventKind::OnJsonApiEvent => "OnJsonApiEvent".into(),
+            EventKind::OnLcdsEvent => "OnLcdsEvent".into(),
+            EventKind::OnLog => "OnLog".into(),
+            EventKind::OnRegionLocaleChanged => "OnRegionLocaleChanged".into(),
+            EventKind::OnServiceProxyAsyncEvent => "OnServiceProxyAsyncEvent".into(),
+            EventKind::OnServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
+            EventKind::OnServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
+            EventKind::OnJsonApiEventCallback(callback) => {
                 format!("OnJsonApiEvent{}", callback.replace('/', "_")).into()
             }
-            EventType::OnLcdsEventCallback(callback) => {
+            EventKind::OnLcdsEventCallback(callback) => {
                 format!("OnLcdsEvent{}", callback.replace('/', "_")).into()
             }
         }
     }
 
-    fn from_str(event: &str) -> EventType {
+    fn from_str(event: &str) -> EventKind {
         match event {
-            "OnJsonApiEvent" => EventType::OnJsonApiEvent,
-            "OnLcdsEvent" => EventType::OnLcdsEvent,
-            "OnLog" => EventType::OnLog,
-            "OnRegionLocaleChanged" => EventType::OnRegionLocaleChanged,
-            "OnServiceProxyAsyncEvent" => EventType::OnServiceProxyAsyncEvent,
-            "OnServiceProxyMethodEvent" => EventType::OnServiceProxyMethodEvent,
-            "OnServiceProxyUuidEvent" => EventType::OnServiceProxyUuidEvent,
+            "OnJsonApiEvent" => EventKind::OnJsonApiEvent,
+            "OnLcdsEvent" => EventKind::OnLcdsEvent,
+            "OnLog" => EventKind::OnLog,
+            "OnRegionLocaleChanged" => EventKind::OnRegionLocaleChanged,
+            "OnServiceProxyAsyncEvent" => EventKind::OnServiceProxyAsyncEvent,
+            "OnServiceProxyMethodEvent" => EventKind::OnServiceProxyMethodEvent,
+            "OnServiceProxyUuidEvent" => EventKind::OnServiceProxyUuidEvent,
             event => unreachable!("{event}"),
         }
     }
@@ -372,16 +380,20 @@ mod test {
         })
         .await
         .unwrap();
-        ws_client.subscribe(crate::ws::EventType::OnJsonApiEvent);
+        ws_client.subscribe(crate::ws::EventKind::OnJsonApiEvent);
 
         while !ws_client.is_finished() {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
-    
+
     #[test]
     fn test_deserialize() {
-        let json = json!([5, "OnJsonApiEvent", {}]);
+        let json = json!([5, "OnJsonApiEvent", {
+            "data": {},
+            "eventType": "Create",
+            "uri": "/Example/Uri"
+        }]);
         let event: Event = serde_json::from_value(json).unwrap();
         println!("{event:?}");
     }
