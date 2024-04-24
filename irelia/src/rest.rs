@@ -228,7 +228,7 @@ impl LcuClient {
     /// not running at all
     pub fn new(force_lock_file: bool) -> Result<Self, Error> {
         let (port, pass) =
-            get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
+            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
 
         Ok(LcuClient {
             url: port,
@@ -256,7 +256,7 @@ impl LcuClient {
     /// the LCU is not running
     pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
         let (port, pass) =
-            get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
+            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
         self.url = port;
         self.auth_header = pass;
         Ok(())

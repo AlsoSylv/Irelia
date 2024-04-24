@@ -63,7 +63,7 @@ impl LCUWebSocket {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
         let connector = Some(Connector::Rustls(tls.clone()));
-        let (url, auth) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false)?;
+        let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
         let str_req = format!("wss://{url}");
 
         let auth_header = HeaderValue::from_str(&auth).unwrap();
@@ -93,14 +93,20 @@ impl LCUWebSocket {
                     };
                 };
 
-                if let Some(Ok(data)) = read.next().await {
-                    let data = data.into_data();
-                    let maybe_json = serde_json::from_slice::<Event>(&data).map_err(Error::from);
-                    let mut c = f(maybe_json);
-                    if !budget_recursive(&mut c, &tls, &f, &mut write, &mut read).await {
-                        break;
-                    };
-                };
+                if let Some(message) = read.next().await {
+                    if let Ok(data) = message {
+                        let data = data.into_data();
+                        let maybe_json = serde_json::from_slice::<Event>(&data).map_err(Error::from);
+                        let mut c = f(maybe_json);
+                        if !budget_recursive(&mut c, &tls, &f, &mut write, &mut read).await {
+                            break;
+                        };
+                    } else {
+                        println!("{message:?}");
+                    }
+                } else {
+                    println!("No messages");
+                }
             }
         });
 
