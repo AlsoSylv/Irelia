@@ -93,19 +93,13 @@ impl LCUWebSocket {
                     };
                 };
 
-                if let Some(message) = read.next().await {
-                    if let Ok(data) = message {
-                        let data = data.into_data();
-                        let maybe_json = serde_json::from_slice::<Event>(&data).map_err(Error::from);
-                        let mut c = f(maybe_json);
-                        if !budget_recursive(&mut c, &tls, &f, &mut write, &mut read).await {
-                            break;
-                        };
-                    } else {
-                        println!("{message:?}");
-                    }
-                } else {
-                    println!("No messages");
+                if let Some(Ok(message)) = read.next().await {
+                    let data = message.into_data();
+                    let maybe_json = serde_json::from_slice::<Event>(&data).map_err(Error::from);
+                    let mut c = f(maybe_json);
+                    if !budget_recursive(&mut c, &tls, &f, &mut write, &mut read).await {
+                        break;
+                    };
                 }
             }
         });
@@ -230,6 +224,11 @@ impl<'de> Deserialize<'de> for RequestType {
                 formatter.write_str("A u8, which maps to a request type")
             }
 
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> where E: serde::de::Error {
+                let v = v.try_into().expect("Only numbers 0-8 are valid");
+                self.visit_u8(v)
+            }
+
             fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E> where E: serde::de::Error {
                 Ok(
                     match v {
@@ -242,9 +241,14 @@ impl<'de> Deserialize<'de> for RequestType {
                         6 => RequestType::Unsubscribe,
                         7 => RequestType::Publish,
                         8 => RequestType::Event,
-                        _ => unreachable!()
+                        _ => unreachable!("Only numbers 0-8 are valid")
                     }
                 )
+            }
+
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> where E: serde::de::Error {
+                let v = v.try_into().expect("Only numbers 0-8 are valid");
+                self.visit_u8(v)
             }
         }
 
@@ -355,8 +359,9 @@ impl EventType {
 
 #[cfg(test)]
 mod test {
-    use super::LCUWebSocket;
+    use super::{Event, LCUWebSocket};
     use std::time::Duration;
+    use serde_json::json;
 
     // #[ignore = "This does not need to be run often"]
     #[tokio::test]
@@ -372,5 +377,12 @@ mod test {
         while !ws_client.is_finished() {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
+    }
+    
+    #[test]
+    fn test_deserialize() {
+        let json = json!([5, "OnJsonApiEvent", {}]);
+        let event: Event = serde_json::from_value(json).unwrap();
+        println!("{event:?}");
     }
 }
