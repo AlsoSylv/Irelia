@@ -25,10 +25,10 @@ pub const GAME_PROCESS_NAME: &str = "League of Legends";
 // up with a solution to running the game on Linux natively
 #[cfg(debug_assertions)]
 #[cfg(target_os = "linux")]
-const CLIENT_PROCESS_NAME: &str = "";
+pub(crate) const CLIENT_PROCESS_NAME: &str = "";
 #[cfg(debug_assertions)]
 #[cfg(target_os = "linux")]
-const GAME_PROCESS_NAME: &str = "";
+pub(crate) const GAME_PROCESS_NAME: &str = "";
 
 /// const copy of the encoder
 pub(crate) const ENCODER: Encoder = Encoder::new();
@@ -44,7 +44,11 @@ pub(crate) const ENCODER: Encoder = Encoder::new();
 /// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
 ///
-pub fn get_running_client(client_process_name: &str, game_process_name: &str, force_lock_file: bool) -> Result<(String, String), Error> {
+pub fn get_running_client(
+    client_process_name: &str,
+    game_process_name: &str,
+    force_lock_file: bool,
+) -> Result<(String, String), Error> {
     // If we always read the lock file, we never need to get the command line of the process
     let cmd = if force_lock_file {
         sysinfo::UpdateKind::Never
@@ -147,12 +151,13 @@ pub fn get_running_client(client_process_name: &str, game_process_name: &str, fo
 
 #[cfg(test)]
 mod tests {
-    use super::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, get_running_client};
+    use super::{get_running_client, CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
     #[test]
     fn test_process_info() {
-        let (port, pass) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false).unwrap();
+        let (port, pass) =
+            get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false).unwrap();
         println!("{port} {pass}");
     }
 }

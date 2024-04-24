@@ -104,6 +104,7 @@ ws = [
     "dep:tokio", 
     "dep:futures-util",
     "dep:sysinfo",
+    "dep:serde_derive",
     "tokio/sync",
     "tokio/rt"
     ]

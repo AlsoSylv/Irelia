@@ -3,8 +3,7 @@ use crate::Error;
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Buf, Bytes, Incoming};
 use hyper::header::AUTHORIZATION;
-use hyper::http::uri;
-use hyper::{Request, Response};
+use hyper::{Request, Response, Uri};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
@@ -20,10 +19,11 @@ use super::setup_tls::setup_tls_connector;
 ///
 /// fn main() {
 ///     let client = RequestClient::new();
-///     
+///
 ///     let lcu_client = LCUClient::new();
 /// }
 /// ```
+#[derive(Clone, Debug)]
 pub struct RequestClient {
     client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
 }
@@ -61,29 +61,34 @@ impl RequestClient {
     where
         T: Serialize,
     {
-        let built_uri = uri::Builder::new()
+        // Build the URI, always in https format
+        let built_uri = Uri::builder()
             .scheme("https")
             .authority(url.as_bytes())
             .path_and_query(endpoint)
             .build()?;
 
-        let body = if let Some(body) = &body {
-            let json = serde_json::value::to_value(body)?;
-            Full::from(json.to_string())
-        } else {
-            Full::default()
+        let mut buffer = Full::default();
+
+        // Turn the JSON to bytes, return any errors,
+        // then map to Full<Bytes>
+        if let Some(body) = body {
+            let json = serde_json::to_vec(&body)?;
+            buffer = Full::from(json);
+        }
+
+        // Build the new request
+        let mut builder = Request::builder().method(method).uri(built_uri);
+
+        // Add the auth header, if provided
+        if let Some(header) = auth_header {
+            builder = builder.header(AUTHORIZATION, header);
         };
 
-        let builder = Request::builder().method(method).uri(built_uri);
+        // Add the body to finalize
+        let request = builder.body(buffer)?;
 
-        let builder = if let Some(header) = auth_header {
-            builder.header(AUTHORIZATION, header)
-        } else {
-            builder
-        };
-
-        let request = builder.body(body)?;
-
+        // Return the incoming request
         Ok(self.client.request(request).await?)
     }
 
@@ -99,13 +104,13 @@ impl RequestClient {
     where
         T: Serialize,
     {
-        let mut response = self
+        let response = self
             .raw_request_template(url, endpoint, method, body, auth_header)
             .await?;
 
-        let body = response.body_mut();
+        let body = response.collect().await?;
 
-        Ok(body.collect().await?.aggregate())
+        Ok(body.aggregate())
     }
 }
 

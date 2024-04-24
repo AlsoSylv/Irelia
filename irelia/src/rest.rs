@@ -2,15 +2,15 @@
 
 pub mod types;
 
-use std::borrow::Cow;
 use http_body_util::BodyExt;
 use hyper::Uri;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::borrow::Cow;
 
 use crate::rest::request_builder::RequestBuilder;
-use crate::{utils::process_info::get_running_client, Error, RequestClient};
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
+use crate::{utils::process_info::get_running_client, Error, RequestClient};
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
@@ -227,7 +227,8 @@ impl LcuClient {
     /// the client being down, the lock file being unable to be opened, or the LCU
     /// not running at all
     pub fn new(force_lock_file: bool) -> Result<Self, Error> {
-        let (port, pass) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
+        let (port, pass) =
+            get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
 
         Ok(LcuClient {
             url: port,
@@ -254,7 +255,8 @@ impl LcuClient {
     /// This will return an error if the lock file is inaccessible, or if
     /// the LCU is not running
     pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
-        let (port, pass) = get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
+        let (port, pass) =
+            get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, force_lock_file)?;
         self.url = port;
         self.auth_header = pass;
         Ok(())
@@ -301,7 +303,7 @@ impl LcuClient {
     /// let request_client = irelia::RequestClient::new();
     /// let lcu_client = irelia::rest::LcuClient::new(false)?;
     ///
-    ///  let response: Option<serde_json::Value> = lcu_client.get("/example/endpoint/", &request_client)?;
+    /// let response: Option<serde_json::Value> = lcu_client.get("/example/endpoint/", &request_client)?;
     /// ```
     ///
     /// # Errors
