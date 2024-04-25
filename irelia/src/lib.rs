@@ -35,6 +35,8 @@ pub enum Error {
     #[cfg(any(feature = "ws", feature = "rest"))]
     StdIo(std::io::Error),
     SerdeJsonError(serde_json::Error),
+    #[cfg(feature = "replay")]
+    RpmSerde(rmp_serde::decode::Error),
     LCUProcessNotRunning,
     PortNotFound,
     AuthTokenNotFound,
@@ -81,6 +83,13 @@ impl From<std::io::Error> for Error {
     }
 }
 
+#[cfg(feature = "replay")]
+impl From<rmp_serde::decode::Error> for Error {
+    fn from(value: rmp_serde::decode::Error) -> Self {
+        Self::RpmSerde(value)
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let error: std::borrow::Cow<'_, str> = match self {
@@ -100,6 +109,8 @@ impl std::fmt::Display for Error {
             Error::LockFileNotFound => {
                 "Unable to the lock file, but the process was running!".into()
             }
+            #[cfg(feature = "replay")]
+            Error::RpmSerde(err) => err.to_string().into(),
         };
         f.write_str(&error)
     }

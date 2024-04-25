@@ -2,6 +2,9 @@
 //!
 //! Please note, well most `in_game` endpoints will work when using the `replay` API, riot does not support
 //! using the `active_player` endpoints, and as such, they are expected to return errors instead
+//! 
+//! The `replay` API uses MSPack internally, as it is the most compact format that the `replay` 
+//! API will accept. This helps work around a bug where buffers that are too large will be dropped
 pub mod types;
 
 /// The `replay` and `in_game` API use the same URL
@@ -187,6 +190,6 @@ impl ReplayClient {
             .request_template(URL, &endpoint, method, body, None)
             .await?;
 
-        Ok(serde_json::from_reader(buffer.reader())?)
+        Ok(rmp_serde::decode::from_read(buffer.reader())?)
     }
 }

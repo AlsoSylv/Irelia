@@ -193,7 +193,7 @@ pub struct ChampionStats {
     physical_lethality: f64,
     resource_max: f64,
     resource_regen_rate: f64,
-    resource_type: String,
+    resource_type: AbilityResource,
     resource_value: f64,
     spell_vamp: f64,
     tenacity: f64,
@@ -297,7 +297,7 @@ impl ChampionStats {
         self.resource_regen_rate
     }
     #[must_use]
-    pub fn resource_type(&self) -> &str {
+    pub fn resource_type(&self) -> &AbilityResource {
         &self.resource_type
     }
     #[must_use]
@@ -720,4 +720,30 @@ pub enum TeamID {
     ORDER,
     CHAOS,
     NEUTRAL,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+/// Ability Resource
+/// 
+/// This defaults to Mana
+pub enum AbilityResource {
+    #[default]
+    Mana,
+    Energy,
+    None,
+    Shield,
+    BattleFury,
+    DragonFury,
+    Rage,
+    Heat,
+    GnarFury,
+    Ferocity,
+    BloodWell,
+    Wind,
+    Ammo,
+    MoonLight,
+    Max,
+    #[serde(other)]
+    Other,
 }

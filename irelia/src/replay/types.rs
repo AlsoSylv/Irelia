@@ -16,7 +16,7 @@ mod hidden {
     impl KeyFrameValue for bool {}
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayGameData {
     all_players: Box<[AllPlayer]>,
@@ -46,28 +46,6 @@ pub enum AVContainer {
     Webm,
     Png,
     PngAndDepth,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-/// Ability Resource
-pub enum AbilityResource {
-    Mana,
-    Energy,
-    None,
-    Shield,
-    BattleFury,
-    DragonFury,
-    Rage,
-    Heat,
-    GnarFury,
-    Ferocity,
-    BloodWell,
-    Wind,
-    Ammo,
-    MoonLight,
-    Max,
-    Other,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -124,7 +102,7 @@ pub enum EasingType {
 }
 
 /// Process identifier for this game
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Game {
     #[serde(rename = "processID")]
     pub process_id: i32,
