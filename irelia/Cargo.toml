@@ -68,6 +68,10 @@ base64 = "0.22.0"
 version = "1.37"
 features = ["sync", "rt", "macros", "rt-multi-thread"]
 
+[[example]]
+name = "replay"
+required-features = ["replay"]
+
 [features]
 default = [
     "full",

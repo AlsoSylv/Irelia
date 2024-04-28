@@ -23,10 +23,8 @@ pub const GAME_PROCESS_NAME: &str = "League of Legends";
 // These ONLY exist so that this will compile in a dev env
 // Linux support will not be re-added unless someone comes
 // up with a solution to running the game on Linux natively
-#[cfg(debug_assertions)]
 #[cfg(target_os = "linux")]
 pub(crate) const CLIENT_PROCESS_NAME: &str = "";
-#[cfg(debug_assertions)]
 #[cfg(target_os = "linux")]
 pub(crate) const GAME_PROCESS_NAME: &str = "";
 

@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "nightly", feature(array_chunks))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
-#![cfg_attr(test, feature(test))]
+#![cfg_attr(test, cfg_attr(feature = "nightly", feature(test)))]
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>
@@ -633,7 +633,7 @@ where
     idxs
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature="nightly"))]
 /*
 These are the current benchmark results running on a Ryzen 9 7900x
 Note: This was after recent changes to core::simd
