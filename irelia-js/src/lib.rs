@@ -1,17 +1,12 @@
 #![deny(clippy::all)]
 
 use std::collections::HashMap;
-use std::future::Future;
-use std::ops::ControlFlow;
 
-use irelia::ws::Flow;
-use napi::bindgen_prelude::{AsyncTask, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi_derive::napi;
 
 use irelia::RequestClient;
-use irelia::{rest::LcuClient, ws::LCUWebSocket};
-use napi::{Error, JsFunction, Status};
+use irelia::rest::LcuClient;
+use napi::{Error, Status};
 use serde_json::Value;
 
 #[napi(js_name = "LcuClient")]
