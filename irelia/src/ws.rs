@@ -206,7 +206,6 @@ async fn reconnect(
     Ok(())
 }
 
-
 /// Different LCU websocket request types
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RequestType {
@@ -222,7 +221,10 @@ pub enum RequestType {
 }
 
 impl<'de> Deserialize<'de> for RequestType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
         struct U8Visitor;
 
         impl<'a> Visitor<'a> for U8Visitor {
@@ -232,29 +234,36 @@ impl<'de> Deserialize<'de> for RequestType {
                 formatter.write_str("A u8, which maps to a request type")
             }
 
-            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> where E: serde::de::Error {
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
                 let v = v.try_into().expect("Only numbers 0-8 are valid");
                 self.visit_u8(v)
             }
 
-            fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E> where E: serde::de::Error {
-                Ok(
-                    match v {
-                        0 => RequestType::Welcome,
-                        1 => RequestType::Prefix,
-                        2 => RequestType::Call,
-                        3 => RequestType::CallResult,
-                        4 => RequestType::CallError,
-                        5 => RequestType::Subscribe,
-                        6 => RequestType::Unsubscribe,
-                        7 => RequestType::Publish,
-                        8 => RequestType::Event,
-                        _ => unreachable!("Only numbers 0-8 are valid")
-                    }
-                )
+            fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(match v {
+                    0 => RequestType::Welcome,
+                    1 => RequestType::Prefix,
+                    2 => RequestType::Call,
+                    3 => RequestType::CallResult,
+                    4 => RequestType::CallError,
+                    5 => RequestType::Subscribe,
+                    6 => RequestType::Unsubscribe,
+                    7 => RequestType::Publish,
+                    8 => RequestType::Event,
+                    _ => unreachable!("Only numbers 0-8 are valid"),
+                })
             }
 
-            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> where E: serde::de::Error {
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
                 let v = v.try_into().expect("Only numbers 0-8 are valid");
                 self.visit_u8(v)
             }
@@ -265,7 +274,10 @@ impl<'de> Deserialize<'de> for RequestType {
 }
 
 impl Serialize for RequestType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         serializer.serialize_u8(self.clone() as u8)
     }
 }
@@ -287,8 +299,8 @@ pub enum EventKind {
 
 impl<'de> Deserialize<'de> for EventKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         struct StringVisitor;
 
@@ -300,8 +312,8 @@ impl<'de> Deserialize<'de> for EventKind {
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-                where
-                    E: serde::de::Error,
+            where
+                E: serde::de::Error,
             {
                 if let Some((event, callback)) = v.split_once('_') {
                     match EventKind::from_str(event) {
@@ -325,8 +337,8 @@ impl<'de> Deserialize<'de> for EventKind {
 
 impl Serialize for EventKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
     }
@@ -368,8 +380,8 @@ impl EventKind {
 #[cfg(test)]
 mod test {
     use super::{Event, LCUWebSocket};
-    use std::time::Duration;
     use serde_json::json;
+    use std::time::Duration;
 
     // #[ignore = "This does not need to be run often"]
     #[tokio::test]

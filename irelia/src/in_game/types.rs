@@ -725,7 +725,7 @@ pub enum TeamID {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 /// Ability Resource
-/// 
+///
 /// This defaults to Mana
 pub enum AbilityResource {
     #[default]

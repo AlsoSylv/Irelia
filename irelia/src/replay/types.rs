@@ -317,6 +317,127 @@ pub struct Render {
     pub sun_direction: Vector3f,
 }
 
+pub struct Frame {
+    /// Keyframe track for Render.cameraPosition
+    pub camera_position: Option<FrameVector3>,
+    /// Keyframe track for Render.cameraRotation
+    pub camera_rotation: Option<FrameVector3>,
+    /// Keyframe track for Render.depthFogColor
+    pub depth_fog_color: Option<FrameColor>,
+    /// Keyframe track for Render.depthFogEnabled
+    pub depth_fog_enabled: Option<FrameBool>,
+    /// Keyframe track for Render.depthFogEnd
+    pub depth_fog_end: Option<FrameFloat>,
+    /// Keyframe track for Render.depthFogIntensity
+    pub depth_fog_intensity: Option<FrameFloat>,
+    /// Keyframe track for Render.depthFogStart
+    pub depth_fog_start: Option<FrameFloat>,
+    /// Keyframe track for Render.depthOfFieldCircle
+    pub depth_of_field_circle: Option<FrameFloat>,
+    /// Keyframe track for Render.depthOfFieldEnabled
+    pub depth_of_field_enabled: Option<FrameBool>,
+    /// Keyframe track for Render.depthOfFieldFar
+    pub depth_of_field_far: Option<FrameFloat>,
+    /// Keyframe track for Render.depthOfFieldMid
+    pub depth_of_field_mid: Option<FrameFloat>,
+    /// Keyframe track for Render.depthOfFieldNear
+    pub depth_of_field_near: Option<FrameFloat>,
+    /// Keyframe track for Render.depthOfFieldWidth
+    pub depth_of_field_width: Option<FrameFloat>,
+    /// Keyframe track for Render.farClip
+    pub far_clip: Option<FrameFloat>,
+    /// Keyframe track for Render.fieldOfView
+    pub field_of_view: Option<FrameFloat>,
+    /// Keyframe track for Render.heightFogColor
+    pub height_fog_color: Option<FrameColor>,
+    /// Keyframe track for Render.heightFogEnabled
+    pub height_fog_enabled: Option<FrameBool>,
+    /// Keyframe track for Render.heightFogEnd
+    pub height_fog_end: Option<FrameFloat>,
+    /// Keyframe track for Render.heightFogIntensity
+    pub height_fog_intensity: Option<FrameFloat>,
+    /// Keyframe track for Render.heightFogStart
+    pub height_fog_start: Option<FrameFloat>,
+    /// Keyframe track for Render.navGridOffset
+    pub nav_grid_offset: Option<FrameFloat>,
+    /// Keyframe track for Render.nearClip
+    pub near_clip: Option<FrameFloat>,
+    /// Keyframe track for Playback.speed
+    pub playback_speed: Option<FrameFloat>,
+    /// Keyframe track for Render.selectionName
+    pub selection_name: Option<FrameAString>,
+    /// Keyframe track for Render.selectionOffset
+    pub selection_offset: Option<FrameVector3>,
+    /// Keyframe track for Render.skyboxOffset
+    pub skybox_offset: Option<FrameFloat>,
+    /// Keyframe track for Render.skyboxRadius
+    pub skybox_radius: Option<FrameFloat>,
+    /// Keyframe track for Render.skyboxRotation
+    pub skybox_rotation: Option<FrameFloat>,
+    /// Keyframe track for Render.sunDirection
+    pub sun_direction: Option<FrameVector3>,
+    pub current_time: f32,
+}
+
+impl Frame {
+    #[must_use]
+    pub fn new(time: f32) -> Self {
+        Self {
+            current_time: time,
+            camera_position: None,
+            camera_rotation: None,
+            depth_fog_color: None,
+            depth_fog_enabled: None,
+            depth_fog_end: None,
+            depth_fog_intensity: None,
+            depth_fog_start: None,
+            depth_of_field_circle: None,
+            depth_of_field_enabled: None,
+            depth_of_field_far: None,
+            depth_of_field_mid: None,
+            depth_of_field_near: None,
+            depth_of_field_width: None,
+            far_clip: None,
+            field_of_view: None,
+            height_fog_color: None,
+            height_fog_enabled: None,
+            height_fog_end: None,
+            height_fog_intensity: None,
+            height_fog_start: None,
+            nav_grid_offset: None,
+            near_clip: None,
+            playback_speed: None,
+            selection_name: None,
+            selection_offset: None,
+            skybox_offset: None,
+            skybox_radius: None,
+            skybox_rotation: None,
+            sun_direction: None,
+        }
+    }
+}
+
+pub struct FrameValue<T: KeyFrameValue> {
+    pub value: T,
+    pub blending_mode: EasingType,
+}
+
+impl<T: KeyFrameValue> FrameValue<T> {
+    #[must_use]
+    pub fn new(value: T, blending_mode: EasingType) -> Self {
+        Self {
+            value,
+            blending_mode,
+        }
+    }
+}
+
+pub type FrameAString = FrameValue<String>;
+pub type FrameBool = FrameValue<bool>;
+pub type FrameColor = FrameValue<ColorValue>;
+pub type FrameFloat = FrameValue<f32>;
+pub type FrameVector3 = FrameValue<Vector3f>;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sequence {
