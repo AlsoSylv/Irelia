@@ -656,23 +656,229 @@ impl core::ops::Index<usize> for Events {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Event {
     #[serde(rename = "EventID")]
     event_id: i64,
-    event_name: String,
     event_time: f64,
+    #[serde(flatten)]
+    other: EventDetails,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all_fields = "PascalCase")]
+#[serde(tag = "EventName")]
+pub enum EventDetails {
+    GameStart,
+    MinionsSpawning,
+    ChampionKill {
+        #[serde(flatten)]
+        kill_info: KillInfo,
+        victim_name: String,
+    },
+    FirstBlood {
+        recipient: String,
+    },
+    Multikill {
+        kill_streak: u16,
+        killer_name: String,
+    },
+    TurretKilled {
+        #[serde(flatten)]
+        kill_info: KillInfo,
+        turret_killed: String,
+    },
+    FirstBrick {
+        killer_name: String,
+    },
+    DragonKill {
+        dragon_type: String,
+        #[serde(flatten)]
+        kill_info: MonsterKill,
+    },
+    HordeKill(MonsterKill),
+    HeraldKill(MonsterKill),
+    BaronKill(MonsterKill),
+    InhibKilled {
+        #[serde(flatten)]
+        kill_info: KillInfo,
+        inhib_killed: String,
+    },
+    InhibRespawned {
+        inhib_respawned: String,
+    },
+    GameEnd {
+        result: String,
+    },
+    #[serde(untagged)]
+    Unknown(serde_json::Value),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct KillInfo {
+    assisters: Box<[String]>,
+    killer_name: String,
+}
+
+impl KillInfo {
+    #[must_use]
+    pub fn assisters(&self) -> &[String] {
+        &self.assisters
+    }
+    #[must_use]
+    pub fn killer_name(&self) -> &str {
+        &self.killer_name
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct MonsterKill {
+    #[serde(flatten)]
+    kill_info: KillInfo,
+    stolen: Stolen,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum Stolen {
+    True,
+    False,
+}
+
+impl MonsterKill {
+    #[must_use]
+    pub fn kill_info(&self) -> &KillInfo {
+        &self.kill_info
+    }
+    #[must_use]
+    pub fn stolen(&self) -> bool {
+        match self.stolen {
+            Stolen::True => true,
+            Stolen::False => false,
+        }
+    }
+}
+
+#[test]
+fn event_deserialize() {
+    let json = serde_json::json!({
+        "Events": [
+            {
+                "EventID": 0,
+                "EventName": "GameStart",
+                "EventTime": 0.6020711064338684
+            },
+            {
+                "EventID": 1,
+                "EventName": "MinionsSpawning",
+                "EventTime": 65.06519317626953
+            },
+            {
+                "Assisters": [
+                    "DZIVVKA"
+                ],
+                "EventID": 2,
+                "EventName": "ChampionKill",
+                "EventTime": 146.44497680664062,
+                "KillerName": "Cris Noyak",
+                "VictimName": "PRAISETHESUNL9NE"
+            },
+            {
+                "EventID": 3,
+                "EventName": "FirstBlood",
+                "EventTime": 146.44497680664062,
+                "Recipient": "Cris Noyak"
+            },
+            {
+                "EventID": 18,
+                "EventName": "Multikill",
+                "EventTime": 391.751220703125,
+                "KillStreak": 2,
+                "KillerName": "DZIVVKA"
+            },
+            {
+                "Assisters": [],
+                "EventID": 29,
+                "EventName": "TurretKilled",
+                "EventTime": 677.7825317382812,
+                "KillerName": "Cris Noyak",
+                "TurretKilled": "Turret_T2_R_03_A"
+            },
+            {
+                "EventID": 30,
+                "EventName": "FirstBrick",
+                "EventTime": 677.7825317382812,
+                "KillerName": "Cris Noyak"
+            },
+            {
+                "Assisters": [],
+                "DragonType": "Fire",
+                "EventID": 39,
+                "EventName": "DragonKill",
+                "EventTime": 800.1002807617188,
+                "KillerName": "Ninja Alpaca",
+                "Stolen": "False"
+            },
+            {
+                "Assisters": [],
+                "EventID": 9,
+                "EventName": "HordeKill",
+                "EventTime": 375.3779296875,
+                "KillerName": "AoshiW",
+                "Stolen": "False"
+            },
+            {
+                "Assisters": ["Example"],
+                "EventID": 20,
+                "EventName": "HeraldKill",
+                "EventTime": 872.9674072265625,
+                "KillerName": "AoshiW",
+                "Stolen": "False"
+            },
+            {
+                "Assisters": [],
+                "EventID": 21,
+                "EventName": "BaronKill",
+                "EventTime": 1226.2342529296875,
+                "KillerName": "AoshiW",
+                "Stolen": "False"
+            },
+            {
+                "Assisters": ["Example"],
+                "EventID": 105,
+                "EventName": "InhibKilled",
+                "EventTime": 1705.0533447265625,
+                "InhibKilled": "Barracks_T1_C1",
+                "KillerName": "Denis josi 123"
+            },
+            {
+                "EventID": 24,
+                "EventName": "InhibRespawned",
+                "EventTime": 1771.694580078125,
+                "InhibRespawned": "Barracks_T2_L1"
+            },
+            {
+                "EventID": 144,
+                "EventName": "GameEnd",
+                "EventTime": 2236.1298828125,
+                "Result": "Win"
+            }
+        ]
+    });
+
+    use serde::Deserialize;
+
+    let events = Events::deserialize(json).unwrap();
+
+    println!("{:#?}", events)
 }
 
 impl Event {
     #[must_use]
     pub fn event_id(&self) -> i64 {
         self.event_id
-    }
-    #[must_use]
-    pub fn event_name(&self) -> &str {
-        &self.event_name
     }
     #[must_use]
     pub fn event_time(&self) -> f64 {

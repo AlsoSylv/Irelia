@@ -1156,7 +1156,8 @@
 						"required": true,
 						"schema": {
 							"type": "string"
-						}					}
+						}
+					}
 				],
 				"responses": {
 					"200": {

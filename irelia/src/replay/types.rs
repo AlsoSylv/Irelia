@@ -381,7 +381,7 @@ pub struct Frame {
 
 impl Frame {
     #[must_use]
-    pub fn new(time: f32) -> Self {
+    pub fn empty(time: f32) -> Self {
         Self {
             current_time: time,
             camera_position: None,
@@ -415,6 +415,74 @@ impl Frame {
             sun_direction: None,
         }
     }
+
+    #[must_use]
+    pub fn from_render_time(name: impl ToString, render: &Render, current_time: f32) -> Self {
+        Self {
+            current_time,
+            camera_position: Some(FrameVector3::new_default_blending(render.camera_position)),
+            camera_rotation: Some(FrameVector3::new_default_blending(render.camera_rotation)),
+            depth_fog_color: Some(FrameColor::new_default_blending(
+                render.depth_fog_color.clone(),
+            )),
+            depth_fog_enabled: render
+                .depth_fog_enabled
+                .map(FrameBool::new_default_blending),
+            sun_direction: Some(FrameVector3::new_default_blending(render.sun_direction)),
+            depth_fog_end: Some(FrameFloat::new_default_blending(render.depth_fog_end)),
+            depth_fog_intensity: Some(FrameFloat::new_default_blending(render.depth_fog_intensity)),
+            depth_fog_start: Some(FrameFloat::new_default_blending(render.depth_fog_start)),
+            depth_of_field_circle: Some(FrameFloat::new_default_blending(
+                render.depth_of_field_circle,
+            )),
+            depth_of_field_enabled: render
+                .depth_of_field_enabled
+                .map(FrameBool::new_default_blending),
+            depth_of_field_far: Some(FrameFloat::new_default_blending(render.depth_of_field_far)),
+            depth_of_field_mid: Some(FrameFloat::new_default_blending(render.depth_of_field_mid)),
+            depth_of_field_near: Some(FrameFloat::new_default_blending(render.depth_of_field_near)),
+            depth_of_field_width: Some(FrameFloat::new_default_blending(
+                render.depth_of_field_width,
+            )),
+            far_clip: Some(FrameFloat::new_default_blending(render.far_clip)),
+            field_of_view: Some(FrameFloat::new_default_blending(render.field_of_view)),
+            height_fog_color: Some(FrameColor::new_default_blending(
+                render.height_fog_color.clone(),
+            )),
+            height_fog_enabled: render
+                .height_fog_enabled
+                .map(FrameBool::new_default_blending),
+            height_fog_end: Some(FrameFloat::new_default_blending(render.height_fog_end)),
+            height_fog_intensity: Some(FrameFloat::new_default_blending(
+                render.height_fog_intensity,
+            )),
+            height_fog_start: Some(FrameFloat::new_default_blending(render.height_fog_start)),
+            nav_grid_offset: Some(FrameFloat::new_default_blending(render.nav_grid_offset)),
+            near_clip: Some(FrameFloat::new_default_blending(render.near_clip)),
+            selection_name: Some(FrameAString::new_default_blending(name.to_string())),
+            selection_offset: Some(FrameVector3::new_default_blending(render.selection_offset)),
+            skybox_offset: Some(FrameFloat::new_default_blending(render.skybox_offset)),
+            playback_speed: Some(FrameFloat::new_default_blending(1.0)),
+            skybox_rotation: Some(FrameFloat::new_default_blending(render.skybox_rotation)),
+            skybox_radius: Some(FrameFloat::new_default_blending(render.skybox_radius)),
+        }
+    }
+
+    #[must_use]
+    pub fn from_render_recording(
+        name: impl ToString,
+        render: &Render,
+        recording: &Recording,
+    ) -> Self {
+        let mut frame = Self::from_render_time(name, render, recording.current_time);
+        let Some(playback_speed) = &mut frame.playback_speed else {
+            unreachable!()
+        };
+
+        playback_speed.value = recording.replay_speed;
+
+        frame
+    }
 }
 
 pub struct FrameValue<T: KeyFrameValue> {
@@ -429,6 +497,11 @@ impl<T: KeyFrameValue> FrameValue<T> {
             value,
             blending_mode,
         }
+    }
+
+    #[must_use]
+    pub fn new_default_blending(value: T) -> Self {
+        Self::new(value, EasingType::default())
     }
 }
 
