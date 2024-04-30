@@ -36,7 +36,8 @@ pub enum Error {
     #[cfg(any(feature = "ws", feature = "rest"))]
     StdIo(std::io::Error),
     SerdeJsonError(serde_json::Error),
-    RmpSerde(rmp_serde::encode::Error),
+    RmpSerdeEncode(rmp_serde::encode::Error),
+    RmpSerdeDecode(rmp_serde::decode::Error),
     LCUProcessNotRunning,
     PortNotFound,
     AuthTokenNotFound,
@@ -79,9 +80,16 @@ impl From<serde_json::Error> for Error {
 
 impl From<rmp_serde::encode::Error> for Error {
     fn from(value: rmp_serde::encode::Error) -> Self {
-        Self::RmpSerde(value)
+        Self::RmpSerdeEncode(value)
     }
 }
+
+impl From<rmp_serde::decode::Error> for Error {
+    fn from(value: rmp_serde::decode::Error) -> Self {
+        Self::RmpSerdeDecode(value)
+    }
+}
+
 
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
@@ -109,7 +117,8 @@ impl std::fmt::Display for Error {
             Error::LockFileNotFound => {
                 "Unable to the lock file, but the process was running!".into()
             }
-            Error::RmpSerde(err) => err.to_string().into(),
+            Error::RmpSerdeEncode(err) => err.to_string().into(),
+            Error::RmpSerdeDecode(err) => err.to_string().into(),
         };
         f.write_str(&error)
     }

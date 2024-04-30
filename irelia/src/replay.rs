@@ -188,10 +188,6 @@ impl ReplayClient {
             .request_template(URL, &endpoint, method, body, None, SerializeFormat::MsgPack)
             .await?;
 
-        let value: serde_json::Value = serde_json::from_reader(buffer.reader())?;
-
-        println!("{value:?}");
-
-        Ok(serde_json::from_value(value)?)
+        Ok(rmp_serde::from_read(buffer.reader())?)
     }
 }
