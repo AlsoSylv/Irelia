@@ -9,7 +9,7 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::fmt::Formatter;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllGameData {
     active_player: ActivePlayer,
@@ -966,19 +966,87 @@ impl Event {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameData {
-    game_mode: String,
+    game_mode: GameMode,
     game_time: f64,
-    map_name: String,
+    map_name: MapName,
     map_number: i64,
-    map_terrain: String,
+    map_terrain: MapTerrain,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum GameMode {
+    #[serde(rename = "CLASSIC")]
+    SummonersRift,
+    #[serde(rename = "ODIN")]
+    Aram,
+    Tutorial,
+    #[serde(rename = "TUTORIAL_MODULE_1")]
+    /// Part 1 of the tutorial
+    Tutorial1,
+    #[serde(rename = "TUTORIAL_MODULE_2")]
+    /// Part 2 of the tutorial
+    Tutorial2,
+    #[serde(rename = "TUTORIAL_MODULE_3")]
+    /// Part 3 of the tutorial
+    Tutorial3,
+    Urf,
+    PracticeTool,
+    OneForAll,
+    #[serde(alias = "GAMEMODEX")]
+    NexusBlitz,
+    #[serde(rename = "ULTBOOK")]
+    UltimateSpellbook,
+    #[serde(rename = "CHERRY")]
+    Arena,
+    /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/gameModes.json>
+    /// However, this may be out of date, if that's the case, look at <https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/maps.json>
+    /// for the latest maps that patch
+    #[serde(untagged)]
+    Other(String),
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum MapName {
+    #[serde(rename = "Map3")]
+    TutorialMap,
+    #[serde(rename = "Map10")]
+    TwistedTreeline,
+    #[serde(rename = "Map11")]
+    SummonersRift,
+    #[serde(rename = "Map12")]
+    HowlingAbyss,
+    #[serde(rename = "Map21")]
+    NexusBlitz,
+    #[serde(rename = "Map22")]
+    TFT,
+    #[serde(rename = "Map30")]
+    Arena,
+    /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/maps.json>
+    /// However, this may be out of date, if that's the case, look at <https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/maps.json>
+    /// for the latest maps that patch
+    #[serde(untagged)]
+    Other(String),
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum MapTerrain {
+    Default,
+    Infernal,
+    Ocean,
+    Mountain,
+    Cloud,
+    Hextech,
+    Chemtech,
 }
 
 impl GameData {
     #[must_use]
-    pub fn game_mode(&self) -> &str {
+    pub fn game_mode(&self) -> &GameMode {
         &self.game_mode
     }
     #[must_use]
@@ -986,7 +1054,7 @@ impl GameData {
         self.game_time
     }
     #[must_use]
-    pub fn map_name(&self) -> &str {
+    pub fn map_name(&self) -> &MapName {
         &self.map_name
     }
     #[must_use]
@@ -994,7 +1062,7 @@ impl GameData {
         self.map_number
     }
     #[must_use]
-    pub fn map_terrain(&self) -> &str {
+    pub fn map_terrain(&self) -> &MapTerrain {
         &self.map_terrain
     }
 }
@@ -1036,8 +1104,8 @@ pub enum AbilityResource {
 }
 
 fn string_to_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
-    where
-        D: Deserializer<'de>,
+where
+    D: Deserializer<'de>,
 {
     #[derive(Serialize, Deserialize)]
     enum Stolen {

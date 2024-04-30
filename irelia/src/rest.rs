@@ -441,7 +441,13 @@ impl LcuClient {
         use hyper::body::Buf;
 
         let buf = request_client
-            .request_template(&self.url, endpoint, method, body, Some(&self.auth_header))
+            .request_template(
+                &self.url,
+                endpoint,
+                method,
+                body,
+                Some(&self.auth_header),
+            )
             .await?;
 
         let body = if buf.has_remaining() {

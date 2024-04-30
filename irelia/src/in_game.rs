@@ -50,7 +50,13 @@ impl GameClient {
         request_client: &RequestClient,
     ) -> Result<Response<Incoming>, Error> {
         request_client
-            .raw_request_template(URL, endpoint, "HEAD", None::<()>, None)
+            .raw_request_template(
+                URL,
+                endpoint,
+                "HEAD",
+                None::<()>,
+                None,
+            )
             .await
     }
 
@@ -249,7 +255,13 @@ impl GameClient {
         };
 
         let buffer = request_client
-            .request_template(URL, &endpoint, "GET", None::<()>, None)
+            .request_template(
+                URL,
+                &endpoint,
+                "GET",
+                None::<()>,
+                None,
+            )
             .await?;
 
         Ok(serde_json::from_reader(buffer.reader())?)
