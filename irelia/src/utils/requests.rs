@@ -147,7 +147,7 @@ impl SerializeFormat {
     fn to_mime(&self) -> &str {
         match &self {
             SerializeFormat::Json => "application/json",
-            SerializeFormat::MsgPack => "application/msgpack",
+            SerializeFormat::MsgPack => "application/x-msgpack",
         }
     }
 
