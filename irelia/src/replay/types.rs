@@ -435,7 +435,9 @@ impl Frame {
             depth_of_field_circle: Some(FrameFloat::new_default_blending(
                 render.depth_of_field_circle,
             )),
-            depth_of_field_enabled: Some(FrameBool::new_default_blending(render.depth_of_field_enabled)),
+            depth_of_field_enabled: Some(FrameBool::new_default_blending(
+                render.depth_of_field_enabled,
+            )),
             depth_of_field_far: Some(FrameFloat::new_default_blending(render.depth_of_field_far)),
             depth_of_field_mid: Some(FrameFloat::new_default_blending(render.depth_of_field_mid)),
             depth_of_field_near: Some(FrameFloat::new_default_blending(render.depth_of_field_near)),

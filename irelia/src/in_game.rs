@@ -9,6 +9,7 @@ use hyper::Response;
 use serde::de::DeserializeOwned;
 
 use crate::{Error, RequestClient};
+use crate::utils::requests::SerializeFormat;
 
 use self::types::{
     Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
@@ -50,13 +51,7 @@ impl GameClient {
         request_client: &RequestClient,
     ) -> Result<Response<Incoming>, Error> {
         request_client
-            .raw_request_template(
-                URL,
-                endpoint,
-                "HEAD",
-                None::<()>,
-                None,
-            )
+            .raw_request_template(URL, endpoint, "HEAD", None::<()>, None, SerializeFormat::Json)
             .await
     }
 
@@ -138,11 +133,11 @@ impl GameClient {
         let team = team.map_or_else(
             || "",
             |team| match team {
-                TeamID::ALL => "?teamID=ALL",
-                TeamID::UNKNOWN => "?teamID=UNKNOWN",
-                TeamID::ORDER => "?teamID=ORDER",
-                TeamID::CHAOS => "?teamID=CHAOS",
-                TeamID::NEUTRAL => "?teamID=NEUTRAL",
+                TeamID::All => "?teamID=ALL",
+                TeamID::Unknown => "?teamID=UNKNOWN",
+                TeamID::Order => "?teamID=ORDER",
+                TeamID::Chaos => "?teamID=CHAOS",
+                TeamID::Neutral => "?teamID=NEUTRAL",
             },
         );
 
@@ -255,13 +250,7 @@ impl GameClient {
         };
 
         let buffer = request_client
-            .request_template(
-                URL,
-                &endpoint,
-                "GET",
-                None::<()>,
-                None,
-            )
+            .request_template(URL, &endpoint, "GET", None::<()>, None, SerializeFormat::Json)
             .await?;
 
         Ok(serde_json::from_reader(buffer.reader())?)

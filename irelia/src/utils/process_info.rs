@@ -105,12 +105,12 @@ pub fn get_running_client(
         // Look for an auth key to put inside the command line, otherwise return an error.
         auth = iter
             .find_map(|s| s.strip_prefix("--remoting-auth-token="))
-            .ok_or(Error::AuthTokenNotFound)?;
+            .ok_or_else(|| Error::AuthTokenNotFound)?;
 
         // Look for a port to connect to the LCU with, otherwise return an error.
         port = iter
             .find_map(|s| s.strip_prefix("--app-port="))
-            .ok_or(Error::PortNotFound)?;
+            .ok_or_else(|| Error::PortNotFound)?;
     } else {
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
@@ -135,10 +135,10 @@ pub fn get_running_client(
         let mut split = lock_file.split(':');
 
         // Get the 3rd field, which should be the port
-        port = split.nth(2).ok_or(Error::PortNotFound)?;
+        port = split.nth(2).ok_or_else(|| Error::PortNotFound)?;
         // We moved the cursor, so the fourth element is the very next one
         // Which should be the auth string
-        auth = split.next().ok_or(Error::AuthTokenNotFound)?;
+        auth = split.next().ok_or_else(|| Error::AuthTokenNotFound)?;
     }
 
     // The auth header has to be base64 encoded, so that's happens here

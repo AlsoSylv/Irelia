@@ -12,6 +12,7 @@ use crate::replay::types::{Playback, Recording, Render, Sequence};
 use crate::{Error, RequestClient};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use crate::utils::requests::SerializeFormat;
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
@@ -44,13 +45,7 @@ impl ReplayClient {
     ) -> Result<types::ReplayGameData, Error> {
         use hyper::body::Buf;
         let buffer = request_client
-            .request_template(
-                URL,
-                "/liveclientdata/allgamedata",
-                "GET",
-                None::<()>,
-                None,
-            )
+            .request_template(URL, "/liveclientdata/allgamedata", "GET", None::<()>, None, SerializeFormat::MsgPack)
             .await?;
         Ok(serde_json::from_reader(buffer.reader())?)
     }
@@ -190,17 +185,11 @@ impl ReplayClient {
         let endpoint = format!("/replay/{endpoint}");
 
         let buffer = request_client
-            .request_template(
-                URL,
-                &endpoint,
-                method,
-                body,
-                None,
-            )
+            .request_template(URL, &endpoint, method, body, None, SerializeFormat::MsgPack)
             .await?;
-        
+
         let value: serde_json::Value = serde_json::from_reader(buffer.reader())?;
-        
+
         println!("{value:?}");
 
         Ok(serde_json::from_value(value)?)

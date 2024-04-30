@@ -7,6 +7,7 @@
 //! - `in_game`: Allows connections to the `in_game` API, return types are auto generated
 //! - `rest`: Allows connections to the LCU `rest` API, providing basic get/post functionality
 //! - `ws`: Allows connections to the LCU websocket API, providing all functionality needed
+//! - `replay`: Allows connections to the `replay` API, also enables the in game API
 pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
@@ -35,6 +36,7 @@ pub enum Error {
     #[cfg(any(feature = "ws", feature = "rest"))]
     StdIo(std::io::Error),
     SerdeJsonError(serde_json::Error),
+    RmpSerde(rmp_serde::encode::Error),
     LCUProcessNotRunning,
     PortNotFound,
     AuthTokenNotFound,
@@ -75,12 +77,17 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<rmp_serde::encode::Error> for Error {
+    fn from(value: rmp_serde::encode::Error) -> Self {
+        Self::RmpSerde(value)
+    }
+}
+
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
         Self::StdIo(value)
     }
 }
-
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -94,6 +101,7 @@ impl std::fmt::Display for Error {
             Error::SerdeJsonError(err) => err.to_string().into(),
             #[cfg(feature = "ws")]
             Error::WebsocketError(err) => err.to_string().into(),
+            #[cfg(any(feature = "ws", feature = "rest"))]
             Error::StdIo(err) => err.to_string().into(),
             Error::LCUProcessNotRunning => "LCU Process is not running!".into(),
             Error::PortNotFound => "Port Not Found!".into(),
@@ -101,6 +109,7 @@ impl std::fmt::Display for Error {
             Error::LockFileNotFound => {
                 "Unable to the lock file, but the process was running!".into()
             }
+            Error::RmpSerde(err) => err.to_string().into(),
         };
         f.write_str(&error)
     }

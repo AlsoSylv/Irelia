@@ -2,6 +2,9 @@
 //!
 //! if anything fails to serialize this module probably needs to
 //! be updated to a newer version of the in-game API.
+//!
+//! Well the types and returned values do not match, the format will serialize
+//! to the same value
 
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -564,6 +567,8 @@ impl SummonerSpells {
 impl core::ops::Index<usize> for SummonerSpells {
     type Output = SummonerSpell;
 
+    // RustRover is falsely saying that this does not get used
+    //noinspection RsLiveness
     fn index(&self, index: usize) -> &Self::Output {
         match index {
             0 => self.summoner_spell_one(),
@@ -826,12 +831,10 @@ impl<'de> serde::Deserialize<'de> for Structure {
                 E: Error,
             {
                 fn determine_structure_team(team: &str) -> TeamID {
-                    if team == "T1" {
-                        TeamID::ORDER
-                    } else if team == "T2" {
-                        TeamID::CHAOS
-                    } else {
-                        unreachable!("{:?}", team)
+                    match team {
+                        "T1" => TeamID::Order,
+                        "T2" => TeamID::Chaos,
+                        team => unreachable!("Expected T1 or T2, found: {:?}", team),
                     }
                 }
 
@@ -864,7 +867,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
                             lane: determine_structure_lane(lane),
                         }
                     }
-                    todo => todo!("{todo:?}"),
+                    todo => unreachable!("{:?}", todo),
                 };
 
                 Ok(structure)
@@ -887,8 +890,8 @@ impl Serialize for Structure {
         };
 
         let team = match self.team_id {
-            TeamID::CHAOS => "T2",
-            TeamID::ORDER => "T1",
+            TeamID::Order => "T1",
+            TeamID::Chaos => "T2",
             _ => unreachable!(),
         };
 
@@ -1003,8 +1006,7 @@ pub enum GameMode {
     #[serde(rename = "CHERRY")]
     Arena,
     /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/gameModes.json>
-    /// However, this may be out of date, if that's the case, look at <https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/maps.json>
-    /// for the latest maps that patch
+    /// However, this may not be up-to-date
     #[serde(untagged)]
     Other(String),
 }
@@ -1068,13 +1070,15 @@ impl GameData {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 /// Enum representation of different team IDs
 pub enum TeamID {
-    ALL,
-    UNKNOWN,
-    ORDER,
-    CHAOS,
-    NEUTRAL,
+    All,
+    Order,
+    Chaos,
+    Neutral,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

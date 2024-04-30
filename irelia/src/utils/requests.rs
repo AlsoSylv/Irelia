@@ -2,7 +2,7 @@ use crate::Error;
 
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Buf, Bytes, Incoming};
-use hyper::header::AUTHORIZATION;
+use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use hyper::{Request, Response, Uri};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -57,6 +57,7 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
+        format: SerializeFormat,
     ) -> Result<Response<Incoming>, Error>
     where
         T: Serialize,
@@ -68,15 +69,6 @@ impl RequestClient {
             .path_and_query(endpoint)
             .build()?;
 
-        let mut buffer = Full::default();
-
-        // Turn the JSON to bytes, return any errors,
-        // then map to Full<Bytes>
-        if let Some(body) = body {
-            let json = serde_json::to_vec(&body)?;
-            buffer = Full::from(json);
-        }
-
         // Build the new request
         let mut builder = Request::builder().method(method).uri(built_uri);
 
@@ -84,6 +76,25 @@ impl RequestClient {
         if let Some(header) = auth_header {
             builder = builder.header(AUTHORIZATION, header);
         };
+
+        let mut buffer = Full::default();
+
+        let mime = format.to_mime();
+
+        builder = builder.header(CONTENT_TYPE, mime);
+        builder = builder.header(ACCEPT, mime);
+
+        // Turn the JSON to bytes, return any errors,
+        // then map to Full<Bytes>
+        if let Some(body) = body {
+            let buf = if format.is_json() {
+                serde_json::to_vec(&body)?
+            } else {
+                rmp_serde::to_vec(&body)?
+            };
+
+            buffer = Full::from(buf);
+        }
 
         // Add the body to finalize
         let request = builder.body(buffer)?;
@@ -100,17 +111,51 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
+        format: SerializeFormat
     ) -> Result<impl Buf + Sized, Error>
     where
         T: Serialize,
     {
         let response = self
-            .raw_request_template(url, endpoint, method, body, auth_header)
+            .raw_request_template(
+                url,
+                endpoint,
+                method,
+                body,
+                auth_header,
+                format,
+            )
             .await?;
 
         let body = response.collect().await?;
 
         Ok(body.aggregate())
+    }
+}
+
+// This isn't actually dead, just only when the replay API is not in use
+#[allow(dead_code)]
+#[repr(u8)]
+/// The format to use for requests, currently only JSON or `MsgPack`
+/// YAML support is possible if requested
+pub(crate) enum SerializeFormat {
+    Json,
+    MsgPack,
+}
+
+impl SerializeFormat {
+    fn to_mime(&self) -> &str {
+        match &self {
+            SerializeFormat::Json => "application/json",
+            SerializeFormat::MsgPack => "application/msgpack",
+        }
+    }
+
+    fn is_json(&self) -> bool {
+        match &self {
+            SerializeFormat::Json => true,
+            SerializeFormat::MsgPack => false,
+        }
     }
 }
 

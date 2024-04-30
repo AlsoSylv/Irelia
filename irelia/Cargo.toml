@@ -11,6 +11,10 @@ readme = "../README.md"
 categories = ["api-bindings", "asynchronous"]
 keywords = ["riot", "league", "league-of-legends", "lcu", "riot-games"]
 
+[[example]]
+name = "replay"
+required-features = ["replay"]
+
 [dependencies]
 # Required across all features
 serde_json = { version = "1.0", default-features = false, features = ["alloc", "std"] }

@@ -11,6 +11,7 @@ use std::borrow::Cow;
 use crate::rest::request_builder::RequestBuilder;
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::{utils::process_info::get_running_client, Error, RequestClient};
+use crate::utils::requests::SerializeFormat;
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
@@ -333,6 +334,7 @@ impl LcuClient {
                 "HEAD",
                 None::<()>,
                 Some(&self.auth_header),
+                SerializeFormat::Json,
             )
             .await
     }
@@ -441,13 +443,7 @@ impl LcuClient {
         use hyper::body::Buf;
 
         let buf = request_client
-            .request_template(
-                &self.url,
-                endpoint,
-                method,
-                body,
-                Some(&self.auth_header),
-            )
+            .request_template(&self.url, endpoint, method, body, Some(&self.auth_header), SerializeFormat::Json)
             .await?;
 
         let body = if buf.has_remaining() {

@@ -99,6 +99,13 @@
       "EventName": "GameEnd",
       "EventTime": 2236.1298828125,
       "Result": "Win"
+    },
+    {
+      "EventID": 0,
+      "EventName": "Ace",
+      "EventTime": 0.00000000000000000,
+      "Acer": "Riot Tuxedo",
+      "AcingTeam": "ORDER"
     }
   ]
 }
