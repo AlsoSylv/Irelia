@@ -417,6 +417,7 @@ impl Frame {
     }
 
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn from_render_time(name: impl ToString, render: &Render, current_time: f32) -> Self {
         Self {
             current_time,

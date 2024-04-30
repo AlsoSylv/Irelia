@@ -1,0 +1,104 @@
+{
+  "Events": [
+    {
+      "EventID": 0,
+      "EventName": "GameStart",
+      "EventTime": 0.6020711064338684
+    },
+    {
+      "EventID": 1,
+      "EventName": "MinionsSpawning",
+      "EventTime": 65.06519317626953
+    },
+    {
+      "Assisters": [
+        "DZIVVKA"
+      ],
+      "EventID": 2,
+      "EventName": "ChampionKill",
+      "EventTime": 146.44497680664062,
+      "KillerName": "Cris Noyak",
+      "VictimName": "PRAISETHESUNL9NE"
+    },
+    {
+      "EventID": 3,
+      "EventName": "FirstBlood",
+      "EventTime": 146.44497680664062,
+      "Recipient": "Cris Noyak"
+    },
+    {
+      "EventID": 18,
+      "EventName": "Multikill",
+      "EventTime": 391.751220703125,
+      "KillStreak": 2,
+      "KillerName": "DZIVVKA"
+    },
+    {
+      "Assisters": [],
+      "EventID": 29,
+      "EventName": "TurretKilled",
+      "EventTime": 677.7825317382812,
+      "KillerName": "Cris Noyak",
+      "TurretKilled": "Turret_T2_R_03_A"
+    },
+    {
+      "EventID": 30,
+      "EventName": "FirstBrick",
+      "EventTime": 677.7825317382812,
+      "KillerName": "Cris Noyak"
+    },
+    {
+      "Assisters": [],
+      "DragonType": "Fire",
+      "EventID": 39,
+      "EventName": "DragonKill",
+      "EventTime": 800.1002807617188,
+      "KillerName": "Ninja Alpaca",
+      "Stolen": "False"
+    },
+    {
+      "Assisters": [],
+      "EventID": 9,
+      "EventName": "HordeKill",
+      "EventTime": 375.3779296875,
+      "KillerName": "AoshiW",
+      "Stolen": "False"
+    },
+    {
+      "Assisters": ["Example"],
+      "EventID": 20,
+      "EventName": "HeraldKill",
+      "EventTime": 872.9674072265625,
+      "KillerName": "AoshiW",
+      "Stolen": "False"
+    },
+    {
+      "Assisters": [],
+      "EventID": 21,
+      "EventName": "BaronKill",
+      "EventTime": 1226.2342529296875,
+      "KillerName": "AoshiW",
+      "Stolen": "False"
+    },
+    {
+      "Assisters": ["Example"],
+      "EventID": 105,
+      "EventName": "InhibKilled",
+      "EventTime": 1705.0533447265625,
+      "InhibKilled": "Barracks_T1_C1",
+      "KillerName": "Denis josi 123"
+    },
+    {
+      "EventID": 24,
+      "EventName": "InhibRespawned",
+      "EventTime": 1771.694580078125,
+      "InhibRespawned": "Barracks_T2_L1"
+    },
+    {
+      "EventID": 144,
+      "EventName": "GameEnd",
+      "EventTime": 2236.1298828125,
+      "Result": "Win"
+    }
+  ]
+}

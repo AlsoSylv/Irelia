@@ -3,8 +3,11 @@
 //! if anything fails to serialize this module probably needs to
 //! be updated to a newer version of the in-game API.
 
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use std::fmt::Formatter;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -320,8 +323,8 @@ pub struct FullRunes {
     keystone: Rune,
     primary_rune_tree: Rune,
     secondary_rune_tree: Rune,
-    general_runes: Box<[Rune]>,
-    stat_runes: Box<[StatRune]>,
+    general_runes: [Rune; 6],
+    stat_runes: [StatRune; 3],
 }
 
 impl FullRunes {
@@ -338,11 +341,11 @@ impl FullRunes {
         &self.secondary_rune_tree
     }
     #[must_use]
-    pub fn general_runes(&self) -> &[Rune] {
+    pub fn general_runes(&self) -> &[Rune; 6] {
         &self.general_runes
     }
     #[must_use]
-    pub fn stat_runes(&self) -> &[StatRune] {
+    pub fn stat_runes(&self) -> &[StatRune; 3] {
         &self.stat_runes
     }
 }
@@ -411,6 +414,8 @@ pub struct AllPlayer {
     summoner_name: String,
     summoner_spells: SummonerSpells,
     team: String,
+    skin_name: Option<String>,
+    raw_skin_name: Option<String>,
 }
 
 impl AllPlayer {
@@ -469,6 +474,16 @@ impl AllPlayer {
     #[must_use]
     pub fn team(&self) -> &str {
         &self.team
+    }
+    #[must_use]
+    /// These will be `None` in spectator mode
+    pub fn raw_skin_name(&self) -> Option<&str> {
+        self.raw_skin_name.as_deref()
+    }
+    #[must_use]
+    /// These will be `None` in spectator mode
+    pub fn skin_name(&self) -> Option<&str> {
+        self.skin_name.as_deref()
     }
 }
 
@@ -561,9 +576,9 @@ impl core::ops::Index<usize> for SummonerSpells {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpell {
-    pub display_name: String,
-    pub raw_description: String,
-    pub raw_display_name: String,
+    display_name: String,
+    raw_description: String,
+    raw_display_name: String,
 }
 
 impl SummonerSpell {
@@ -672,6 +687,10 @@ pub struct Event {
 pub enum EventDetails {
     GameStart,
     MinionsSpawning,
+    Ace {
+        acer: String,
+        acing_team: TeamID,
+    },
     ChampionKill {
         #[serde(flatten)]
         kill_info: KillInfo,
@@ -680,20 +699,21 @@ pub enum EventDetails {
     FirstBlood {
         recipient: String,
     },
-    Multikill {
+    #[serde(rename = "Multikill")]
+    MultiKill {
         kill_streak: u16,
         killer_name: String,
     },
     TurretKilled {
         #[serde(flatten)]
         kill_info: KillInfo,
-        turret_killed: String,
+        turret_killed: Structure,
     },
     FirstBrick {
         killer_name: String,
     },
     DragonKill {
-        dragon_type: String,
+        dragon_type: DragonType,
         #[serde(flatten)]
         kill_info: MonsterKill,
     },
@@ -703,16 +723,198 @@ pub enum EventDetails {
     InhibKilled {
         #[serde(flatten)]
         kill_info: KillInfo,
-        inhib_killed: String,
+        inhib_killed: Structure,
     },
     InhibRespawned {
-        inhib_respawned: String,
+        inhib_respawned: Structure,
     },
     GameEnd {
         result: String,
     },
     #[serde(untagged)]
     Unknown(serde_json::Value),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DragonType {
+    Fire,
+    Earth,
+    Water,
+    Air,
+    Hextech,
+    Chemtech,
+    Elder,
+    #[serde(untagged)]
+    Unknown(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Structure {
+    structure_type: StructureType,
+    /// Blue side = Order
+    /// Red side = Chaos,
+    team_id: TeamID,
+    /// This still exists in aram, but it's useless
+    lane: Lane,
+    /// This gets tricky, on summoners rift, this is 1-3 for top
+    /// and bot lane, and 1-5 for mid, going in reverse. So the outer turret is
+    /// 3 or 5, and the inner is 1 or 2.
+    ///
+    /// On Nexus blitz, it's 4-1, with 4 and 1 being the top outer and inner
+    /// while 3 and 2 are the bottom outer and inner turrets
+    ///
+    /// However, on Aram, on aram, the red side is 1-4 where 1 is the outermost turret
+    /// And blue side being 8-10, with 8 as the outermost, 7 as the inner, while 9 and 10
+    /// are the innermost nexus turrets!
+    place: u8,
+}
+
+impl Structure {
+    #[must_use]
+    /// Either Turret or Barracks (aka inhibitor)
+    pub fn structure_type(&self) -> &StructureType {
+        &self.structure_type
+    }
+
+    #[must_use]
+    /// This still exists in aram, but it's useless
+    pub fn lane(&self) -> &Lane {
+        &self.lane
+    }
+
+    #[must_use]
+    /// Blue side = Order
+    /// Red side = Chaos
+    pub fn team_id(&self) -> &TeamID {
+        &self.team_id
+    }
+
+    #[must_use]
+    /// This gets tricky, on summoners rift, this is `1..3` for top
+    /// and bot lane, and `1..5` for mid, going in reverse. So the outer turret is
+    /// 3 or 5, and the inner is 1 or 2.
+    ///
+    /// On Nexus blitz, it's `4..1`, with 4 and 1 being the top outer and inner
+    /// while 3 and 2 are the bottom outer and inner turrets
+    ///
+    /// However, on Aram, on aram, the red side is `1..4` where 1 is the outermost turret
+    /// And blue side being `8..10`, with 8 as the outermost, 7 as the inner, while 9 and 10
+    /// are the innermost nexus turrets!
+    ///
+    /// See `StructureNames.png` for a diagram
+    pub fn place(&self) -> u8 {
+        self.place
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Structure {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        pub struct StringVisitor;
+
+        impl<'a> serde::de::Visitor<'a> for StringVisitor {
+            type Value = Structure;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("A string in a really fucking weird format")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                fn determine_structure_team(team: &str) -> TeamID {
+                    if team == "T1" {
+                        TeamID::ORDER
+                    } else if team == "T2" {
+                        TeamID::CHAOS
+                    } else {
+                        unreachable!("{:?}", team)
+                    }
+                }
+
+                fn determine_structure_lane(lane: &str) -> Lane {
+                    match lane {
+                        "L" => Lane::Top,
+                        "C" => Lane::Mid,
+                        "R" => Lane::Bot,
+                        unrecognized => unreachable!("{}", unrecognized),
+                    }
+                }
+
+                let split: Vec<&str> = v.split('_').collect();
+
+                let structure = match split.as_slice() {
+                    // The last value here is always A
+                    &["Turret", team, lane, number, _] => Structure {
+                        structure_type: StructureType::Turret,
+                        team_id: determine_structure_team(team),
+                        place: number.parse().unwrap(),
+                        lane: determine_structure_lane(lane),
+                    },
+                    &["Barracks", team, lane] => {
+                        let lane = &lane[0..1];
+                        Structure {
+                            structure_type: StructureType::Barracks,
+                            team_id: determine_structure_team(team),
+                            // This is always 1, as all lanes have one inhib
+                            place: 1,
+                            lane: determine_structure_lane(lane),
+                        }
+                    }
+                    todo => todo!("{todo:?}"),
+                };
+
+                Ok(structure)
+            }
+        }
+
+        deserializer.deserialize_str(StringVisitor)
+    }
+}
+
+impl Serialize for Structure {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let lane = match &self.lane {
+            Lane::Bot => "R",
+            Lane::Mid => "C",
+            Lane::Top => "L",
+        };
+
+        let team = match self.team_id {
+            TeamID::CHAOS => "T2",
+            TeamID::ORDER => "T1",
+            _ => unreachable!(),
+        };
+
+        let place = self.place;
+
+        let str = if self.structure_type == StructureType::Barracks {
+            format!("Barracks_{team}_{lane}1")
+        } else {
+            format!("Turret_{team}_{lane}_0{place}_A")
+        };
+
+        serializer.serialize_str(&str)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StructureType {
+    Turret,
+    Barracks,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Lane {
+    Top,
+    Mid,
+    Bot,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -738,13 +940,8 @@ impl KillInfo {
 pub struct MonsterKill {
     #[serde(flatten)]
     kill_info: KillInfo,
-    stolen: Stolen,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-enum Stolen {
-    True,
-    False,
+    #[serde(deserialize_with = "string_to_bool")]
+    stolen: bool,
 }
 
 impl MonsterKill {
@@ -754,125 +951,8 @@ impl MonsterKill {
     }
     #[must_use]
     pub fn stolen(&self) -> bool {
-        match self.stolen {
-            Stolen::True => true,
-            Stolen::False => false,
-        }
+        self.stolen
     }
-}
-
-#[test]
-fn event_deserialize() {
-    let json = serde_json::json!({
-        "Events": [
-            {
-                "EventID": 0,
-                "EventName": "GameStart",
-                "EventTime": 0.6020711064338684
-            },
-            {
-                "EventID": 1,
-                "EventName": "MinionsSpawning",
-                "EventTime": 65.06519317626953
-            },
-            {
-                "Assisters": [
-                    "DZIVVKA"
-                ],
-                "EventID": 2,
-                "EventName": "ChampionKill",
-                "EventTime": 146.44497680664062,
-                "KillerName": "Cris Noyak",
-                "VictimName": "PRAISETHESUNL9NE"
-            },
-            {
-                "EventID": 3,
-                "EventName": "FirstBlood",
-                "EventTime": 146.44497680664062,
-                "Recipient": "Cris Noyak"
-            },
-            {
-                "EventID": 18,
-                "EventName": "Multikill",
-                "EventTime": 391.751220703125,
-                "KillStreak": 2,
-                "KillerName": "DZIVVKA"
-            },
-            {
-                "Assisters": [],
-                "EventID": 29,
-                "EventName": "TurretKilled",
-                "EventTime": 677.7825317382812,
-                "KillerName": "Cris Noyak",
-                "TurretKilled": "Turret_T2_R_03_A"
-            },
-            {
-                "EventID": 30,
-                "EventName": "FirstBrick",
-                "EventTime": 677.7825317382812,
-                "KillerName": "Cris Noyak"
-            },
-            {
-                "Assisters": [],
-                "DragonType": "Fire",
-                "EventID": 39,
-                "EventName": "DragonKill",
-                "EventTime": 800.1002807617188,
-                "KillerName": "Ninja Alpaca",
-                "Stolen": "False"
-            },
-            {
-                "Assisters": [],
-                "EventID": 9,
-                "EventName": "HordeKill",
-                "EventTime": 375.3779296875,
-                "KillerName": "AoshiW",
-                "Stolen": "False"
-            },
-            {
-                "Assisters": ["Example"],
-                "EventID": 20,
-                "EventName": "HeraldKill",
-                "EventTime": 872.9674072265625,
-                "KillerName": "AoshiW",
-                "Stolen": "False"
-            },
-            {
-                "Assisters": [],
-                "EventID": 21,
-                "EventName": "BaronKill",
-                "EventTime": 1226.2342529296875,
-                "KillerName": "AoshiW",
-                "Stolen": "False"
-            },
-            {
-                "Assisters": ["Example"],
-                "EventID": 105,
-                "EventName": "InhibKilled",
-                "EventTime": 1705.0533447265625,
-                "InhibKilled": "Barracks_T1_C1",
-                "KillerName": "Denis josi 123"
-            },
-            {
-                "EventID": 24,
-                "EventName": "InhibRespawned",
-                "EventTime": 1771.694580078125,
-                "InhibRespawned": "Barracks_T2_L1"
-            },
-            {
-                "EventID": 144,
-                "EventName": "GameEnd",
-                "EventTime": 2236.1298828125,
-                "Result": "Win"
-            }
-        ]
-    });
-
-    use serde::Deserialize;
-
-    let events = Events::deserialize(json).unwrap();
-
-    println!("{:#?}", events)
 }
 
 impl Event {
@@ -889,11 +969,11 @@ impl Event {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameData {
-    pub game_mode: String,
-    pub game_time: f64,
-    pub map_name: String,
-    pub map_number: i64,
-    pub map_terrain: String,
+    game_mode: String,
+    game_time: f64,
+    map_name: String,
+    map_number: i64,
+    map_terrain: String,
 }
 
 impl GameData {
@@ -919,6 +999,7 @@ impl GameData {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Enum representation of different team IDs
 pub enum TeamID {
     ALL,
@@ -952,4 +1033,40 @@ pub enum AbilityResource {
     Max,
     #[serde(other)]
     Other,
+}
+
+fn string_to_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    #[derive(Serialize, Deserialize)]
+    enum Stolen {
+        True,
+        False,
+    }
+
+    let stolen = Stolen::deserialize(deserializer)?;
+
+    Ok(match stolen {
+        Stolen::False => false,
+        Stolen::True => true,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::in_game::types::Events;
+
+    #[test]
+    fn event_deserialize() {
+        const JSON: &str = include_str!("events.json");
+
+        let events: Events = serde_json::from_str(JSON).unwrap();
+
+        println!("{events:#?}");
+
+        let json = serde_json::to_string_pretty(&events).unwrap();
+
+        println!("{json:#}");
+    }
 }
