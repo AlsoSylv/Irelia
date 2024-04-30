@@ -45,7 +45,7 @@ impl ReplayClient {
     ) -> Result<types::ReplayGameData, Error> {
         use hyper::body::Buf;
         let buffer = request_client
-            .request_template(URL, "/liveclientdata/allgamedata", "GET", None::<()>, None, SerializeFormat::MsgPack)
+            .request_template(URL, "/liveclientdata/allgamedata", "GET", None::<()>, None, SerializeFormat::Json)
             .await?;
         Ok(serde_json::from_reader(buffer.reader())?)
     }

@@ -103,7 +103,7 @@ impl RequestClient {
         Ok(self.client.request(request).await?)
     }
 
-    /// Makes a request, collects the bytes, and passes them to `return_logic` for handling
+    /// Makes a request, collects the bytes, and returns the buf
     pub(crate) async fn request_template<T>(
         &self,
         url: &str,
