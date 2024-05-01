@@ -90,7 +90,6 @@ impl From<rmp_serde::decode::Error> for Error {
     }
 }
 
-
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
         Self::StdIo(value)

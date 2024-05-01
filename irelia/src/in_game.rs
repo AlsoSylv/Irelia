@@ -8,8 +8,8 @@ use hyper::body::Incoming;
 use hyper::Response;
 use serde::de::DeserializeOwned;
 
-use crate::{Error, RequestClient};
 use crate::utils::requests::SerializeFormat;
+use crate::{Error, RequestClient};
 
 use self::types::{
     Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
@@ -51,7 +51,14 @@ impl GameClient {
         request_client: &RequestClient,
     ) -> Result<Response<Incoming>, Error> {
         request_client
-            .raw_request_template(URL, endpoint, "HEAD", None::<()>, None, SerializeFormat::Json)
+            .raw_request_template(
+                URL,
+                endpoint,
+                "HEAD",
+                None::<()>,
+                None,
+                SerializeFormat::Json,
+            )
             .await
     }
 
@@ -249,11 +256,18 @@ impl GameClient {
             format!("/liveclientdata/{endpoint}")
         };
 
-        let buffer = request_client
-            .request_template(URL, &endpoint, "GET", None::<()>, None, SerializeFormat::Json)
+        let buf = request_client
+            .request_template(
+                URL,
+                &endpoint,
+                "GET",
+                None::<()>,
+                None,
+                SerializeFormat::Json,
+            )
             .await?;
 
-        Ok(serde_json::from_reader(buffer.reader())?)
+        Ok(serde_json::from_reader(buf.reader())?)
     }
 }
 

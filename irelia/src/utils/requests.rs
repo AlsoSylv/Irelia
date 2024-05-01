@@ -69,8 +69,14 @@ impl RequestClient {
             .path_and_query(endpoint)
             .build()?;
 
+        let mime = format.to_mime();
+
         // Build the new request
-        let mut builder = Request::builder().method(method).uri(built_uri);
+        let mut builder = Request::builder()
+            .method(method)
+            .uri(built_uri)
+            .header(CONTENT_TYPE, mime)
+            .header(ACCEPT, mime);
 
         // Add the auth header, if provided
         if let Some(header) = auth_header {
@@ -79,18 +85,13 @@ impl RequestClient {
 
         let mut buffer = Full::default();
 
-        let mime = format.to_mime();
-
-        builder = builder.header(CONTENT_TYPE, mime);
-        builder = builder.header(ACCEPT, mime);
-
-        // Turn the JSON to bytes, return any errors,
+        // Turn the body to bytes, return any errors,
         // then map to Full<Bytes>
         if let Some(body) = body {
             let buf = if format.is_json() {
                 serde_json::to_vec(&body)?
             } else {
-                rmp_serde::to_vec(&body)?
+                rmp_serde::to_vec_named(&body)?
             };
 
             buffer = Full::from(buf);
@@ -111,20 +112,13 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        format: SerializeFormat
+        format: SerializeFormat,
     ) -> Result<impl Buf + Sized, Error>
     where
         T: Serialize,
     {
         let response = self
-            .raw_request_template(
-                url,
-                endpoint,
-                method,
-                body,
-                auth_header,
-                format,
-            )
+            .raw_request_template(url, endpoint, method, body, auth_header, format)
             .await?;
 
         let body = response.collect().await?;

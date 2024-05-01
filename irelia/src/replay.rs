@@ -2,6 +2,9 @@
 //!
 //! Please note, well most `in_game` endpoints will work when using the `replay` API, riot does not support
 //! using the `active_player` endpoints, and as such, they are expected to return errors instead
+//!
+//! The `replay` API uses `MsgPack` internally to communicate, as there is a max request size of 512kb, and
+//! the API will not accept compressed inputs, but is willing to return compressed outputs
 pub mod types;
 
 /// The `replay` and `in_game` API use the same URL
@@ -9,10 +12,10 @@ pub mod types;
 /// Hence why the replay API enables the `in_game` feature
 pub use super::in_game::URL;
 use crate::replay::types::{Playback, Recording, Render, Sequence};
+use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use crate::utils::requests::SerializeFormat;
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
@@ -44,10 +47,17 @@ impl ReplayClient {
         request_client: &RequestClient,
     ) -> Result<types::ReplayGameData, Error> {
         use hyper::body::Buf;
-        let buffer = request_client
-            .request_template(URL, "/liveclientdata/allgamedata", "GET", None::<()>, None, SerializeFormat::Json)
+        let buf = request_client
+            .request_template(
+                URL,
+                "/liveclientdata/allgamedata",
+                "GET",
+                None::<()>,
+                None,
+                SerializeFormat::Json,
+            )
             .await?;
-        Ok(serde_json::from_reader(buffer.reader())?)
+        Ok(serde_json::from_reader(buf.reader())?)
     }
 
     /// Information about particle visibility.
