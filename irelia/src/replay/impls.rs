@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use super::hidden::KeyFrameValue;
 use super::{
     EasingType, Frame, FrameAString, FrameBool, FrameColor, FrameFloat, FrameValue, FrameVector3,
@@ -5,6 +6,7 @@ use super::{
     Recording, Render, Sequence,
 };
 use serde::de::DeserializeOwned;
+use time::Duration;
 
 impl<T: KeyFrameValue + PartialEq> PartialEq<KeyFrameT<T>> for KeyFrameT<T> {
     fn eq(&self, other: &KeyFrameT<T>) -> bool {
@@ -14,13 +16,19 @@ impl<T: KeyFrameValue + PartialEq> PartialEq<KeyFrameT<T>> for KeyFrameT<T> {
     }
 }
 
+impl<T: KeyFrameValue + PartialEq> PartialOrd<Self> for KeyFrameT<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.time.partial_cmp(&other.time)
+    }
+}
+
 impl<T: KeyFrameValue + DeserializeOwned> KeyFrameT<T> {
     /// Creates a new generic keyframe with the time and value
     /// Defaults to `EasingType::Linear`
-    fn new(time: f32, value: T) -> Self {
+    fn new(time: f64, value: T) -> Self {
         Self {
             blend: EasingType::Linear,
-            time,
+            time: Duration::seconds_f64(time),
             value,
         }
     }
@@ -43,9 +51,9 @@ impl<T: KeyFrameValue> FrameValue<T> {
 
 impl Frame {
     #[must_use]
-    pub fn empty(time: f32) -> Self {
+    pub fn empty(time: f64) -> Self {
         Self {
-            current_time: time,
+            current_time: Duration::seconds_f64(time),
             camera_position: None,
             camera_rotation: None,
             depth_fog_color: None,
@@ -80,9 +88,9 @@ impl Frame {
 
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn from_render_time(name: impl ToString, render: &Render, current_time: f32) -> Self {
+    pub fn from_render_time(name: impl ToString, render: &Render, current_time: f64) -> Self {
         Self {
-            current_time,
+            current_time: Duration::seconds_f64(current_time),
             camera_position: Some(FrameVector3::new_default_blending(render.camera_position)),
             camera_rotation: Some(FrameVector3::new_default_blending(render.camera_rotation)),
             depth_fog_color: Some(FrameColor::new_default_blending(
@@ -133,7 +141,7 @@ impl Frame {
         render: &Render,
         recording: &Recording,
     ) -> Self {
-        let mut frame = Self::from_render_time(name, render, recording.current_time);
+        let mut frame = Self::from_render_time(name, render, recording.current_time.as_seconds_f64());
         let Some(playback_speed) = &mut frame.playback_speed else {
             unreachable!()
         };
@@ -218,7 +226,7 @@ impl Sequence {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    pub fn from_render_time(name: impl ToString, render: &Render, current_time: f32) -> Self {
+    pub fn from_render_time(name: impl ToString, render: &Render, current_time: f64) -> Self {
         Self {
             camera_position: Some(vec![KeyFrameVector3::new(
                 current_time,
@@ -324,9 +332,9 @@ impl Sequence {
         recording: &Recording,
     ) -> Self {
         let current_time = recording.current_time;
-        let mut sequence = Self::from_render_time(name, render, current_time);
+        let mut sequence = Self::from_render_time(name, render, current_time.as_seconds_f64());
         if let Some(value) = sequence.playback_speed.as_mut() {
-            value[0].value = current_time;
+            value[0].value = current_time.as_seconds_f64();
         }
         sequence
     }
@@ -339,11 +347,11 @@ impl Sequence {
 impl From<Vec<Frame>> for Sequence {
 	fn from(frames: Vec<Frame>) -> Self {
 		let mut sequence = Self::empty();
-		
+
 		for frame in frames {
 			todo!("There needs to be a giant if let Some() chain here")
 		}
-		
+
 		sequence
 	}
 }

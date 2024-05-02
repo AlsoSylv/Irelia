@@ -1,7 +1,10 @@
 use crate::in_game::types::{AllPlayer, Events, GameData};
 use crate::replay::types::hidden::KeyFrameValue;
-pub use serde_derive::{Deserialize, Serialize};
-use std::fmt::Debug;
+use serde_derive::{Deserialize, Serialize};
+use std::fmt::{Debug, Formatter};
+use serde::{Deserializer, Serializer};
+use serde::de::{Error, Visitor};
+use time::Duration;
 
 mod hidden {
     use crate::replay::types::{ColorValue, Vector3f};
@@ -9,7 +12,7 @@ mod hidden {
     /// This is a specific bound, only applied to valid schema types
     pub trait KeyFrameValue {}
     impl KeyFrameValue for String {}
-    impl KeyFrameValue for f32 {}
+    impl KeyFrameValue for f64 {}
     impl KeyFrameValue for ColorValue {}
     impl KeyFrameValue for Vector3f {}
     impl KeyFrameValue for bool {}
@@ -53,13 +56,13 @@ pub enum AVContainer {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColorValue {
     /// Red channel value (0-255)
-    pub r: f32,
+    pub r: f64,
     /// Green channel value (0-255)
-    pub g: f32,
+    pub g: f64,
     /// Blue channel value (0-255)
-    pub b: f32,
+    pub b: f64,
     /// Alpha channel value (0-255)
-    pub a: f32,
+    pub a: f64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -107,7 +110,7 @@ pub enum EasingType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Game {
     #[serde(rename = "processID")]
-    pub process_id: i32,
+    pub process_id: u32,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -121,33 +124,82 @@ pub enum HudCameraMode {
     Path,
 }
 
+/// Two keyframes are considered equal, assuming they both have the same value
+/// and that both use `Linear` blending
+///
+/// As for ordering, keyframes are ordered based on time
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
-    pub time: f32,
+    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    pub time: Duration,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
+}
+
+fn duration_to_f64<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
+    let seconds = duration.as_seconds_f64();
+    serializer.serialize_f64(seconds)
+}
+
+fn duration_from_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
+    struct F64Visitor;
+
+    impl<'a> Visitor<'a> for F64Visitor {
+        type Value = Duration;
+
+        fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+            formatter.write_str("An f64, representing time in seconds")
+        }
+
+        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> where E: Error {
+            Ok(Duration::seconds_f64(v))
+        }
+    }
+
+    deserializer.deserialize_any(F64Visitor)
+}
+
+#[test]
+fn test_deserialize() {
+    use serde::Deserialize;
+
+    let json = serde_json::json!({
+        "blend": "linear",
+        "value": 10.0,
+        "time": 1.1001,
+    });
+    
+    let keyframe = KeyFrameFloat::deserialize(json).unwrap();
+    
+    println!("{keyframe:?}");
+
+    let json = serde_json::to_value(keyframe).unwrap();
+
+    println!("{json}");
 }
 
 pub type KeyFrameAString = KeyFrameT<String>;
 pub type KeyFrameBool = KeyFrameT<bool>;
 pub type KeyFrameColor = KeyFrameT<ColorValue>;
-pub type KeyFrameFloat = KeyFrameT<f32>;
+pub type KeyFrameFloat = KeyFrameT<f64>;
 pub type KeyFrameVector3 = KeyFrameT<Vector3f>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Playback state
 pub struct Playback {
+    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
     /// Total length of the replay in seconds
-    pub length: f32,
+    pub length: Duration,
     /// True if the replay is paused
     pub paused: bool,
     /// True if the replay is fast forwarding or rewinding
     pub seeking: bool,
     /// Replay playback speed (0.5 is half speed, 2.0 is double speed etc.)
-    pub speed: f32,
+    pub speed: f64,
+    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
     /// Current time of the replay in seconds since the beginning of the game.
-    pub time: f32,
+    pub time: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -156,10 +208,12 @@ pub struct Playback {
 pub struct Recording {
     /// Indicates the output format of the recording (for example webm or png)
     pub codec: AVContainer,
+    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
     /// Current time of the recording, indicating progress of the render
-    pub current_time: f32,
+    pub current_time: Duration,
+    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
     /// Game time in seconds where the recording ends
-    pub end_time: f32,
+    pub end_time: Duration,
     /// True if the recording should match the target frames per second exactly by slowing down the recording if required
     pub enforce_frame_rate: bool,
     /// Target number of frames per second to record in the video
@@ -174,9 +228,10 @@ pub struct Recording {
     /// True if we are currently recording a replay
     pub recording: bool,
     /// Playback speed used when recording
-    pub replay_speed: f32,
+    pub replay_speed: f64,
+    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
     /// Game time in seconds where the recording starts
-    pub start_time: f32,
+    pub start_time: Duration,
     /// Width of the output video in pixels (same as the game window size)
     pub width: i32,
 }
@@ -191,11 +246,11 @@ pub struct Render {
     /// True if the camera is attached to an object in the game
     pub camera_attached: bool,
     /// Mouse look speed of the camera when in FPS mode (higher is faster)
-    pub camera_look_speed: f32,
+    pub camera_look_speed: f64,
     /// Camera movement mode such as first person or third person
     pub camera_mode: HudCameraMode,
     /// Movement speed of the camera (higher is faster)
-    pub camera_move_speed: f32,
+    pub camera_move_speed: f64,
     /// Position of the camera in world coordinates
     pub camera_position: Vector3f,
     /// Rotation of the camera in Euler degrees (yaw, pitch, roll)
@@ -207,31 +262,31 @@ pub struct Render {
     /// Display depth based fog
     pub depth_fog_enabled: bool,
     /// Distance from the camera to the end of the fog
-    pub depth_fog_end: f32,
+    pub depth_fog_end: f64,
     /// Depth fog intensity (opacity from 0.0 to 1.0)
-    pub depth_fog_intensity: f32,
+    pub depth_fog_intensity: f64,
     /// Distance from the camera to the start of the fog
-    pub depth_fog_start: f32,
+    pub depth_fog_start: f64,
     /// Adjusts the shape and strength of the blur effect
-    pub depth_of_field_circle: f32,
+    pub depth_of_field_circle: f64,
     /// Render a debug display to visualize depth of field distances
     pub depth_of_field_debug: bool,
     /// Display depth of field post-processing
     pub depth_of_field_enabled: bool,
     /// Furthest distance from the camera in full blur
-    pub depth_of_field_far: f32,
+    pub depth_of_field_far: f64,
     /// Distance to the center of the depth of field effect, the point that will be the most in focus
-    pub depth_of_field_mid: f32,
+    pub depth_of_field_mid: f64,
     /// Closest distance from the camera in full blur
-    pub depth_of_field_near: f32,
+    pub depth_of_field_near: f64,
     /// Distance around the middle point that should be in focus
-    pub depth_of_field_width: f32,
+    pub depth_of_field_width: f64,
     /// Display the level environment
     pub environment: bool,
     /// Far camera clipping distance
-    pub far_clip: f32,
+    pub far_clip: f64,
     /// Camera field of view in degrees (default 45)
-    pub field_of_view: f32,
+    pub field_of_view: f64,
     /// Display text notifications over the top of champions
     pub floating_text: bool,
     /// Display fog of war
@@ -251,11 +306,11 @@ pub struct Render {
     /// Display height based fog
     pub height_fog_enabled: bool,
     /// Vertical height at the end of the fog
-    pub height_fog_end: f32,
+    pub height_fog_end: f64,
     /// Height fog intensity (opacity from 0.0 to 1.0)
-    pub height_fog_intensity: f32,
+    pub height_fog_intensity: f64,
     /// Vertical height at the start of the fog
-    pub height_fog_start: f32,
+    pub height_fog_start: f64,
     /// Display all the user interface
     pub interface_all: bool,
     /// Display game announcements (center of the window)
@@ -283,9 +338,9 @@ pub struct Render {
     /// Display the replay timeline (bottom of the window)
     pub interface_timeline: bool,
     /// Adjusts the height that champions and minions walk over the environment
-    pub nav_grid_offset: f32,
+    pub nav_grid_offset: f64,
     /// Near camera clipping distance
-    pub near_clip: f32,
+    pub near_clip: f64,
     /// Display outlines on champions when the mouse is hovered over
     pub outline_hover: Option<bool>,
     /// Display outlines on champions when selected
@@ -297,13 +352,13 @@ pub struct Render {
     /// Sets the camera location to the selection's location adding the given offset
     pub selection_offset: Vector3f,
     /// Y-Axis offset of the skybox from the camera position
-    pub skybox_offset: f32,
+    pub skybox_offset: f64,
     /// Filepath for a cube mapped skybox in DDS format
     pub skybox_path: String,
     /// Radius from the camera position to the edge of the skybox
-    pub skybox_radius: f32,
+    pub skybox_radius: f64,
     /// Y-Axis rotation of the skybox in degrees
-    pub skybox_rotation: f32,
+    pub skybox_rotation: f64,
     /// Vector indicating the direction of the sun for shadows
     pub sun_direction: Vector3f,
 }
@@ -367,7 +422,7 @@ pub struct Frame {
     pub skybox_rotation: Option<FrameFloat>,
     /// Keyframe track for Render.sunDirection
     pub sun_direction: Option<FrameVector3>,
-    pub current_time: f32,
+    pub current_time: Duration,
 }
 
 pub struct FrameValue<T: KeyFrameValue> {
@@ -378,7 +433,7 @@ pub struct FrameValue<T: KeyFrameValue> {
 pub type FrameAString = FrameValue<String>;
 pub type FrameBool = FrameValue<bool>;
 pub type FrameColor = FrameValue<ColorValue>;
-pub type FrameFloat = FrameValue<f32>;
+pub type FrameFloat = FrameValue<f64>;
 pub type FrameVector3 = FrameValue<Vector3f>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -446,7 +501,7 @@ pub struct Sequence {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector3f {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }
