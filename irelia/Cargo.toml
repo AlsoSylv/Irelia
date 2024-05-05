@@ -22,6 +22,7 @@ rmp-serde = { version = "1.2.0" }
 rustls = { version = "0.22", default-features = false }
 rustls-pemfile = { version = "2.1", default-features = false }
 irelia_encoder = { path = "../encoder", version = "0.1" }
+affix = "0.1.2"
 # Optional across some features
 http-body-util = { version = "0.1", optional = true }
 sysinfo = { version = "0.30", optional = true, default-features = false }

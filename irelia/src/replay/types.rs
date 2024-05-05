@@ -1,9 +1,10 @@
 use crate::in_game::types::{AllPlayer, Events, GameData};
 use crate::replay::types::hidden::KeyFrameValue;
+use serde::de::{Error, Visitor};
+use serde::ser::SerializeStruct;
+use serde::{Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
-use serde::{Deserializer, Serializer};
-use serde::de::{Error, Visitor};
 use time::Duration;
 
 mod hidden {
@@ -53,7 +54,7 @@ pub enum AVContainer {
     PngAndDepth,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ColorValue {
     /// Red channel value (0-255)
     pub r: f64,
@@ -131,7 +132,10 @@ pub enum HudCameraMode {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
-    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    #[serde(
+        serialize_with = "duration_to_f64",
+        deserialize_with = "duration_from_f64"
+    )]
     pub time: Duration,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
@@ -152,7 +156,10 @@ fn duration_from_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Durat
             formatter.write_str("An f64, representing time in seconds")
         }
 
-        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> where E: Error {
+        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
             Ok(Duration::seconds_f64(v))
         }
     }
@@ -169,9 +176,9 @@ fn test_deserialize() {
         "value": 10.0,
         "time": 1.1001,
     });
-    
-    let keyframe = KeyFrameFloat::deserialize(json).unwrap();
-    
+
+    let keyframe = KeyFrameF32::deserialize(json).unwrap();
+
     println!("{keyframe:?}");
 
     let json = serde_json::to_value(keyframe).unwrap();
@@ -182,13 +189,16 @@ fn test_deserialize() {
 pub type KeyFrameAString = KeyFrameT<String>;
 pub type KeyFrameBool = KeyFrameT<bool>;
 pub type KeyFrameColor = KeyFrameT<ColorValue>;
-pub type KeyFrameFloat = KeyFrameT<f64>;
+pub type KeyFrameF32 = KeyFrameT<f64>;
 pub type KeyFrameVector3 = KeyFrameT<Vector3f>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Playback state
 pub struct Playback {
-    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    #[serde(
+        serialize_with = "duration_to_f64",
+        deserialize_with = "duration_from_f64"
+    )]
     /// Total length of the replay in seconds
     pub length: Duration,
     /// True if the replay is paused
@@ -197,7 +207,10 @@ pub struct Playback {
     pub seeking: bool,
     /// Replay playback speed (0.5 is half speed, 2.0 is double speed etc.)
     pub speed: f64,
-    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    #[serde(
+        serialize_with = "duration_to_f64",
+        deserialize_with = "duration_from_f64"
+    )]
     /// Current time of the replay in seconds since the beginning of the game.
     pub time: Duration,
 }
@@ -208,10 +221,16 @@ pub struct Playback {
 pub struct Recording {
     /// Indicates the output format of the recording (for example webm or png)
     pub codec: AVContainer,
-    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    #[serde(
+        serialize_with = "duration_to_f64",
+        deserialize_with = "duration_from_f64"
+    )]
     /// Current time of the recording, indicating progress of the render
     pub current_time: Duration,
-    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    #[serde(
+        serialize_with = "duration_to_f64",
+        deserialize_with = "duration_from_f64"
+    )]
     /// Game time in seconds where the recording ends
     pub end_time: Duration,
     /// True if the recording should match the target frames per second exactly by slowing down the recording if required
@@ -229,7 +248,10 @@ pub struct Recording {
     pub recording: bool,
     /// Playback speed used when recording
     pub replay_speed: f64,
-    #[serde(serialize_with = "duration_to_f64", deserialize_with = "duration_from_f64")]
+    #[serde(
+        serialize_with = "duration_to_f64",
+        deserialize_with = "duration_from_f64"
+    )]
     /// Game time in seconds where the recording starts
     pub start_time: Duration,
     /// Width of the output video in pixels (same as the game window size)
@@ -363,6 +385,7 @@ pub struct Render {
     pub sun_direction: Vector3f,
 }
 
+#[derive(Debug)]
 pub struct Frame {
     /// Keyframe track for Render.cameraPosition
     pub camera_position: Option<FrameVector3>,
@@ -425,6 +448,156 @@ pub struct Frame {
     pub current_time: Duration,
 }
 
+#[derive(Default, Debug)]
+pub struct FrameList(Vec<Frame>);
+
+impl FrameList {
+    #[must_use]
+    pub fn new() -> Self {
+        FrameList(Vec::default())
+    }
+
+    pub fn push(&mut self, frame: Frame) {
+        self.0.push(frame);
+    }
+}
+
+impl std::ops::Index<usize> for FrameList {
+    type Output = Frame;
+
+    fn index(&self, index: usize) -> &Frame {
+        &self.0[index]
+    }
+}
+
+impl std::ops::IndexMut<usize> for FrameList {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
+use affix::paste;
+
+macro_rules! count {
+    () => (0usize);
+    ( $x:tt $($xs:tt)* ) => (1usize + count!($($xs)*));
+}
+
+// I don't want have to write so much repeated code
+macro_rules! frame_list_collectors {
+    ($($field:ident: $type:ty)+) => {
+        impl FrameList {
+            paste! {
+                $(fn [<collect_ $field s>](&self) -> Vec<$type> {
+                    self.0
+                        .iter()
+                        .filter_map(|frame| {
+                            Some($type::from_frame_value(
+                                frame.current_time,
+                                frame.$field.clone()?,
+                            ))
+                        })
+                        .collect()
+                })+
+            }
+        }
+
+        impl Serialize for FrameList {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+                let mut sequence = serializer.serialize_struct("Sequence", count!($($field)*))?;
+                paste! {
+                    $(
+                        let vec = self.[< collect_ $field s>]();
+                        let field_name = stringify!([< $field:camel >]);
+                        if vec.is_empty() {
+                            sequence.skip_field(field_name)?;
+                        } else {
+                            sequence.serialize_field(field_name, &vec)?;
+                        }
+                    )+
+                }
+
+                sequence.end()
+            }
+        }
+    }
+}
+
+// This is what a final sequence should look like
+frame_list_collectors! {
+    camera_position: KeyFrameVector3
+    camera_rotation: KeyFrameVector3
+    depth_fog_color: KeyFrameColor
+    depth_fog_enabled: KeyFrameBool
+    depth_fog_end: KeyFrameF32
+    depth_fog_intensity: KeyFrameF32
+    depth_fog_start: KeyFrameF32
+    depth_of_field_circle: KeyFrameF32
+    depth_of_field_enabled: KeyFrameBool
+    depth_of_field_far: KeyFrameF32
+    depth_of_field_mid: KeyFrameF32
+    depth_of_field_near: KeyFrameF32
+    depth_of_field_width: KeyFrameF32
+    far_clip: KeyFrameF32
+    field_of_view: KeyFrameF32
+    height_fog_color: KeyFrameColor
+    height_fog_enabled: KeyFrameBool
+    height_fog_end: KeyFrameF32
+    height_fog_intensity: KeyFrameF32
+    height_fog_start: KeyFrameF32
+    nav_grid_offset: KeyFrameF32
+    near_clip: KeyFrameF32
+    playback_speed: KeyFrameF32
+    selection_name: KeyFrameAString
+    selection_offset: KeyFrameVector3
+    skybox_offset: KeyFrameF32
+    skybox_radius: KeyFrameF32
+    skybox_rotation: KeyFrameF32
+    sun_direction: KeyFrameVector3
+}
+
+// impl<'de> Deserialize<'de> for FrameList {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+//         #[derive(Deserialize)]
+//         #[serde(field_identifier, rename_all = "camelCase")]
+//         enum Fields {
+//             CameraPositions,
+//         }
+//
+//         struct SequenceVisitor;
+//
+//         impl<'de> Visitor<'de> for SequenceVisitor {
+//             type Value = FrameList;
+//
+//             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+//                 formatter.write_str("Expecting a sequence from the replay API")
+//             }
+//
+//             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de> {
+//                 let mut camera_position = None;
+//                 while let Some(key) = map.next_key()? {
+//                     match key {
+//                         Fields::CameraPositions => {
+//                             if camera_position.is_some() {
+//                                 return Err(serde::de::Error::duplicate_field("camera_position"))?;
+//                             }
+//                             camera_position = Some(map.next_value()?);
+//                         }
+//                     }
+//                 }
+//
+//                 camera_position.ok_or_else(|| Error::missing_field("camera_position"))?;
+//
+//                 todo!()
+//             }
+//         }
+//
+//         const FIELDS: &[&str] = &["cameraPosition"];
+//         deserializer.deserialize_struct("Sequence", FIELDS, SequenceVisitor)
+//     }
+// }
+
+#[derive(Clone, Debug)]
 pub struct FrameValue<T: KeyFrameValue> {
     pub value: T,
     pub blending_mode: EasingType,
@@ -448,53 +621,53 @@ pub struct Sequence {
     /// Keyframe track for Render.depthFogEnabled
     pub depth_fog_enabled: Option<Vec<KeyFrameBool>>,
     /// Keyframe track for Render.depthFogEnd
-    pub depth_fog_end: Option<Vec<KeyFrameFloat>>,
+    pub depth_fog_end: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthFogIntensity
-    pub depth_fog_intensity: Option<Vec<KeyFrameFloat>>,
+    pub depth_fog_intensity: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthFogStart
-    pub depth_fog_start: Option<Vec<KeyFrameFloat>>,
+    pub depth_fog_start: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthOfFieldCircle
-    pub depth_of_field_circle: Option<Vec<KeyFrameFloat>>,
+    pub depth_of_field_circle: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthOfFieldEnabled
     pub depth_of_field_enabled: Option<Vec<KeyFrameBool>>,
     /// Keyframe track for Render.depthOfFieldFar
-    pub depth_of_field_far: Option<Vec<KeyFrameFloat>>,
+    pub depth_of_field_far: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthOfFieldMid
-    pub depth_of_field_mid: Option<Vec<KeyFrameFloat>>,
+    pub depth_of_field_mid: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthOfFieldNear
-    pub depth_of_field_near: Option<Vec<KeyFrameFloat>>,
+    pub depth_of_field_near: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.depthOfFieldWidth
-    pub depth_of_field_width: Option<Vec<KeyFrameFloat>>,
+    pub depth_of_field_width: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.farClip
-    pub far_clip: Option<Vec<KeyFrameFloat>>,
+    pub far_clip: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.fieldOfView
-    pub field_of_view: Option<Vec<KeyFrameFloat>>,
+    pub field_of_view: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.heightFogColor
     pub height_fog_color: Option<Vec<KeyFrameColor>>,
     /// Keyframe track for Render.heightFogEnabled
     pub height_fog_enabled: Option<Vec<KeyFrameBool>>,
     /// Keyframe track for Render.heightFogEnd
-    pub height_fog_end: Option<Vec<KeyFrameFloat>>,
+    pub height_fog_end: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.heightFogIntensity
-    pub height_fog_intensity: Option<Vec<KeyFrameFloat>>,
+    pub height_fog_intensity: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.heightFogStart
-    pub height_fog_start: Option<Vec<KeyFrameFloat>>,
+    pub height_fog_start: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.navGridOffset
-    pub nav_grid_offset: Option<Vec<KeyFrameFloat>>,
+    pub nav_grid_offset: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.nearClip
-    pub near_clip: Option<Vec<KeyFrameFloat>>,
+    pub near_clip: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Playback.speed
-    pub playback_speed: Option<Vec<KeyFrameFloat>>,
+    pub playback_speed: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.selectionName
     pub selection_name: Option<Vec<KeyFrameAString>>,
     /// Keyframe track for Render.selectionOffset
     pub selection_offset: Option<Vec<KeyFrameVector3>>,
     /// Keyframe track for Render.skyboxOffset
-    pub skybox_offset: Option<Vec<KeyFrameFloat>>,
+    pub skybox_offset: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.skyboxRadius
-    pub skybox_radius: Option<Vec<KeyFrameFloat>>,
+    pub skybox_radius: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.skyboxRotation
-    pub skybox_rotation: Option<Vec<KeyFrameFloat>>,
+    pub skybox_rotation: Option<Vec<KeyFrameF32>>,
     /// Keyframe track for Render.sunDirection
     pub sun_direction: Option<Vec<KeyFrameVector3>>,
 }

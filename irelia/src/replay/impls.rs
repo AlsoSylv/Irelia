@@ -1,11 +1,11 @@
-use std::cmp::Ordering;
 use super::hidden::KeyFrameValue;
 use super::{
     EasingType, Frame, FrameAString, FrameBool, FrameColor, FrameFloat, FrameValue, FrameVector3,
-    KeyFrameAString, KeyFrameBool, KeyFrameColor, KeyFrameFloat, KeyFrameT, KeyFrameVector3,
+    KeyFrameAString, KeyFrameBool, KeyFrameColor, KeyFrameF32, KeyFrameT, KeyFrameVector3,
     Recording, Render, Sequence,
 };
 use serde::de::DeserializeOwned;
+use std::cmp::Ordering;
 use time::Duration;
 
 impl<T: KeyFrameValue + PartialEq> PartialEq<KeyFrameT<T>> for KeyFrameT<T> {
@@ -30,6 +30,14 @@ impl<T: KeyFrameValue + DeserializeOwned> KeyFrameT<T> {
             blend: EasingType::Linear,
             time: Duration::seconds_f64(time),
             value,
+        }
+    }
+
+    pub fn from_frame_value(time: Duration, value: FrameValue<T>) -> Self {
+        Self {
+            time,
+            value: value.value,
+            blend: value.blending_mode,
         }
     }
 }
@@ -93,9 +101,7 @@ impl Frame {
             current_time: Duration::seconds_f64(current_time),
             camera_position: Some(FrameVector3::new_default_blending(render.camera_position)),
             camera_rotation: Some(FrameVector3::new_default_blending(render.camera_rotation)),
-            depth_fog_color: Some(FrameColor::new_default_blending(
-                render.depth_fog_color.clone(),
-            )),
+            depth_fog_color: Some(FrameColor::new_default_blending(render.depth_fog_color)),
             depth_fog_enabled: Some(FrameBool::new_default_blending(render.depth_fog_enabled)),
             sun_direction: Some(FrameVector3::new_default_blending(render.sun_direction)),
             depth_fog_end: Some(FrameFloat::new_default_blending(render.depth_fog_end)),
@@ -115,9 +121,7 @@ impl Frame {
             )),
             far_clip: Some(FrameFloat::new_default_blending(render.far_clip)),
             field_of_view: Some(FrameFloat::new_default_blending(render.field_of_view)),
-            height_fog_color: Some(FrameColor::new_default_blending(
-                render.height_fog_color.clone(),
-            )),
+            height_fog_color: Some(FrameColor::new_default_blending(render.height_fog_color)),
             height_fog_enabled: Some(FrameBool::new_default_blending(render.height_fog_enabled)),
             height_fog_end: Some(FrameFloat::new_default_blending(render.height_fog_end)),
             height_fog_intensity: Some(FrameFloat::new_default_blending(
@@ -141,7 +145,8 @@ impl Frame {
         render: &Render,
         recording: &Recording,
     ) -> Self {
-        let mut frame = Self::from_render_time(name, render, recording.current_time.as_seconds_f64());
+        let mut frame =
+            Self::from_render_time(name, render, recording.current_time.as_seconds_f64());
         let Some(playback_speed) = &mut frame.playback_speed else {
             unreachable!()
         };
@@ -238,22 +243,22 @@ impl Sequence {
             )]),
             depth_fog_color: Some(vec![KeyFrameColor::new(
                 current_time,
-                render.depth_fog_color.clone(),
+                render.depth_fog_color,
             )]),
             depth_fog_enabled: Some(vec![KeyFrameBool::new(
                 current_time,
                 render.depth_fog_enabled,
             )]),
-            depth_fog_end: Some(vec![KeyFrameFloat::new(current_time, render.depth_fog_end)]),
-            depth_fog_intensity: Some(vec![KeyFrameFloat::new(
+            depth_fog_end: Some(vec![KeyFrameF32::new(current_time, render.depth_fog_end)]),
+            depth_fog_intensity: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_fog_intensity,
             )]),
-            depth_fog_start: Some(vec![KeyFrameFloat::new(
+            depth_fog_start: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_fog_start,
             )]),
-            depth_of_field_circle: Some(vec![KeyFrameFloat::new(
+            depth_of_field_circle: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_of_field_circle,
             )]),
@@ -261,61 +266,61 @@ impl Sequence {
                 current_time,
                 render.depth_of_field_enabled,
             )]),
-            depth_of_field_far: Some(vec![KeyFrameFloat::new(
+            depth_of_field_far: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_of_field_far,
             )]),
-            depth_of_field_mid: Some(vec![KeyFrameFloat::new(
+            depth_of_field_mid: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_of_field_mid,
             )]),
-            depth_of_field_near: Some(vec![KeyFrameFloat::new(
+            depth_of_field_near: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_of_field_near,
             )]),
-            depth_of_field_width: Some(vec![KeyFrameFloat::new(
+            depth_of_field_width: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.depth_of_field_width,
             )]),
-            far_clip: Some(vec![KeyFrameFloat::new(current_time, render.far_clip)]),
-            field_of_view: Some(vec![KeyFrameFloat::new(current_time, render.field_of_view)]),
+            far_clip: Some(vec![KeyFrameF32::new(current_time, render.far_clip)]),
+            field_of_view: Some(vec![KeyFrameF32::new(current_time, render.field_of_view)]),
             height_fog_color: Some(vec![KeyFrameColor::new(
                 current_time,
-                render.height_fog_color.clone(),
+                render.height_fog_color,
             )]),
             height_fog_enabled: Some(vec![KeyFrameBool::new(
                 current_time,
                 render.height_fog_enabled,
             )]),
-            height_fog_end: Some(vec![KeyFrameFloat::new(
+            height_fog_end: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.height_fog_end,
             )]),
-            height_fog_intensity: Some(vec![KeyFrameFloat::new(
+            height_fog_intensity: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.height_fog_intensity,
             )]),
-            height_fog_start: Some(vec![KeyFrameFloat::new(
+            height_fog_start: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.height_fog_start,
             )]),
-            nav_grid_offset: Some(vec![KeyFrameFloat::new(
+            nav_grid_offset: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.nav_grid_offset,
             )]),
-            near_clip: Some(vec![KeyFrameFloat::new(
+            near_clip: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.nav_grid_offset,
             )]),
-            playback_speed: Some(vec![KeyFrameFloat::new(current_time, 1.0)]),
+            playback_speed: Some(vec![KeyFrameF32::new(current_time, 1.0)]),
             selection_name: Some(vec![KeyFrameAString::new(current_time, name.to_string())]),
             selection_offset: Some(vec![KeyFrameVector3::new(
                 current_time,
                 render.selection_offset,
             )]),
-            skybox_offset: Some(vec![KeyFrameFloat::new(current_time, render.skybox_offset)]),
-            skybox_radius: Some(vec![KeyFrameFloat::new(current_time, render.skybox_radius)]),
-            skybox_rotation: Some(vec![KeyFrameFloat::new(
+            skybox_offset: Some(vec![KeyFrameF32::new(current_time, render.skybox_offset)]),
+            skybox_radius: Some(vec![KeyFrameF32::new(current_time, render.skybox_radius)]),
+            skybox_rotation: Some(vec![KeyFrameF32::new(
                 current_time,
                 render.skybox_rotation,
             )]),
@@ -342,16 +347,267 @@ impl Sequence {
     pub fn from_render(name: impl ToString, render: &Render) -> Self {
         Self::from_render_time(name, render, 0.0)
     }
+
+    pub fn push_from_render_recording(&mut self, render: &Render, recording: &Recording) {
+        let current_time = recording.current_time.as_seconds_f64();
+        self.push_from_render_time(render, current_time);
+        if let Some(vec) = &mut self.playback_speed {
+            let place = vec.len() - 1;
+            vec[place] = KeyFrameT::new(current_time, recording.replay_speed);
+        }
+    }
+
+    pub fn push_from_render_time(&mut self, render: &Render, time: f64) {
+        if let Some(vec) = &mut self.camera_position {
+            vec.push(KeyFrameT::new(time, render.camera_position));
+        }
+        if let Some(vec) = &mut self.camera_rotation {
+            vec.push(KeyFrameT::new(time, render.camera_rotation));
+        }
+        if let Some(vec) = &mut self.depth_fog_color {
+            vec.push(KeyFrameT::new(time, render.depth_fog_color));
+        }
+        if let Some(vec) = &mut self.depth_fog_enabled {
+            vec.push(KeyFrameT::new(time, render.depth_fog_enabled));
+        }
+        if let Some(vec) = &mut self.depth_fog_end {
+            vec.push(KeyFrameT::new(time, render.depth_fog_end));
+        }
+        if let Some(vec) = &mut self.depth_fog_intensity {
+            vec.push(KeyFrameT::new(time, render.depth_fog_intensity));
+        }
+        if let Some(vec) = &mut self.depth_fog_start {
+            vec.push(KeyFrameT::new(time, render.depth_fog_start));
+        }
+        if let Some(vec) = &mut self.depth_of_field_circle {
+            vec.push(KeyFrameT::new(time, render.depth_of_field_circle));
+        }
+        if let Some(vec) = &mut self.depth_of_field_enabled {
+            vec.push(KeyFrameT::new(time, render.depth_of_field_enabled));
+        }
+        if let Some(vec) = &mut self.depth_of_field_far {
+            vec.push(KeyFrameT::new(time, render.depth_of_field_far));
+        }
+        if let Some(vec) = &mut self.depth_of_field_mid {
+            vec.push(KeyFrameT::new(time, render.depth_of_field_mid));
+        }
+        if let Some(vec) = &mut self.depth_of_field_near {
+            vec.push(KeyFrameT::new(time, render.depth_of_field_near));
+        }
+        if let Some(vec) = &mut self.depth_of_field_width {
+            vec.push(KeyFrameT::new(time, render.depth_of_field_width));
+        }
+        if let Some(vec) = &mut self.far_clip {
+            vec.push(KeyFrameT::new(time, render.far_clip));
+        }
+        if let Some(vec) = &mut self.field_of_view {
+            vec.push(KeyFrameT::new(time, render.field_of_view));
+        }
+        if let Some(vec) = &mut self.height_fog_color {
+            vec.push(KeyFrameT::new(time, render.height_fog_color));
+        }
+        if let Some(vec) = &mut self.height_fog_enabled {
+            vec.push(KeyFrameT::new(time, render.height_fog_enabled));
+        }
+        if let Some(vec) = &mut self.height_fog_end {
+            vec.push(KeyFrameT::new(time, render.height_fog_end));
+        }
+        if let Some(vec) = &mut self.height_fog_intensity {
+            vec.push(KeyFrameT::new(time, render.height_fog_intensity));
+        }
+        if let Some(vec) = &mut self.height_fog_start {
+            vec.push(KeyFrameT::new(time, render.height_fog_start));
+        }
+        if let Some(vec) = &mut self.nav_grid_offset {
+            vec.push(KeyFrameT::new(time, render.nav_grid_offset));
+        }
+        if let Some(vec) = &mut self.near_clip {
+            vec.push(KeyFrameT::new(time, render.near_clip));
+        }
+        if let Some(vec) = &mut self.playback_speed {
+            vec.push(KeyFrameT::new(time, vec[vec.len() - 2].value));
+        }
+        if let Some(vec) = &mut self.selection_offset {
+            vec.push(KeyFrameT::new(time, render.selection_offset));
+        }
+        if let Some(vec) = &mut self.skybox_offset {
+            vec.push(KeyFrameT::new(time, render.skybox_offset));
+        }
+        if let Some(vec) = &mut self.skybox_radius {
+            vec.push(KeyFrameT::new(time, render.skybox_radius));
+        }
+        if let Some(vec) = &mut self.skybox_rotation {
+            vec.push(KeyFrameT::new(time, render.skybox_rotation));
+        }
+        if let Some(vec) = &mut self.sun_direction {
+            vec.push(KeyFrameT::new(time, render.sun_direction));
+        }
+    }
 }
 
-impl From<Vec<Frame>> for Sequence {
-	fn from(frames: Vec<Frame>) -> Self {
-		let mut sequence = Self::empty();
+impl Sequence {
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn from_frames(frames: Vec<Frame>, name: impl ToString) -> Self {
+        let mut sequence = Self::empty();
+        let mut first = true;
 
-		for frame in frames {
-			todo!("There needs to be a giant if let Some() chain here")
-		}
+        for frame in frames {
+            let time = frame.current_time;
 
-		sequence
-	}
+            if first {
+                if let Some(section_name) = &mut sequence.selection_name {
+                    section_name.push(KeyFrameAString::from_frame_value(
+                        time,
+                        FrameValue::new_default_blending(name.to_string()),
+                    ));
+                }
+            }
+
+            first = false;
+
+            if let Some(vec) = &mut sequence.camera_position {
+                if let Some(value) = frame.camera_position {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.camera_rotation {
+                if let Some(value) = frame.camera_rotation {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_fog_color {
+                if let Some(value) = frame.depth_fog_color {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_fog_enabled {
+                if let Some(value) = frame.depth_fog_enabled {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_fog_end {
+                if let Some(value) = frame.depth_fog_end {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_fog_intensity {
+                if let Some(value) = frame.depth_fog_intensity {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_fog_start {
+                if let Some(value) = frame.depth_fog_start {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_of_field_circle {
+                if let Some(value) = frame.depth_of_field_circle {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_of_field_enabled {
+                if let Some(value) = frame.depth_of_field_enabled {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_of_field_far {
+                if let Some(value) = frame.depth_of_field_far {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_of_field_mid {
+                if let Some(value) = frame.depth_of_field_mid {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_of_field_near {
+                if let Some(value) = frame.depth_of_field_near {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.depth_of_field_width {
+                if let Some(value) = frame.depth_of_field_width {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.far_clip {
+                if let Some(value) = frame.far_clip {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.field_of_view {
+                if let Some(value) = frame.field_of_view {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.height_fog_color {
+                if let Some(value) = frame.height_fog_color {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.height_fog_enabled {
+                if let Some(value) = frame.height_fog_enabled {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.height_fog_end {
+                if let Some(value) = frame.height_fog_end {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.height_fog_intensity {
+                if let Some(value) = frame.height_fog_intensity {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.height_fog_start {
+                if let Some(value) = frame.height_fog_start {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.nav_grid_offset {
+                if let Some(value) = frame.nav_grid_offset {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.near_clip {
+                if let Some(value) = frame.near_clip {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.playback_speed {
+                if let Some(value) = frame.playback_speed {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.selection_offset {
+                if let Some(value) = frame.selection_offset {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.skybox_offset {
+                if let Some(value) = frame.skybox_offset {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.skybox_radius {
+                if let Some(value) = frame.skybox_radius {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.skybox_rotation {
+                if let Some(value) = frame.skybox_rotation {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+            if let Some(vec) = &mut sequence.sun_direction {
+                if let Some(value) = frame.sun_direction {
+                    vec.push(KeyFrameT::from_frame_value(time, value));
+                }
+            }
+        }
+
+        sequence
+    }
 }

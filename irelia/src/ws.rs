@@ -43,7 +43,7 @@ pub enum Flow {
 
 type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 type Reader = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-type Callback = Box<dyn FnMut(Result<Event, Error>) -> ControlFlow<(), Flow> + Send + 'static>;
+type Callback = dyn FnMut(Result<Event, Error>) -> ControlFlow<(), Flow> + Send + 'static;
 
 impl LCUWebSocket {
     /// Creates a new connection to the LCU websocket
@@ -55,7 +55,9 @@ impl LCUWebSocket {
     /// # Panics
     ///
     /// If the auth header returned is somehow invalid (though I have not seen this in practice)
-    pub async fn new(f: Callback) -> Result<Self, Error> {
+    pub async fn new(
+        mut f: impl FnMut(Result<Event, Error>) -> ControlFlow<(), Flow> + Send + 'static,
+    ) -> Result<Self, Error> {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
         let connector = Some(Connector::Rustls(tls.clone()));
@@ -74,8 +76,6 @@ impl LCUWebSocket {
         let (mut write, mut read) = stream.split();
 
         let handle = tokio::spawn(async move {
-            let mut f = f;
-
             loop {
                 if let Ok((code, endpoint)) = ws_receiver.try_recv() {
                     let endpoint_str = endpoint.to_string();
