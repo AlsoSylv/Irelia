@@ -1,12 +1,26 @@
 use super::hidden::KeyFrameValue;
 use super::{
-    EasingType, Frame, FrameAString, FrameBool, FrameColor, FrameFloat, FrameValue, FrameVector3,
-    KeyFrameAString, KeyFrameBool, KeyFrameColor, KeyFrameF32, KeyFrameT, KeyFrameVector3,
+    EasingType, Frame, FrameBool, FrameColor, FrameFloat, FrameString, FrameValue, FrameVector3,
+    KeyFrameBool, KeyFrameColor, KeyFrameF64, KeyFrameString, KeyFrameT, KeyFrameVector3,
     Recording, Render, Sequence,
 };
 use serde::de::DeserializeOwned;
 use std::cmp::Ordering;
 use time::Duration;
+
+impl Eq for Frame {}
+
+impl PartialOrd<Self> for Frame {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.current_time.partial_cmp(&other.current_time)
+    }
+}
+
+impl Ord for Frame {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.current_time.cmp(&other.current_time)
+    }
+}
 
 impl<T: KeyFrameValue + PartialEq> PartialEq<KeyFrameT<T>> for KeyFrameT<T> {
     fn eq(&self, other: &KeyFrameT<T>) -> bool {
@@ -130,7 +144,7 @@ impl Frame {
             height_fog_start: Some(FrameFloat::new_default_blending(render.height_fog_start)),
             nav_grid_offset: Some(FrameFloat::new_default_blending(render.nav_grid_offset)),
             near_clip: Some(FrameFloat::new_default_blending(render.near_clip)),
-            selection_name: Some(FrameAString::new_default_blending(name.to_string())),
+            selection_name: Some(FrameString::new_default_blending(name.to_string())),
             selection_offset: Some(FrameVector3::new_default_blending(render.selection_offset)),
             skybox_offset: Some(FrameFloat::new_default_blending(render.skybox_offset)),
             playback_speed: Some(FrameFloat::new_default_blending(1.0)),
@@ -249,16 +263,13 @@ impl Sequence {
                 current_time,
                 render.depth_fog_enabled,
             )]),
-            depth_fog_end: Some(vec![KeyFrameF32::new(current_time, render.depth_fog_end)]),
-            depth_fog_intensity: Some(vec![KeyFrameF32::new(
+            depth_fog_end: Some(vec![KeyFrameF64::new(current_time, render.depth_fog_end)]),
+            depth_fog_intensity: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.depth_fog_intensity,
             )]),
-            depth_fog_start: Some(vec![KeyFrameF32::new(
-                current_time,
-                render.depth_fog_start,
-            )]),
-            depth_of_field_circle: Some(vec![KeyFrameF32::new(
+            depth_fog_start: Some(vec![KeyFrameF64::new(current_time, render.depth_fog_start)]),
+            depth_of_field_circle: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.depth_of_field_circle,
             )]),
@@ -266,24 +277,24 @@ impl Sequence {
                 current_time,
                 render.depth_of_field_enabled,
             )]),
-            depth_of_field_far: Some(vec![KeyFrameF32::new(
+            depth_of_field_far: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.depth_of_field_far,
             )]),
-            depth_of_field_mid: Some(vec![KeyFrameF32::new(
+            depth_of_field_mid: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.depth_of_field_mid,
             )]),
-            depth_of_field_near: Some(vec![KeyFrameF32::new(
+            depth_of_field_near: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.depth_of_field_near,
             )]),
-            depth_of_field_width: Some(vec![KeyFrameF32::new(
+            depth_of_field_width: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.depth_of_field_width,
             )]),
-            far_clip: Some(vec![KeyFrameF32::new(current_time, render.far_clip)]),
-            field_of_view: Some(vec![KeyFrameF32::new(current_time, render.field_of_view)]),
+            far_clip: Some(vec![KeyFrameF64::new(current_time, render.far_clip)]),
+            field_of_view: Some(vec![KeyFrameF64::new(current_time, render.field_of_view)]),
             height_fog_color: Some(vec![KeyFrameColor::new(
                 current_time,
                 render.height_fog_color,
@@ -292,38 +303,26 @@ impl Sequence {
                 current_time,
                 render.height_fog_enabled,
             )]),
-            height_fog_end: Some(vec![KeyFrameF32::new(
-                current_time,
-                render.height_fog_end,
-            )]),
-            height_fog_intensity: Some(vec![KeyFrameF32::new(
+            height_fog_end: Some(vec![KeyFrameF64::new(current_time, render.height_fog_end)]),
+            height_fog_intensity: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.height_fog_intensity,
             )]),
-            height_fog_start: Some(vec![KeyFrameF32::new(
+            height_fog_start: Some(vec![KeyFrameF64::new(
                 current_time,
                 render.height_fog_start,
             )]),
-            nav_grid_offset: Some(vec![KeyFrameF32::new(
-                current_time,
-                render.nav_grid_offset,
-            )]),
-            near_clip: Some(vec![KeyFrameF32::new(
-                current_time,
-                render.nav_grid_offset,
-            )]),
-            playback_speed: Some(vec![KeyFrameF32::new(current_time, 1.0)]),
-            selection_name: Some(vec![KeyFrameAString::new(current_time, name.to_string())]),
+            nav_grid_offset: Some(vec![KeyFrameF64::new(current_time, render.nav_grid_offset)]),
+            near_clip: Some(vec![KeyFrameF64::new(current_time, render.nav_grid_offset)]),
+            playback_speed: Some(vec![KeyFrameF64::new(current_time, 1.0)]),
+            selection_name: Some(vec![KeyFrameString::new(current_time, name.to_string())]),
             selection_offset: Some(vec![KeyFrameVector3::new(
                 current_time,
                 render.selection_offset,
             )]),
-            skybox_offset: Some(vec![KeyFrameF32::new(current_time, render.skybox_offset)]),
-            skybox_radius: Some(vec![KeyFrameF32::new(current_time, render.skybox_radius)]),
-            skybox_rotation: Some(vec![KeyFrameF32::new(
-                current_time,
-                render.skybox_rotation,
-            )]),
+            skybox_offset: Some(vec![KeyFrameF64::new(current_time, render.skybox_offset)]),
+            skybox_radius: Some(vec![KeyFrameF64::new(current_time, render.skybox_radius)]),
+            skybox_rotation: Some(vec![KeyFrameF64::new(current_time, render.skybox_rotation)]),
             sun_direction: Some(vec![KeyFrameVector3::new(
                 current_time,
                 render.sun_direction,
@@ -457,7 +456,7 @@ impl Sequence {
 
             if first {
                 if let Some(section_name) = &mut sequence.selection_name {
-                    section_name.push(KeyFrameAString::from_frame_value(
+                    section_name.push(KeyFrameString::from_frame_value(
                         time,
                         FrameValue::new_default_blending(name.to_string()),
                     ));
