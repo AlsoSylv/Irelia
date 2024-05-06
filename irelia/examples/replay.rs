@@ -10,17 +10,7 @@ async fn main() {
     let request_client = RequestClient::new();
     let replay_client = ReplayClient::new();
 
-    let process_info = replay_client.game(&request_client).await;
-
-    println!("{process_info:?}");
-
-    let all_game_data = replay_client.all_game_data(&request_client).await;
-
-    println!("{all_game_data:?}");
-
     let mut renderer = replay_client.get_render(&request_client).await.unwrap();
-
-    println!("{renderer:?}");
 
     renderer.fog_of_war = false;
 
@@ -34,14 +24,30 @@ async fn main() {
         &record,
     ));
 
-    sequence[0].camera_position = None;
+    let mut renderer = replay_client.get_render(&request_client).await.unwrap();
 
-    println!("\n\n{sequence:#?}");
+    renderer.fog_of_war = true;
+
+    let record = replay_client.get_recording(&request_client).await.unwrap();
+
+    sequence.push(Frame::from_render_recording(
+        "TestSequence",
+        &renderer,
+        &record,
+    ));
+
+    sequence.push(Frame::from_render_recording(
+        "TestSequence",
+        &renderer,
+        &record,
+    ));
+
+    println!("\n\n{sequence:?}");
 
     let sequence = replay_client
         .post_sequence(sequence, &request_client)
         .await
         .unwrap();
 
-    println!("\n\n{:#}", serde_json::to_value(sequence).unwrap());
+    println!("\n\n{}", serde_json::to_value(sequence).unwrap());
 }

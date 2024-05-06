@@ -11,7 +11,7 @@ pub mod types;
 /// A number of endpoints are also shared
 /// Hence why the replay API enables the `in_game` feature
 pub use super::in_game::URL;
-use crate::replay::types::{FrameList, Playback, Recording, Render, Sequence};
+use crate::replay::types::{FrameList, Playback, Recording, Render};
 use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 use serde::de::DeserializeOwned;
@@ -157,7 +157,7 @@ impl ReplayClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    pub async fn get_sequence(&self, request_client: &RequestClient) -> Result<Sequence, Error> {
+    pub async fn get_sequence(&self, request_client: &RequestClient) -> Result<FrameList, Error> {
         self.replay("sequence", "GET", None::<()>, request_client)
             .await
     }
@@ -170,7 +170,7 @@ impl ReplayClient {
         &self,
         body: FrameList,
         request_client: &RequestClient,
-    ) -> Result<Sequence, Error> {
+    ) -> Result<FrameList, Error> {
         self.replay("sequence", "POST", Some(body), request_client)
             .await
     }

@@ -12,7 +12,7 @@ impl Eq for Frame {}
 
 impl PartialOrd<Self> for Frame {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.current_time.partial_cmp(&other.current_time)
+        Some(self.cmp(other))
     }
 }
 
@@ -424,7 +424,7 @@ impl Sequence {
             vec.push(KeyFrameT::new(time, render.near_clip));
         }
         if let Some(vec) = &mut self.playback_speed {
-            vec.push(KeyFrameT::new(time, vec[vec.len() - 2].value));
+            vec.push(KeyFrameT::new(time, vec[vec.len() - 1].value));
         }
         if let Some(vec) = &mut self.selection_offset {
             vec.push(KeyFrameT::new(time, render.selection_offset));
