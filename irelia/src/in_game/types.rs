@@ -6,11 +6,10 @@
 //! Well the types and returned values do not match, the format will serialize
 //! to the same value
 
-use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use std::fmt::Formatter;
+use time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -81,7 +80,7 @@ impl ActivePlayer {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Abilities {
-    passive: Passive,
+    passive: AbilityInfo,
     q: Ability,
     w: Ability,
     e: Ability,
@@ -90,7 +89,7 @@ pub struct Abilities {
 
 impl Abilities {
     #[must_use]
-    pub fn passive(&self) -> &Passive {
+    pub fn passive(&self) -> &AbilityInfo {
         &self.passive
     }
     #[must_use]
@@ -113,14 +112,14 @@ impl Abilities {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Passive {
+pub struct AbilityInfo {
     display_name: String,
     id: String,
     raw_description: String,
     raw_display_name: String,
 }
 
-impl Passive {
+impl AbilityInfo {
     #[must_use]
     pub fn display_name(&self) -> &str {
         &self.display_name
@@ -143,10 +142,8 @@ impl Passive {
 #[serde(rename_all = "camelCase")]
 pub struct Ability {
     ability_level: i64,
-    display_name: String,
-    id: String,
-    raw_description: String,
-    raw_display_name: String,
+    #[serde(flatten)]
+    ability_info: AbilityInfo
 }
 
 impl Ability {
@@ -155,20 +152,8 @@ impl Ability {
         self.ability_level
     }
     #[must_use]
-    pub fn display_name(&self) -> &str {
-        &self.display_name
-    }
-    #[must_use]
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-    #[must_use]
-    pub fn raw_description(&self) -> &str {
-        &self.raw_description
-    }
-    #[must_use]
-    pub fn raw_display_name(&self) -> &str {
-        &self.raw_display_name
+    pub fn ability_info(&self) -> &AbilityInfo {
+        &self.ability_info
     }
 }
 
@@ -179,15 +164,16 @@ pub struct ChampionStats {
     armor: f64,
     armor_penetration_flat: f64,
     armor_penetration_percent: f64,
+    ability_haste: f64,
     attack_damage: f64,
     attack_range: f64,
     attack_speed: f64,
     bonus_armor_penetration_percent: f64,
     bonus_magic_penetration_percent: f64,
-    ability_haste: f64,
     crit_chance: f64,
     crit_damage: f64,
     current_health: f64,
+    heal_shield_power: f64,
     health_regen_rate: f64,
     life_steal: f64,
     magic_lethality: f64,
@@ -196,7 +182,9 @@ pub struct ChampionStats {
     magic_resist: f64,
     max_health: f64,
     move_speed: f64,
+    omnivamp: f64,
     physical_lethality: f64,
+    physical_vamp: f64,
     resource_max: f64,
     resource_regen_rate: f64,
     resource_type: AbilityResource,
@@ -318,6 +306,18 @@ impl ChampionStats {
     pub fn tenacity(&self) -> f64 {
         self.tenacity
     }
+    #[must_use]
+    pub fn heal_shield_power(&self) -> f64 {
+        self.heal_shield_power
+    }
+    #[must_use]
+    pub fn omnivamp(&self) -> f64 {
+        self.omnivamp
+    }
+    #[must_use]
+    pub fn physical_vamp(&self) -> f64 {
+        self.physical_vamp
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -399,7 +399,7 @@ impl StatRune {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllPlayer {
     champion_name: String,
@@ -407,18 +407,33 @@ pub struct AllPlayer {
     is_dead: bool,
     items: Box<[Item]>,
     level: i64,
-    position: String,
+    position: Position,
     raw_champion_name: String,
-    respawn_timer: f64,
+    #[serde(with = "duration")]
+    respawn_timer: Duration,
     runes: Runes,
     scores: Scores,
     #[serde(rename = "skinID")]
     skin_id: i64,
     summoner_name: String,
     summoner_spells: SummonerSpells,
-    team: String,
+    team: TeamID,
     skin_name: Option<String>,
     raw_skin_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Position {
+    Top,
+    Jungle,
+    Middle,
+    Bottom,
+    #[serde(rename = "UTILITY")]
+    Support,
+    None,
+    #[serde(untagged)]
+    Unknown(String),
 }
 
 impl AllPlayer {
@@ -443,7 +458,7 @@ impl AllPlayer {
         self.level
     }
     #[must_use]
-    pub fn position(&self) -> &str {
+    pub fn position(&self) -> &Position {
         &self.position
     }
     #[must_use]
@@ -451,7 +466,7 @@ impl AllPlayer {
         &self.raw_champion_name
     }
     #[must_use]
-    pub fn respawn_timer(&self) -> f64 {
+    pub fn respawn_timer(&self) -> Duration {
         self.respawn_timer
     }
     #[must_use]
@@ -475,7 +490,7 @@ impl AllPlayer {
         &self.summoner_spells
     }
     #[must_use]
-    pub fn team(&self) -> &str {
+    pub fn team(&self) -> &TeamID {
         &self.team
     }
     #[must_use]
@@ -681,9 +696,10 @@ impl core::ops::Index<usize> for Events {
 pub struct Event {
     #[serde(rename = "EventID")]
     event_id: i64,
-    event_time: f64,
+    #[serde(with = "duration")]
+    event_time: Duration,
     #[serde(flatten)]
-    other: EventDetails,
+    event_details: EventDetails,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -817,64 +833,46 @@ impl<'de> serde::Deserialize<'de> for Structure {
     where
         D: Deserializer<'de>,
     {
-        pub struct StringVisitor;
-
-        impl<'a> serde::de::Visitor<'a> for StringVisitor {
-            type Value = Structure;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("A string in a really fucking weird format")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                fn determine_structure_team(team: &str) -> TeamID {
-                    match team {
-                        "T1" => TeamID::Order,
-                        "T2" => TeamID::Chaos,
-                        team => unreachable!("Expected T1 or T2, found: {:?}", team),
-                    }
-                }
-
-                fn determine_structure_lane(lane: &str) -> Lane {
-                    match lane {
-                        "L" => Lane::Top,
-                        "C" => Lane::Mid,
-                        "R" => Lane::Bot,
-                        unrecognized => unreachable!("{}", unrecognized),
-                    }
-                }
-
-                let split: Vec<&str> = v.split('_').collect();
-
-                let structure = match split.as_slice() {
-                    // The last value here is always A
-                    &["Turret", team, lane, number, _] => Structure {
-                        structure_type: StructureType::Turret,
-                        team_id: determine_structure_team(team),
-                        place: number.parse().unwrap(),
-                        lane: determine_structure_lane(lane),
-                    },
-                    &["Barracks", team, lane] => {
-                        let lane = &lane[0..1];
-                        Structure {
-                            structure_type: StructureType::Barracks,
-                            team_id: determine_structure_team(team),
-                            // This is always 1, as all lanes have one inhib
-                            place: 1,
-                            lane: determine_structure_lane(lane),
-                        }
-                    }
-                    todo => unreachable!("{:?}", todo),
-                };
-
-                Ok(structure)
+        fn determine_structure_team(team: &str) -> TeamID {
+            match team {
+                "T1" => TeamID::Order,
+                "T2" => TeamID::Chaos,
+                team => unreachable!("Expected T1 or T2, found: {:?}", team),
             }
         }
 
-        deserializer.deserialize_str(StringVisitor)
+        fn determine_structure_lane(lane: u8) -> Lane {
+            match lane {
+                b'L' => Lane::Top,
+                b'C' => Lane::Mid,
+                b'R' => Lane::Bot,
+                unrecognized => unreachable!("{}", unrecognized),
+            }
+        }
+
+        let data: &str = Deserialize::deserialize(deserializer)?;
+
+        let split: Box<[&str]> = data.split('_').collect();
+
+        let structure = match split.as_ref() {
+            // The last value here is always A
+            &["Turret", team, lane, number, _] => Structure {
+                structure_type: StructureType::Turret,
+                team_id: determine_structure_team(team),
+                place: number.parse().unwrap(),
+                lane: determine_structure_lane(lane.as_bytes()[0]),
+            },
+            &["Barracks", team, lane] => Structure {
+                structure_type: StructureType::Barracks,
+                team_id: determine_structure_team(team),
+                // This is always 1, as all lanes have one inhib
+                place: 1,
+                lane: determine_structure_lane(lane.as_bytes()[0]),
+            },
+            todo => unreachable!("A new type of structure must have been added, please open an issue with the following info: {:?}", todo),
+        };
+
+        Ok(structure)
     }
 }
 
@@ -923,14 +921,15 @@ pub enum Lane {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct KillInfo {
-    assisters: Box<[String]>,
+    #[serde(with = "option_slice")]
+    assisters: Option<Box<[String]>>,
     killer_name: String,
 }
 
 impl KillInfo {
     #[must_use]
-    pub fn assisters(&self) -> &[String] {
-        &self.assisters
+    pub fn assisters(&self) -> Option<&[String]> {
+       self.assisters.as_deref()
     }
     #[must_use]
     pub fn killer_name(&self) -> &str {
@@ -943,7 +942,7 @@ impl KillInfo {
 pub struct MonsterKill {
     #[serde(flatten)]
     kill_info: KillInfo,
-    #[serde(deserialize_with = "string_to_bool")]
+    #[serde(with = "string_to_bool")]
     stolen: bool,
 }
 
@@ -964,7 +963,7 @@ impl Event {
         self.event_id
     }
     #[must_use]
-    pub fn event_time(&self) -> f64 {
+    pub fn event_time(&self) -> Duration {
         self.event_time
     }
 }
@@ -973,7 +972,8 @@ impl Event {
 #[serde(rename_all = "camelCase")]
 pub struct GameData {
     game_mode: GameMode,
-    game_time: f64,
+    #[serde(with = "duration")]
+    game_time: Duration,
     map_name: MapName,
     map_number: i64,
     map_terrain: MapTerrain,
@@ -1052,7 +1052,7 @@ impl GameData {
         &self.game_mode
     }
     #[must_use]
-    pub fn game_time(&self) -> f64 {
+    pub fn game_time(&self) -> Duration {
         self.game_time
     }
     #[must_use]
@@ -1107,22 +1107,85 @@ pub enum AbilityResource {
     Other,
 }
 
-fn string_to_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Serialize, Deserialize)]
-    enum Stolen {
-        True,
-        False,
+mod string_to_bool {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<bool, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        let stolen: &str = Deserialize::deserialize(deserializer)?;
+
+        Ok(match stolen {
+            "False" => false,
+            "True" => true,
+            _ => unreachable!()
+        })
     }
 
-    let stolen = Stolen::deserialize(deserializer)?;
+    // This has to be passed by ref to work with serde
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub fn serialize<S: Serializer>(stolen: &bool, serializer: S) -> Result<S::Ok, S::Error> {
+        let value = if *stolen {
+            "True"
+        } else {
+            "False"
+        };
+        serializer.serialize_str(value)
+    }
+}
 
-    Ok(match stolen {
-        Stolen::False => false,
-        Stolen::True => true,
-    })
+mod option_slice {
+    use serde::ser::SerializeSeq;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        slice: &Option<Box<[String]>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut len = None;
+
+        if let Some(slice) = &slice {
+            len = Some(slice.len());
+        }
+
+        let mut seq = serializer.serialize_seq(len)?;
+
+        if let Some(slice) = slice {
+            for player in slice.iter() {
+                seq.serialize_element(player)?;
+            }
+        }
+
+        seq.end()
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Box<[String]>>, D::Error> {
+        let slice: Box<[String]> = Box::deserialize(deserializer)?;
+        if slice.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(slice))
+        }
+    }
+}
+
+pub(crate) mod duration {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use time::Duration;
+
+    pub(crate) fn serialize<S: Serializer>(
+        duration: &Duration,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_f64(duration.as_seconds_f64())
+    }
+
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Duration, D::Error> {
+        f64::deserialize(deserializer).map(Duration::seconds_f64)
+    }
 }
 
 #[cfg(test)]
@@ -1140,5 +1203,8 @@ mod tests {
         let json = serde_json::to_string_pretty(&events).unwrap();
 
         println!("{json:#}");
+
+        // Test that it goes back into the proper format
+        let _: Events = serde_json::from_str(&json).unwrap();
     }
 }

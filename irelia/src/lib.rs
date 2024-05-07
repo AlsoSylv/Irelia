@@ -8,7 +8,6 @@
 //! - `rest`: Allows connections to the LCU `rest` API, providing basic get/post functionality
 //! - `ws`: Allows connections to the LCU websocket API, providing all functionality needed
 //! - `replay`: Allows connections to the `replay` API, also enables the in game API
-pub use irelia_encoder;
 
 #[cfg(feature = "in_game")]
 pub mod in_game;
@@ -16,7 +15,9 @@ pub mod in_game;
 pub mod replay;
 #[cfg(feature = "rest")]
 pub mod rest;
-pub mod utils;
+pub(crate) mod utils;
+#[cfg(any(feature = "ws", feature = "rest"))]
+pub use utils::process_info;
 #[cfg(feature = "ws")]
 pub mod ws;
 

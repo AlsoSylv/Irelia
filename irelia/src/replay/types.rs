@@ -1,4 +1,4 @@
-use crate::in_game::types::{AllPlayer, Events, GameData};
+use crate::in_game::types::{duration, AllPlayer, Events, GameData};
 use crate::replay::types::hidden::KeyFrameValue;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
@@ -133,39 +133,10 @@ pub enum HudCameraMode {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
-    #[serde(
-        serialize_with = "duration_to_f64",
-        deserialize_with = "duration_from_f64"
-    )]
+    #[serde(with = "duration")]
     pub time: Duration,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
-}
-
-fn duration_to_f64<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
-    let seconds = duration.as_seconds_f64();
-    serializer.serialize_f64(seconds)
-}
-
-fn duration_from_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
-    struct F64Visitor;
-
-    impl<'a> Visitor<'a> for F64Visitor {
-        type Value = Duration;
-
-        fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-            formatter.write_str("An f64, representing time in seconds")
-        }
-
-        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
-        where
-            E: Error,
-        {
-            Ok(Duration::seconds_f64(v))
-        }
-    }
-
-    deserializer.deserialize_any(F64Visitor)
 }
 
 #[test]
@@ -196,10 +167,7 @@ type KeyFrameVector3 = KeyFrameT<Vector3f>;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Playback state
 pub struct Playback {
-    #[serde(
-        serialize_with = "duration_to_f64",
-        deserialize_with = "duration_from_f64"
-    )]
+    #[serde(with = "duration")]
     /// Total length of the replay in seconds
     pub length: Duration,
     /// True if the replay is paused
@@ -208,10 +176,7 @@ pub struct Playback {
     pub seeking: bool,
     /// Replay playback speed (0.5 is half speed, 2.0 is double speed etc.)
     pub speed: f64,
-    #[serde(
-        serialize_with = "duration_to_f64",
-        deserialize_with = "duration_from_f64"
-    )]
+    #[serde(with = "duration")]
     /// Current time of the replay in seconds since the beginning of the game.
     pub time: Duration,
 }
@@ -222,16 +187,10 @@ pub struct Playback {
 pub struct Recording {
     /// Indicates the output format of the recording (for example webm or png)
     pub codec: AVContainer,
-    #[serde(
-        serialize_with = "duration_to_f64",
-        deserialize_with = "duration_from_f64"
-    )]
+    #[serde(with = "duration")]
     /// Current time of the recording, indicating progress of the render
     pub current_time: Duration,
-    #[serde(
-        serialize_with = "duration_to_f64",
-        deserialize_with = "duration_from_f64"
-    )]
+    #[serde(with = "duration")]
     /// Game time in seconds where the recording ends
     pub end_time: Duration,
     /// True if the recording should match the target frames per second exactly by slowing down the recording if required
@@ -249,10 +208,7 @@ pub struct Recording {
     pub recording: bool,
     /// Playback speed used when recording
     pub replay_speed: f64,
-    #[serde(
-        serialize_with = "duration_to_f64",
-        deserialize_with = "duration_from_f64"
-    )]
+    #[serde(with = "duration")]
     /// Game time in seconds where the recording starts
     pub start_time: Duration,
     /// Width of the output video in pixels (same as the game window size)
@@ -644,10 +600,18 @@ frame_list_collectors! {
     sun_direction: KeyFrameVector3
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct FrameValue<T: KeyFrameValue> {
     pub value: T,
     pub blending_mode: EasingType,
+}
+
+impl<T: KeyFrameValue + PartialEq> PartialEq for FrameValue<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+            && self.blending_mode == EasingType::Linear
+            && other.blending_mode == EasingType::Linear
+    }
 }
 
 pub type FrameString = FrameValue<String>;
