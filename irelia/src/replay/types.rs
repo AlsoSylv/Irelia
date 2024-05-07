@@ -131,7 +131,7 @@ pub enum HudCameraMode {
 ///
 /// As for ordering, keyframes are ordered based on time
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct KeyFrameT<T: KeyFrameValue> {
+struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
     #[serde(
         serialize_with = "duration_to_f64",
@@ -187,11 +187,11 @@ fn test_deserialize() {
     println!("{json}");
 }
 
-pub type KeyFrameString = KeyFrameT<String>;
-pub type KeyFrameBool = KeyFrameT<bool>;
-pub type KeyFrameColor = KeyFrameT<ColorValue>;
-pub type KeyFrameF64 = KeyFrameT<f64>;
-pub type KeyFrameVector3 = KeyFrameT<Vector3f>;
+type KeyFrameString = KeyFrameT<String>;
+type KeyFrameBool = KeyFrameT<bool>;
+type KeyFrameColor = KeyFrameT<ColorValue>;
+type KeyFrameF64 = KeyFrameT<f64>;
+type KeyFrameVector3 = KeyFrameT<Vector3f>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Playback state
@@ -655,69 +655,6 @@ pub type FrameBool = FrameValue<bool>;
 pub type FrameColor = FrameValue<ColorValue>;
 pub type FrameFloat = FrameValue<f64>;
 pub type FrameVector3 = FrameValue<Vector3f>;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Sequence {
-    /// Keyframe track for Render.cameraPosition
-    pub camera_position: Option<Vec<KeyFrameVector3>>,
-    /// Keyframe track for Render.cameraRotation
-    pub camera_rotation: Option<Vec<KeyFrameVector3>>,
-    /// Keyframe track for Render.depthFogColor
-    pub depth_fog_color: Option<Vec<KeyFrameColor>>,
-    /// Keyframe track for Render.depthFogEnabled
-    pub depth_fog_enabled: Option<Vec<KeyFrameBool>>,
-    /// Keyframe track for Render.depthFogEnd
-    pub depth_fog_end: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthFogIntensity
-    pub depth_fog_intensity: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthFogStart
-    pub depth_fog_start: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthOfFieldCircle
-    pub depth_of_field_circle: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthOfFieldEnabled
-    pub depth_of_field_enabled: Option<Vec<KeyFrameBool>>,
-    /// Keyframe track for Render.depthOfFieldFar
-    pub depth_of_field_far: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthOfFieldMid
-    pub depth_of_field_mid: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthOfFieldNear
-    pub depth_of_field_near: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.depthOfFieldWidth
-    pub depth_of_field_width: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.farClip
-    pub far_clip: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.fieldOfView
-    pub field_of_view: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.heightFogColor
-    pub height_fog_color: Option<Vec<KeyFrameColor>>,
-    /// Keyframe track for Render.heightFogEnabled
-    pub height_fog_enabled: Option<Vec<KeyFrameBool>>,
-    /// Keyframe track for Render.heightFogEnd
-    pub height_fog_end: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.heightFogIntensity
-    pub height_fog_intensity: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.heightFogStart
-    pub height_fog_start: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.navGridOffset
-    pub nav_grid_offset: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.nearClip
-    pub near_clip: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Playback.speed
-    pub playback_speed: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.selectionName
-    pub selection_name: Option<Vec<KeyFrameString>>,
-    /// Keyframe track for Render.selectionOffset
-    pub selection_offset: Option<Vec<KeyFrameVector3>>,
-    /// Keyframe track for Render.skyboxOffset
-    pub skybox_offset: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.skyboxRadius
-    pub skybox_radius: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.skyboxRotation
-    pub skybox_rotation: Option<Vec<KeyFrameF64>>,
-    /// Keyframe track for Render.sunDirection
-    pub sun_direction: Option<Vec<KeyFrameVector3>>,
-}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector3f {

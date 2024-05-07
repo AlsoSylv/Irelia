@@ -1,3 +1,10 @@
+## Irelia 0.7
+- Add generic request interface
+- Bodies now take `T` rather than `Option<T>`, use the generic request interface if you need to post a completely empty buffer
+- `in_game` now properly supports events, this applies to the replay API as well
+- `replay` `Sequence` has been replaced with `FrameList`, this conversion is handled automatically
+- `ws` now takes FnMut, to allow capturing and mutating variables
+
 ## Irelia 0.6
 - Update batching system
 - Provide proper usage examples

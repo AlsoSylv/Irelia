@@ -4,6 +4,7 @@ extern crate tokio;
 use irelia::replay::types::{Frame, FrameList};
 use irelia::replay::ReplayClient;
 use irelia::RequestClient;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
@@ -24,6 +25,8 @@ async fn main() {
         &record,
     ));
 
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
     let mut renderer = replay_client.get_render(&request_client).await.unwrap();
 
     renderer.fog_of_war = true;
@@ -36,13 +39,7 @@ async fn main() {
         &record,
     ));
 
-    sequence.push(Frame::from_render_recording(
-        "TestSequence",
-        &renderer,
-        &record,
-    ));
-
-    println!("\n\n{sequence:?}");
+    println!("\n\n{:?}", sequence);
 
     let sequence = replay_client
         .post_sequence(sequence, &request_client)

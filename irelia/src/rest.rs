@@ -346,7 +346,7 @@ impl LcuClient {
     pub async fn patch<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str>,
-        body: Option<T>,
+        body: T,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
         self.lcu_request(endpoint.as_ref(), "PATCH", Some(body), request_client)
@@ -360,7 +360,7 @@ impl LcuClient {
     pub async fn post<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str>,
-        body: Option<T>,
+        body: T,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
         self.lcu_request(endpoint.as_ref(), "POST", Some(body), request_client)
@@ -374,7 +374,7 @@ impl LcuClient {
     pub async fn put<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str>,
-        body: Option<T>,
+        body: T,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
         self.lcu_request(endpoint.as_ref(), "PUT", Some(body), request_client)
