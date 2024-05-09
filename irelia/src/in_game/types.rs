@@ -14,16 +14,62 @@ use time::Duration;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllGameData {
-    active_player: ActivePlayer,
+    #[serde(deserialize_with = "deserialize_active_player")]
+    active_player: Option<ActivePlayer>,
     all_players: Box<[AllPlayer]>,
     events: Events,
     game_data: GameData,
 }
 
+fn deserialize_active_player<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ActivePlayer>, D::Error> {
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[serde(deny_unknown_fields)]
+    pub struct OptionalActivePlayer {
+        abilities: Option<Abilities>,
+        champion_stats: Option<ChampionStats>,
+        current_gold: Option<f64>,
+        full_runes: Option<Runes>,
+        level: Option<i64>,
+        summoner_name: Option<String>,
+    }
+
+    let optional_active_player = OptionalActivePlayer::deserialize(deserializer)?;
+
+    if let (
+        Some(abilities),
+        Some(champion_stats),
+        Some(current_gold),
+        Some(full_runes),
+        Some(level),
+        Some(summoner_name),
+    ) = (
+        optional_active_player.abilities,
+        optional_active_player.champion_stats,
+        optional_active_player.current_gold,
+        optional_active_player.full_runes,
+        optional_active_player.level,
+        optional_active_player.summoner_name,
+    ) {
+        Ok(Some(ActivePlayer {
+            abilities,
+            champion_stats,
+            current_gold,
+            full_runes,
+            level,
+            summoner_name,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 impl AllGameData {
     #[must_use]
-    pub fn active_player(&self) -> &ActivePlayer {
-        &self.active_player
+    pub fn active_player(&self) -> Option<&ActivePlayer> {
+        self.active_player.as_ref()
     }
     #[must_use]
     pub fn all_players(&self) -> &[AllPlayer] {
@@ -45,7 +91,7 @@ pub struct ActivePlayer {
     abilities: Abilities,
     champion_stats: ChampionStats,
     current_gold: f64,
-    full_runes: FullRunes,
+    full_runes: Runes,
     level: i64,
     summoner_name: String,
 }
@@ -64,7 +110,7 @@ impl ActivePlayer {
         self.current_gold
     }
     #[must_use]
-    pub fn full_runes(&self) -> &FullRunes {
+    pub fn full_runes(&self) -> &Runes {
         &self.full_runes
     }
     #[must_use]
@@ -143,7 +189,7 @@ impl AbilityInfo {
 pub struct Ability {
     ability_level: i64,
     #[serde(flatten)]
-    ability_info: AbilityInfo
+    ability_info: AbilityInfo,
 }
 
 impl Ability {
@@ -322,15 +368,15 @@ impl ChampionStats {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FullRunes {
+pub struct Runes {
     keystone: Rune,
     primary_rune_tree: Rune,
     secondary_rune_tree: Rune,
-    general_runes: [Rune; 6],
-    stat_runes: [StatRune; 3],
+    general_runes: Option<[Rune; 6]>,
+    stat_runes: Option<[StatRune; 3]>,
 }
 
-impl FullRunes {
+impl Runes {
     #[must_use]
     pub fn keystone(&self) -> &Rune {
         &self.keystone
@@ -344,12 +390,12 @@ impl FullRunes {
         &self.secondary_rune_tree
     }
     #[must_use]
-    pub fn general_runes(&self) -> &[Rune; 6] {
-        &self.general_runes
+    pub fn general_runes(&self) -> Option<&[Rune; 6]> {
+        self.general_runes.as_ref()
     }
     #[must_use]
-    pub fn stat_runes(&self) -> &[StatRune; 3] {
-        &self.stat_runes
+    pub fn stat_runes(&self) -> Option<&[StatRune; 3]> {
+        self.stat_runes.as_ref()
     }
 }
 
@@ -502,29 +548,6 @@ impl AllPlayer {
     /// These will be `None` in spectator mode
     pub fn skin_name(&self) -> Option<&str> {
         self.skin_name.as_deref()
-    }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Runes {
-    keystone: Rune,
-    primary_rune_tree: Rune,
-    secondary_rune_tree: Rune,
-}
-
-impl Runes {
-    #[must_use]
-    pub fn keystone(&self) -> &Rune {
-        &self.keystone
-    }
-    #[must_use]
-    pub fn primary_rune_tree(&self) -> &Rune {
-        &self.primary_rune_tree
-    }
-    #[must_use]
-    pub fn secondary_rune_tree(&self) -> &Rune {
-        &self.secondary_rune_tree
     }
 }
 
@@ -929,7 +952,7 @@ pub struct KillInfo {
 impl KillInfo {
     #[must_use]
     pub fn assisters(&self) -> Option<&[String]> {
-       self.assisters.as_deref()
+        self.assisters.as_deref()
     }
     #[must_use]
     pub fn killer_name(&self) -> &str {
@@ -1111,26 +1134,22 @@ mod string_to_bool {
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<bool, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         let stolen: &str = Deserialize::deserialize(deserializer)?;
 
         Ok(match stolen {
             "False" => false,
             "True" => true,
-            _ => unreachable!()
+            _ => unreachable!(),
         })
     }
 
     // This has to be passed by ref to work with serde
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn serialize<S: Serializer>(stolen: &bool, serializer: S) -> Result<S::Ok, S::Error> {
-        let value = if *stolen {
-            "True"
-        } else {
-            "False"
-        };
+        let value = if *stolen { "True" } else { "False" };
         serializer.serialize_str(value)
     }
 }
@@ -1160,7 +1179,9 @@ mod option_slice {
         seq.end()
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Box<[String]>>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Box<[String]>>, D::Error> {
         let slice: Box<[String]> = Box::deserialize(deserializer)?;
         if slice.is_empty() {
             Ok(None)

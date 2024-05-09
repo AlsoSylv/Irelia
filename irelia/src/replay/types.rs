@@ -23,29 +23,6 @@ mod hidden {
 #[path = "impls.rs"]
 mod impls;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReplayGameData {
-    all_players: Box<[AllPlayer]>,
-    events: Events,
-    game_data: GameData,
-}
-
-impl ReplayGameData {
-    #[must_use]
-    pub fn all_players(&self) -> &[AllPlayer] {
-        &self.all_players
-    }
-    #[must_use]
-    pub fn events(&self) -> &Events {
-        &self.events
-    }
-    #[must_use]
-    pub fn game_data(&self) -> &GameData {
-        &self.game_data
-    }
-}
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AVContainer {

@@ -35,31 +35,6 @@ impl ReplayClient {
         self.replay("game", "GET", None::<()>, request_client).await
     }
 
-    /// Get all available data.
-    ///
-    /// A sample response can be found [here](https://static.developer.riotgames.com/docs/lol/liveclientdata_sample.json).
-    /// The key difference is that there is no active player when using the replay API, so no active player data can be returned
-    ///
-    /// # Errors
-    /// This will return an error if the game API is not running
-    pub async fn all_game_data(
-        &self,
-        request_client: &RequestClient,
-    ) -> Result<types::ReplayGameData, Error> {
-        use hyper::body::Buf;
-        let buf = request_client
-            .request_template(
-                URL,
-                "/liveclientdata/allgamedata",
-                "GET",
-                None::<()>,
-                None,
-                SerializeFormat::Json,
-            )
-            .await?;
-        Ok(serde_json::from_reader(buf.reader())?)
-    }
-
     /// Information about particle visibility.
     /// Returns a map of particle names to current visibility status.
     ///

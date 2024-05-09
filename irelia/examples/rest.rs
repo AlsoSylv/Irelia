@@ -6,11 +6,14 @@ async fn main() {
     let request_client = irelia::RequestClient::new();
     let lcu_client = irelia::rest::LcuClient::new(false).unwrap();
 
-    let value: serde_json::Value = lcu_client
-        .get("Example", &request_client)
+    let current_summoner: Option<serde_json::Value> = lcu_client
+        .get("/lol-summoner/v1/current-summoner", &request_client)
         .await
-        .unwrap()
         .unwrap();
 
-    let _value = &value["example_index"];
+    if let Some(value) = current_summoner {
+        let summoner_id = &value["summonerId"];
+
+        println!("{summoner_id}");
+    }
 }

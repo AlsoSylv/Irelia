@@ -12,7 +12,7 @@ use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 
 use self::types::{
-    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, FullRunes, GameData, Item, Runes,
+    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, GameData, Item, Runes,
     Scores, SummonerSpells, TeamID,
 };
 
@@ -122,7 +122,7 @@ impl GameClient {
     pub async fn active_player_runes(
         &self,
         request_client: &RequestClient,
-    ) -> Result<FullRunes, Error> {
+    ) -> Result<Runes, Error> {
         self.live_client("activeplayerrunes", None, request_client)
             .await
     }
