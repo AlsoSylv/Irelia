@@ -128,7 +128,7 @@
 						"description": "Events that have taken place during the game",
 						"type": "object",
 						"additionalProperties": {
-							
+							"$ref": "#/components/schemas/Events"
 						}
 					},
 					"game_data": {
@@ -165,10 +165,18 @@
 			"ActivePlayer": {
 				"properties": {
 					"abilities": {
-						"nullable": true
+						"nullable": true,
+						"type": "object",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/Abilities"
+						}
 					},
 					"championStats": {
-						"nullable": true
+						"nullable": true,
+						"type": "object",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/ChampionStats"
+						}
 					},
 					"currentGold": {
 						"nullable": true,
@@ -350,6 +358,269 @@
 						"type": "string"
 					}
 				}
+			},
+			"Abilities": {
+				"properties": {
+					"passive": {
+						"$ref": "#/components/schemas/Ability"
+					},
+					"q": {
+						"$ref": "#/components/schemas/Ability"
+					},
+					"w": {
+						"$ref": "#/components/schemas/Ability"
+					},
+					"e": {
+						"$ref": "#/components/schemas/Ability"
+					},
+					"r": {
+						"$ref": "#/components/schemas/Ability"
+					}
+				}
+			},
+			"Ability": {
+				"properties": {
+					"displayName": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string"
+					},
+					"rawDescription": {
+						"type": "string"
+					},
+					"rawDisplayName": {
+						"type": "string"
+					},
+					"abilityLevel": {
+						"description": "abilityLevel is null if you are getting the passive",
+						"type": "integer",
+						"nullable": true,
+						"minimum": 0,
+						"maximum": 5
+					}
+				}
+			},
+			"ChampionStats": {
+				"properties": {
+					"abilityPower": {
+						"type": "number",
+						"format": "float"
+					},
+					"armor": {
+						"type": "number",
+						"format": "float"
+					},
+					"armorPenetrationFlat": {
+						"type": "number",
+						"format": "float"
+					},
+					"armorPenetrationPercent": {
+						"type": "number",
+						"format": "float"
+					},
+					"abilityHaste": {
+						"type": "number",
+						"format": "float"
+					},
+					"attackDamage": {
+						"type": "number",
+						"format": "float"
+					},
+					"attackRange": {
+						"type": "number",
+						"format": "float"
+					},
+					"attackSpeed": {
+						"type": "number",
+						"format": "float"
+					},
+					"bonusArmorPenetrationPercent": {
+						"type": "number",
+						"format": "float"
+					},
+					"bonusMagicPenetrationPercent": {
+						"type": "number",
+						"format": "float"
+					},
+					"critChance": {
+						"type": "number",
+						"format": "float"
+					},
+					"critDamage": {
+						"type": "number",
+						"format": "float"
+					},
+					"currentHealth": {
+						"type": "number",
+						"format": "float"
+					},
+					"healShieldPower": {
+						"type": "number",
+						"format": "float"
+					},
+					"healthRegenRate": {
+						"type": "number",
+						"format": "float"
+					},
+					"lifeSteal": {
+						"type": "number",
+						"format": "float"
+					},
+					"magicLethality": {
+						"type": "number",
+						"format": "float"
+					},
+					"magicPenetrationFlat": {
+						"type": "number",
+						"format": "float"
+					},
+					"magicPenetrationPercent": {
+						"type": "number",
+						"format": "float"
+					},
+					"magicResist": {
+						"type": "number",
+						"format": "float"
+					},
+					"maxHealth": {
+						"type": "number",
+						"format": "float"
+					},
+					"moveSpeed": {
+						"type": "number",
+						"format": "float"
+					},
+					"omnivamp": {
+						"type": "number",
+						"format": "float"
+					},
+					"physicalLethality": {
+						"type": "number",
+						"format": "float"
+					},
+					"physicalVamp": {
+						"type": "number",
+						"format": "float"
+					},
+					"resourceMax": {
+						"type": "number",
+						"format": "float"
+					},
+					"resourceRegenRate": {
+						"type": "number",
+						"format": "float"
+					},
+					"resourceType": {
+						"$ref": "#/components/schemas/AbilityResource"
+					},
+					"resourceValue": {
+						"type": "number",
+						"format": "float"
+					},
+					"spellVamp": {
+						"type": "number",
+						"format": "float"
+					},
+					"tenacity": {
+						"type": "number",
+						"format": "float"
+					}
+				}
+			},
+			"Events": {
+				"properties": {
+					"events": {
+						"type": "array",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/Event"
+						}
+					}
+				}
+			},
+			"Event": {
+				"properties": {
+					"EventID": {
+						"type": "integer"
+					},
+					"EventTime": {
+						"type": "number",
+						"format": "float"
+					},
+					"EventName": {
+						"type": "string",
+						"enum": [
+							"Ace",
+							"GameStart",
+							"MinionsSpawning",
+							"FirstBlood",
+							"ChampionKill",
+							"Multikill",
+							"TurretKilled",
+							"FirstBrick",
+							"DragonKill",
+							"HordeKill",
+							"HeraldKill",
+							"BaronKill",
+							"InhibKilled",
+							"GameEnd"
+						]
+					},
+					"Acer": {
+						"type": "string"
+					},
+					"AcingTeam": {
+						"$ref": "#/components/schemas/TeamID"
+					},
+					"VictimName": {
+						"type": "string"
+					},
+					"Assisters": {
+						"type": "array",
+						"additionalProperties": {
+							"type": "string"
+						}
+					},
+					"KillerName": {
+						"type": "string"
+					},
+					"Recipient": {
+						"type": "string"
+					},
+					"KillStreak": {
+						"type": "integer"
+					},
+					"TurretKilled": {
+						"type": "string"
+					},
+					"DragonType": {
+						"type": "string",
+						"enum": [
+							"Fire",
+							"Earth",
+							"Water",
+							"Air",
+							"Hextech",
+							"Chemtech",
+							"Elder",
+							"Unknown"
+						]
+					},
+					"Stolen": {
+						"type": "string",
+						"enum": ["True", "False"]
+					},
+					"InhibKilled": {
+						"type": "string"
+					},
+					"InhibRespawned": {
+						"type": "string"
+					},
+					"Result": {
+						"type": "string",
+						"enum": ["Win", "Lose"]
+					}
+				}
 			}
 		}
 	},
@@ -363,14 +634,12 @@
 		"/liveclientdata/activeplayer": {
 			"get": {
 				"operationId": "GetLiveclientdataActiveplayer",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/ActivePlayer"
 								}
 							}
 						},
@@ -387,7 +656,6 @@
 		"/liveclientdata/activeplayerabilities": {
 			"get": {
 				"operationId": "GetLiveclientdataActiveplayerabilities",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
@@ -412,7 +680,6 @@
 		"/liveclientdata/activeplayername": {
 			"get": {
 				"operationId": "GetLiveclientdataActiveplayername",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
@@ -434,7 +701,6 @@
 		"/liveclientdata/activeplayerrunes": {
 			"get": {
 				"operationId": "GetLiveclientdataActiveplayerrunes",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
@@ -527,7 +793,6 @@
 		"/liveclientdata/gamestats": {
 			"get": {
 				"operationId": "GetLiveclientdataGamestats",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
@@ -591,14 +856,7 @@
 						"name": "teamID",
 						"required": false,
 						"schema": {
-							"enum": [
-								"ALL",
-								"UNKNOWN",
-								"ORDER",
-								"CHAOS",
-								"NEUTRAL"
-							],
-							"type": "string"
+							"$ref": "#/components/schemas/TeamID"
 						}
 					}
 				],
@@ -726,7 +984,6 @@
 		"/swagger/v1/api-docs": {
 			"get": {
 				"operationId": "HttpApiDocsV1",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
@@ -782,7 +1039,6 @@
 		"/swagger/v2/swagger.json": {
 			"get": {
 				"operationId": "HttpApiDocsV2",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
@@ -805,7 +1061,6 @@
 		"/swagger/v3/openapi.json": {
 			"get": {
 				"operationId": "HttpApiDocsV3",
-				"parameters": [],
 				"responses": {
 					"200": {
 						"content": {
