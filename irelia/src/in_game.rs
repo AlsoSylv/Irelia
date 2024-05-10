@@ -12,8 +12,8 @@ use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 
 use self::types::{
-    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, GameData, Item, Runes,
-    Scores, SummonerSpells, TeamID,
+    Abilities, ActivePlayer, AllGameData, AllPlayer, Events, GameData, Item, Runes, Scores,
+    SummonerSpells, TeamID,
 };
 
 /// The only url the in game API can be used on

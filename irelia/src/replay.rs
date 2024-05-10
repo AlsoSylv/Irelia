@@ -11,11 +11,13 @@ pub mod types;
 /// A number of endpoints are also shared
 /// Hence why the replay API enables the `in_game` feature
 pub use super::in_game::URL;
-use crate::replay::types::{FrameList, Playback, Recording, Render};
+use crate::replay::types::{Playback, Recording, Render, Sequence};
 use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::borrow::Borrow;
+use std::collections::HashMap;
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
@@ -43,7 +45,7 @@ impl ReplayClient {
     pub async fn get_particles(
         &self,
         request_client: &RequestClient,
-    ) -> Result<serde_json::Value, Error> {
+    ) -> Result<HashMap<String, bool>, Error> {
         self.replay("particles", "GET", None::<()>, request_client)
             .await
     }
@@ -57,7 +59,7 @@ impl ReplayClient {
         &self,
         body: serde_json::Value,
         request_client: &RequestClient,
-    ) -> Result<serde_json::Value, Error> {
+    ) -> Result<HashMap<String, bool>, Error> {
         self.replay("particles", "POST", Some(body), request_client)
             .await
     }
@@ -77,10 +79,10 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn post_playback(
         &self,
-        body: Playback,
+        body: impl Borrow<Playback>,
         request_client: &RequestClient,
     ) -> Result<Playback, Error> {
-        self.replay("playback", "POST", Some(body), request_client)
+        self.replay("playback", "POST", Some(body.borrow()), request_client)
             .await
     }
 
@@ -99,10 +101,10 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn post_recording(
         &self,
-        body: Recording,
+        body: impl Borrow<Recording>,
         request_client: &RequestClient,
     ) -> Result<Recording, Error> {
-        self.replay("recording", "POST", Some(body), request_client)
+        self.replay("recording", "POST", Some(body.borrow()), request_client)
             .await
     }
 
@@ -121,10 +123,10 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn post_render(
         &self,
-        body: Render,
+        body: impl Borrow<Render>,
         request_client: &RequestClient,
     ) -> Result<Render, Error> {
-        self.replay("render", "POST", Some(body), request_client)
+        self.replay("render", "POST", Some(body.borrow()), request_client)
             .await
     }
 
@@ -132,7 +134,7 @@ impl ReplayClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    pub async fn get_sequence(&self, request_client: &RequestClient) -> Result<FrameList, Error> {
+    pub async fn get_sequence(&self, request_client: &RequestClient) -> Result<Sequence, Error> {
         self.replay("sequence", "GET", None::<()>, request_client)
             .await
     }
@@ -143,10 +145,10 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn post_sequence(
         &self,
-        body: FrameList,
+        body: Option<impl Borrow<Sequence> + Serialize>,
         request_client: &RequestClient,
-    ) -> Result<FrameList, Error> {
-        self.replay("sequence", "POST", Some(body), request_client)
+    ) -> Result<Sequence, Error> {
+        self.replay("sequence", "POST", Some(body.borrow()), request_client)
             .await
     }
 

@@ -1,11 +1,9 @@
-use crate::in_game::types::{duration, AllPlayer, Events, GameData};
+use crate::in_game::types::duration;
 use crate::replay::types::hidden::KeyFrameValue;
-use serde::de::{Error, MapAccess, Visitor};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::cmp::Ordering;
+use std::default::Default;
+use std::fmt::Debug;
 use time::Duration;
 
 mod hidden {
@@ -19,9 +17,6 @@ mod hidden {
     impl KeyFrameValue for Vector3f {}
     impl KeyFrameValue for bool {}
 }
-
-#[path = "impls.rs"]
-mod impls;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,17 +98,47 @@ pub enum HudCameraMode {
     Path,
 }
 
-/// Two keyframes are considered equal, assuming they both have the same value
-/// and that both use `Linear` blending
+/// Two keyframes are considered equal, assuming they both have the same value and that both use `Linear` blending,
+/// or they use the same `EasingType`, and take place at the same time
 ///
 /// As for ordering, keyframes are ordered based on time
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-struct KeyFrameT<T: KeyFrameValue> {
+pub struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
     #[serde(with = "duration")]
     pub time: Duration,
     #[serde(bound(deserialize = "T: serde::Deserialize<'de>"))]
     pub value: T,
+}
+
+impl<T: KeyFrameValue> KeyFrameT<T> {
+    #[must_use]
+    pub fn new(value: T, time: Duration, blend: EasingType) -> Self {
+        Self { blend, time, value }
+    }
+
+    #[must_use]
+    pub fn new_default_blending(value: T, time: Duration) -> Self {
+        Self {
+            value,
+            time,
+            blend: EasingType::Linear,
+        }
+    }
+}
+
+impl<T: KeyFrameValue + PartialEq> PartialEq<KeyFrameT<T>> for KeyFrameT<T> {
+    fn eq(&self, other: &KeyFrameT<T>) -> bool {
+        self.value == other.value
+            && ((self.blend == EasingType::Linear && other.blend == EasingType::Linear)
+                || (self.blend == other.blend && self.time == other.time))
+    }
+}
+
+impl<T: KeyFrameValue + PartialEq> PartialOrd<Self> for KeyFrameT<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.time.partial_cmp(&other.time)
+    }
 }
 
 #[test]
@@ -319,283 +344,137 @@ pub struct Render {
     pub sun_direction: Vector3f,
 }
 
-#[derive(Debug, Clone)]
-pub struct Frame {
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(default)]
+pub struct Sequence {
     /// Keyframe track for Render.cameraPosition
-    pub camera_position: Option<FrameVector3>,
+    pub camera_position: Vec<KeyFrameVector3>,
     /// Keyframe track for Render.cameraRotation
-    pub camera_rotation: Option<FrameVector3>,
+    pub camera_rotation: Vec<KeyFrameVector3>,
     /// Keyframe track for Render.depthFogColor
-    pub depth_fog_color: Option<FrameColor>,
+    pub depth_fog_color: Vec<KeyFrameColor>,
     /// Keyframe track for Render.depthFogEnabled
-    pub depth_fog_enabled: Option<FrameBool>,
+    pub depth_fog_enabled: Vec<KeyFrameBool>,
     /// Keyframe track for Render.depthFogEnd
-    pub depth_fog_end: Option<FrameFloat>,
+    pub depth_fog_end: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthFogIntensity
-    pub depth_fog_intensity: Option<FrameFloat>,
+    pub depth_fog_intensity: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthFogStart
-    pub depth_fog_start: Option<FrameFloat>,
+    pub depth_fog_start: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthOfFieldCircle
-    pub depth_of_field_circle: Option<FrameFloat>,
+    pub depth_of_field_circle: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthOfFieldEnabled
-    pub depth_of_field_enabled: Option<FrameBool>,
+    pub depth_of_field_enabled: Vec<KeyFrameBool>,
     /// Keyframe track for Render.depthOfFieldFar
-    pub depth_of_field_far: Option<FrameFloat>,
+    pub depth_of_field_far: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthOfFieldMid
-    pub depth_of_field_mid: Option<FrameFloat>,
+    pub depth_of_field_mid: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthOfFieldNear
-    pub depth_of_field_near: Option<FrameFloat>,
+    pub depth_of_field_near: Vec<KeyFrameF64>,
     /// Keyframe track for Render.depthOfFieldWidth
-    pub depth_of_field_width: Option<FrameFloat>,
+    pub depth_of_field_width: Vec<KeyFrameF64>,
     /// Keyframe track for Render.farClip
-    pub far_clip: Option<FrameFloat>,
+    pub far_clip: Vec<KeyFrameF64>,
     /// Keyframe track for Render.fieldOfView
-    pub field_of_view: Option<FrameFloat>,
+    pub field_of_view: Vec<KeyFrameF64>,
     /// Keyframe track for Render.heightFogColor
-    pub height_fog_color: Option<FrameColor>,
+    pub height_fog_color: Vec<KeyFrameColor>,
     /// Keyframe track for Render.heightFogEnabled
-    pub height_fog_enabled: Option<FrameBool>,
+    pub height_fog_enabled: Vec<KeyFrameBool>,
     /// Keyframe track for Render.heightFogEnd
-    pub height_fog_end: Option<FrameFloat>,
+    pub height_fog_end: Vec<KeyFrameF64>,
     /// Keyframe track for Render.heightFogIntensity
-    pub height_fog_intensity: Option<FrameFloat>,
+    pub height_fog_intensity: Vec<KeyFrameF64>,
     /// Keyframe track for Render.heightFogStart
-    pub height_fog_start: Option<FrameFloat>,
+    pub height_fog_start: Vec<KeyFrameF64>,
     /// Keyframe track for Render.navGridOffset
-    pub nav_grid_offset: Option<FrameFloat>,
+    pub nav_grid_offset: Vec<KeyFrameF64>,
     /// Keyframe track for Render.nearClip
-    pub near_clip: Option<FrameFloat>,
+    pub near_clip: Vec<KeyFrameF64>,
     /// Keyframe track for Playback.speed
-    pub playback_speed: Option<FrameFloat>,
+    pub playback_speed: Vec<KeyFrameF64>,
     /// Keyframe track for Render.selectionName
-    pub selection_name: Option<FrameString>,
+    pub selection_name: Vec<KeyFrameString>,
     /// Keyframe track for Render.selectionOffset
-    pub selection_offset: Option<FrameVector3>,
+    pub selection_offset: Vec<KeyFrameVector3>,
     /// Keyframe track for Render.skyboxOffset
-    pub skybox_offset: Option<FrameFloat>,
+    pub skybox_offset: Vec<KeyFrameF64>,
     /// Keyframe track for Render.skyboxRadius
-    pub skybox_radius: Option<FrameFloat>,
+    pub skybox_radius: Vec<KeyFrameF64>,
     /// Keyframe track for Render.skyboxRotation
-    pub skybox_rotation: Option<FrameFloat>,
+    pub skybox_rotation: Vec<KeyFrameF64>,
     /// Keyframe track for Render.sunDirection
-    pub sun_direction: Option<FrameVector3>,
-    pub current_time: Duration,
+    pub sun_direction: Vec<KeyFrameVector3>,
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct FrameList(Vec<Frame>);
-
-impl FrameList {
+impl Sequence {
     #[must_use]
     pub fn new() -> Self {
-        FrameList(Vec::default())
+        Self::default()
     }
 
-    pub fn push(&mut self, frame: Frame) {
-        self.0.push(frame);
+    #[must_use]
+    pub fn new_with_name(name: String) -> Self {
+        let mut sequence = Self::default();
+
+        sequence.name(name);
+
+        sequence
     }
 
-    /// Sorts the frames in time order
-    pub fn sort(&mut self) {
-        self.0.sort();
+    #[must_use]
+    pub fn from_render(name: String, render: &Render, playback_speed: f64, time: Duration) -> Self {
+        let mut sequence = Self::default();
+
+        sequence.push_render(render, playback_speed, time);
+        sequence.name(name);
+
+        sequence
     }
 
-    /// Deduplicates the frames based on if all the values of keyframes are the same, regardless of their time
-    /// You probably want the list to be sorted before calling this, as it is destructive
-    pub fn dedup(&mut self) {
-        self.0.dedup();
+    pub fn name(&mut self, name: String) {
+        self.selection_name.push(KeyFrameString::new(
+            name,
+            Duration::default(),
+            EasingType::Linear,
+        ));
+    }
+
+    #[rustfmt::skip]
+    pub fn push_render(&mut self, render: &Render, playback_speed: f64, time: Duration) {
+        self.camera_position.push(KeyFrameT::new_default_blending(render.camera_position, time));
+        self.camera_rotation.push(KeyFrameT::new_default_blending(render.camera_rotation, time));
+        self.depth_fog_color.push(KeyFrameT::new_default_blending(render.depth_fog_color, time));
+        self.depth_fog_enabled.push(KeyFrameT::new_default_blending(render.depth_fog_enabled, time));
+        self.depth_fog_end.push(KeyFrameT::new_default_blending(render.depth_fog_end, time));
+        self.depth_fog_intensity.push(KeyFrameT::new_default_blending(render.depth_fog_intensity, time));
+        self.depth_fog_start.push(KeyFrameT::new_default_blending(render.depth_fog_start, time));
+        self.depth_of_field_circle.push(KeyFrameT::new_default_blending(render.depth_of_field_circle, time));
+        self.depth_of_field_enabled.push(KeyFrameT::new_default_blending(render.depth_of_field_enabled, time));
+        self.depth_of_field_far.push(KeyFrameT::new_default_blending(render.depth_of_field_far, time));
+        self.depth_of_field_mid.push(KeyFrameT::new_default_blending(render.depth_of_field_mid, time));
+        self.depth_of_field_near.push(KeyFrameT::new_default_blending(render.depth_of_field_near, time));
+        self.depth_of_field_width.push(KeyFrameT::new_default_blending(render.depth_of_field_width, time));
+        self.far_clip.push(KeyFrameT::new_default_blending(render.far_clip, time));
+        self.field_of_view.push(KeyFrameT::new_default_blending(render.field_of_view, time));
+        self.height_fog_color.push(KeyFrameT::new_default_blending(render.height_fog_color, time));
+        self.height_fog_enabled.push(KeyFrameT::new_default_blending(render.height_fog_enabled, time));
+        self.height_fog_end.push(KeyFrameT::new_default_blending(render.height_fog_end, time));
+        self.height_fog_intensity.push(KeyFrameT::new_default_blending(render.height_fog_intensity, time));
+        self.height_fog_start.push(KeyFrameT::new_default_blending(render.height_fog_start, time));
+        self.nav_grid_offset.push(KeyFrameT::new_default_blending(render.nav_grid_offset, time));
+        self.near_clip.push(KeyFrameT::new_default_blending(render.near_clip, time));
+        self.playback_speed.push(KeyFrameT::new_default_blending(playback_speed, time));
+        // The name does not need to be set more than once
+        // self.selection_name.push(KeyFrameT::new_default_blending(render.camera_position, time));
+        self.selection_offset.push(KeyFrameT::new_default_blending(render.selection_offset, time));
+        self.skybox_offset.push(KeyFrameT::new_default_blending(render.skybox_offset, time));
+        self.skybox_radius.push(KeyFrameT::new_default_blending(render.skybox_radius, time));
+        self.skybox_rotation.push(KeyFrameT::new_default_blending(render.skybox_rotation, time));
+        self.sun_direction.push(KeyFrameT::new_default_blending(render.sun_direction, time));
     }
 }
-
-impl std::ops::Index<usize> for FrameList {
-    type Output = Frame;
-
-    fn index(&self, index: usize) -> &Frame {
-        &self.0[index]
-    }
-}
-
-impl std::ops::IndexMut<usize> for FrameList {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
-    }
-}
-
-use affix::paste;
-
-macro_rules! count {
-    () => (0);
-    ( $x:tt $($xs:tt)* ) => (1 + count!($($xs)*));
-}
-
-// I don't want have to write so much repeated code
-macro_rules! frame_list_collectors {
-    ($($field:ident: $type:ty)+) => {
-        impl FrameList {
-            paste! {
-                $(fn [<collect_ $field s>](&self) -> Vec<$type> {
-                    self.0
-                        .iter()
-                        .filter_map(|frame| {
-                            Some($type::from_frame_value(
-                                frame.current_time,
-                                frame.$field.clone()?,
-                            ))
-                        })
-                        .collect()
-                })+
-            }
-        }
-
-        impl PartialEq<Self> for Frame {
-            fn eq(&self, other: &Self) -> bool {
-                $(self.$field == other.$field)&&*
-            }
-        }
-
-        impl Serialize for FrameList {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-                let mut sequence = serializer.serialize_struct("Sequence", count!($($field)*))?;
-                paste! {
-                    $(
-                        let vec = self.[< collect_ $field s>]();
-                        let field_name = stringify!([< $field:camel >]);
-                        if vec.is_empty() {
-                            sequence.skip_field(field_name)?;
-                        } else {
-                            sequence.serialize_field(field_name, &vec)?;
-                        }
-                    )+
-                }
-
-                sequence.end()
-            }
-        }
-
-        impl<'de> Deserialize<'de> for FrameList {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                paste! {
-                    #[derive(Deserialize)]
-                    #[serde(field_identifier, rename_all = "camelCase")]
-                    enum Fields {
-                        $([<$field:pascal>]),*
-                    }
-                }
-                struct SequenceVisitor;
-                impl<'de> Visitor<'de> for SequenceVisitor {
-                    type Value = FrameList;
-                    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                        formatter.write_str("Expecting a sequence from the replay API")
-                    }
-                    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-                    where
-                        A: MapAccess<'de>,
-                    {
-                        let mut hashmap: HashMap<Duration, Frame> = HashMap::new();
-
-                        $(let mut $field: Option<Vec<$type>> = None;)*
-                        while let Some(key) = map.next_key()? {
-                            paste! {
-                                match key {
-                                    $(Fields::[<$field:pascal>] => {
-                                        if $field.is_some() {
-                                            return Err(Error::duplicate_field(stringify!($field)))?;
-                                        }
-
-                                        $field = Some(map.next_value()?);
-                                    })*
-                                }
-                            }
-                        }
-
-                        $(
-                            if let Some($field) = $field {
-                                for $field in $field {
-                                    let frame_value = Some(FrameValue::new($field.value, $field.blend));
-                                    if let Some(frame) = hashmap.get_mut(&$field.time) {
-                                        frame.$field = frame_value;
-                                    } else {
-                                        let mut frame = Frame::empty($field.time.as_seconds_f64());
-                                        frame.$field = frame_value;
-                                        hashmap.insert($field.time, frame);
-                                    }
-                                }
-                            }
-                        )*
-
-                        let mut frame_list = Vec::with_capacity(hashmap.len());
-
-                        for frames in hashmap.into_values() {
-                            frame_list.push(frames);
-                        }
-
-                        frame_list.sort();
-
-                        Ok(FrameList(frame_list))
-                    }
-                }
-                const FIELDS: &[&str] = &[$(paste!(stringify!([< $field:camel >]))),*];
-                deserializer.deserialize_struct("Sequence", FIELDS, SequenceVisitor)
-            }
-        }
-    }
-}
-
-// This is what a final sequence should look like
-frame_list_collectors! {
-    camera_position: KeyFrameVector3
-    camera_rotation: KeyFrameVector3
-    depth_fog_color: KeyFrameColor
-    depth_fog_enabled: KeyFrameBool
-    depth_fog_end: KeyFrameF64
-    depth_fog_intensity: KeyFrameF64
-    depth_fog_start: KeyFrameF64
-    depth_of_field_circle: KeyFrameF64
-    depth_of_field_enabled: KeyFrameBool
-    depth_of_field_far: KeyFrameF64
-    depth_of_field_mid: KeyFrameF64
-    depth_of_field_near: KeyFrameF64
-    depth_of_field_width: KeyFrameF64
-    far_clip: KeyFrameF64
-    field_of_view: KeyFrameF64
-    height_fog_color: KeyFrameColor
-    height_fog_enabled: KeyFrameBool
-    height_fog_end: KeyFrameF64
-    height_fog_intensity: KeyFrameF64
-    height_fog_start: KeyFrameF64
-    nav_grid_offset: KeyFrameF64
-    near_clip: KeyFrameF64
-    playback_speed: KeyFrameF64
-    selection_name: KeyFrameString
-    selection_offset: KeyFrameVector3
-    skybox_offset: KeyFrameF64
-    skybox_radius: KeyFrameF64
-    skybox_rotation: KeyFrameF64
-    sun_direction: KeyFrameVector3
-}
-
-#[derive(Clone, Debug)]
-pub struct FrameValue<T: KeyFrameValue> {
-    pub value: T,
-    pub blending_mode: EasingType,
-}
-
-impl<T: KeyFrameValue + PartialEq> PartialEq for FrameValue<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-            && self.blending_mode == EasingType::Linear
-            && other.blending_mode == EasingType::Linear
-    }
-}
-
-pub type FrameString = FrameValue<String>;
-pub type FrameBool = FrameValue<bool>;
-pub type FrameColor = FrameValue<ColorValue>;
-pub type FrameFloat = FrameValue<f64>;
-pub type FrameVector3 = FrameValue<Vector3f>;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector3f {
