@@ -234,6 +234,9 @@
 						"type": "number",
 						"format": "float"
 					},
+					"scores": {
+						"$ref": "#/components/schemas/Scores"
+					},
 					"runes": {
 						"$ref": "#/components/schemas/Runes"
 					},
@@ -528,6 +531,26 @@
 					}
 				}
 			},
+			"Scores": {
+				"properties": {
+					"assists": {
+						"type": "integer"
+					},
+					"creepScore": {
+						"type": "integer"
+					},
+					"deaths": {
+						"type": "integer"
+					},
+					"kills": {
+						"type": "integer"
+					},
+					"wardScore": {
+						"type": "number",
+						"format": "float"
+					}
+				}
+			},
 			"Events": {
 				"properties": {
 					"events": {
@@ -541,13 +564,18 @@
 			"Event": {
 				"properties": {
 					"EventID": {
+						"nullable": false,
 						"type": "integer"
 					},
 					"EventTime": {
+						"description": "Time the event took place, in float formatted seconds",
+						"nullable": false,
+						"minimum": 0.0,
 						"type": "number",
 						"format": "float"
 					},
 					"EventName": {
+						"nullable": false,
 						"type": "string",
 						"enum": [
 							"Ace",
@@ -565,16 +593,189 @@
 							"InhibKilled",
 							"GameEnd"
 						]
+					}
+				},
+				"required": [
+					"EventID",
+					"EventName",
+					"EventTime"
+				],
+				"discriminator": {
+					"propertyName": "EventName",
+					"mapping": {
+						"GameStart": "",
+						"MinionsSpawning": "",
+						"Ace": "#/components/schemas/Ace",
+						"ChampionKill": "#/components/schemas/ChampionKill",
+						"FirstBlood": "#/components/schemas/FirstBlood",
+						"Multikill": "#/components/schemas/Multikill",
+						"TurretKilled": "#/components/schemas/TurretKilled",
+						"FirstBrick": "#/components/schemas/FirstBrick",
+						"DragonKill": "#/components/schemas/DragonKill",
+						"HordeKill": "#/components/schemas/HordeKill",
+						"HeraldKill": "#/components/schemas/HeraldKill",
+						"BaronKill": "#/components/schemas/BaronKill",
+						"InhibKilled": "#/components/schemas/InhibKilled",
+						"InhibRespawned": "#/components/schemas/InhibRespawned",
+						"GameEnd": "#/components/schemas/GameEnd"
+					}
+				},
+				"oneOf": [
+					{
+
 					},
+					{
+						"$ref": "#/components/schemas/Ace"
+					},
+					{
+						"$ref": "#/components/schemas/ChampionKIll"
+					},
+					{
+						"$ref": "#/components/schemas/FirstBlood"
+					},
+					{
+						"$ref": "#/components/schemas/Multikill"
+					},
+					{
+						"$ref": "#/components/schemas/TurretKilled"
+					},
+					{
+						"$ref": "#/components/schemas/FirstBrick"
+					},
+					{
+						"$ref": "#/components/schemas/DragonKill"
+					},
+					{
+						"$ref": "#/components/schemas/HordeKill"
+					},
+					{
+						"$ref": "#/components/schemas/HeraldKill"
+					},
+					{
+						"$ref": "#/components/schemas/BaronKill"
+					},
+					{
+						"$ref": "#/components/schemas/InhibKilled"
+					},
+					{
+						"$ref": "#/components/schemas/InhibRespawned"
+					},
+					{
+						"$ref": "#/components/schemas/GameEnd"
+					}
+				]
+			},
+			"Ace": {
+				"properties": {
 					"Acer": {
 						"type": "string"
 					},
 					"AcingTeam": {
 						"$ref": "#/components/schemas/TeamID"
-					},
+					}
+				}
+			},
+			"ChampionKIll": {
+				"properties": {
 					"VictimName": {
 						"type": "string"
+					}
+				},
+				"additionalProperties": {
+					"$ref": "#/components/schemas/KillInfo"
+				}
+			},
+			"FirstBlood": {
+				"properties": {
+					"Recipient": {
+						"type": "string"
+					}
+				}
+			},
+			"Multikill": {
+				"properties": {
+					"KillStreak": {
+						"type": "integer"
 					},
+					"KillerName": {
+						"type": "string"
+					}
+				}
+			},
+			"TurretKilled": {
+				"properties": {
+					"TurretKilled": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": {
+					"$ref": "#/components/schemas/KillInfo"
+				}
+			},
+			"FirstBrick": {
+				"properties": {
+					"KillerName": {
+						"type": "string"
+					}
+				}
+			},
+			"DragonKill": {
+				"properties": {
+					"DragonType": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": {
+					"$ref": "#/components/schemas/MonsterKillInfo"
+				}
+			},
+			"HordeKill": {
+				"$ref": "#/components/schemas/MonsterKillInfo"
+			},
+			"HeraldKill": {
+				"$ref": "#/components/schemas/MonsterKillInfo"
+			},
+			"BaronKill": {
+				"$ref": "#/components/schemas/MonsterKillInfo"
+			},
+			"InhibKilled": {
+				"properties": {
+					"InhibKilled": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": {
+					"$ref": "#/components/schemas/KillInfo"
+				}
+			},
+			"InhibRespawned": {
+				"properties": {
+					"InhibRespawned": {
+						"type": "string"
+					}
+				}
+			},
+			"GameEnd": {
+				"properties": {
+					"Result": {
+						"type": "string",
+						"enum": ["Win", "Lose"]
+					}
+				}
+			},
+			"MonsterKillInfo": {
+				"properties": {
+					"Stolen": {
+						"type": "string",
+						"enum": ["True", "False"]
+					}
+				},
+				"additionalProperties": {
+					"$ref": "#/components/schemas/KillInfo"
+				}
+			},
+			"KillInfo": {
+				"properties": {
 					"Assisters": {
 						"type": "array",
 						"additionalProperties": {
@@ -583,42 +784,6 @@
 					},
 					"KillerName": {
 						"type": "string"
-					},
-					"Recipient": {
-						"type": "string"
-					},
-					"KillStreak": {
-						"type": "integer"
-					},
-					"TurretKilled": {
-						"type": "string"
-					},
-					"DragonType": {
-						"type": "string",
-						"enum": [
-							"Fire",
-							"Earth",
-							"Water",
-							"Air",
-							"Hextech",
-							"Chemtech",
-							"Elder",
-							"Unknown"
-						]
-					},
-					"Stolen": {
-						"type": "string",
-						"enum": ["True", "False"]
-					},
-					"InhibKilled": {
-						"type": "string"
-					},
-					"InhibRespawned": {
-						"type": "string"
-					},
-					"Result": {
-						"type": "string",
-						"enum": ["Win", "Lose"]
 					}
 				}
 			}
@@ -661,8 +826,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/Abilities"
 								}
 							}
 						},
@@ -706,8 +870,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/Runes"
 								}
 							}
 						},
@@ -741,8 +904,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/AllGameData"
 								}
 							}
 						},
@@ -775,8 +937,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/Events"
 								}
 							}
 						},
@@ -798,8 +959,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/GameData"
 								}
 							}
 						},
@@ -831,8 +991,10 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Item"
+									}
 								}
 							}
 						},
@@ -865,8 +1027,10 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/AllPlayer"
+									}
 								}
 							}
 						},
@@ -900,8 +1064,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/Runes"
 								}
 							}
 						},
@@ -926,15 +1089,15 @@
 						"required": true,
 						"schema": {
 							"type": "string"
-						}					}
+						}
+					}
 				],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/Scores"
 								}
 							}
 						},
@@ -967,8 +1130,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"additionalProperties": true,
-									"type": "object"
+									"$ref": "#/components/schemas/SummonerSpells"
 								}
 							}
 						},
