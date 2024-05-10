@@ -622,7 +622,7 @@
 				},
 				"oneOf": [
 					{
-						"type": "null"
+
 					},
 					{
 						"$ref": "#/components/schemas/Ace"
@@ -992,7 +992,7 @@
 							"application/json": {
 								"schema": {
 									"type": "array",
-									"additionalProperties": {
+									"items": {
 										"$ref": "#/components/schemas/Item"
 									}
 								}
@@ -1028,7 +1028,7 @@
 							"application/json": {
 								"schema": {
 									"type": "array",
-									"additionalProperties": {
+									"items": {
 										"$ref": "#/components/schemas/AllPlayer"
 									}
 								}
