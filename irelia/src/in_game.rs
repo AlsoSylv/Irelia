@@ -173,12 +173,12 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_summoner_spells(
         &self,
-        summoner: impl AsRef<str>,
+        riot_id: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<SummonerSpells, Error> {
         self.live_client(
             "playersummonerspells",
-            Some(summoner.as_ref()),
+            Some(riot_id.as_ref()),
             request_client,
         )
         .await
@@ -191,10 +191,10 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_main_runes(
         &self,
-        summoner: impl AsRef<str>,
+        riot_id: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Runes, Error> {
-        self.live_client("playermainrunes", Some(summoner.as_ref()), request_client)
+        self.live_client("playermainrunes", Some(riot_id.as_ref()), request_client)
             .await
     }
 
@@ -205,10 +205,10 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_items(
         &self,
-        summoner: impl AsRef<str>,
+        riot_id: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Vec<Item>, Error> {
-        self.live_client("playeritems", Some(summoner.as_ref()), request_client)
+        self.live_client("playeritems", Some(riot_id.as_ref()), request_client)
             .await
     }
 
@@ -245,13 +245,13 @@ impl GameClient {
     async fn live_client<R: DeserializeOwned>(
         &self,
         endpoint: &str,
-        summoner: Option<&str>,
+        riot_id: Option<&str>,
         request_client: &RequestClient,
     ) -> Result<R, Error> {
         use hyper::body::Buf;
 
-        let endpoint = if let Some(summoner) = summoner {
-            format!("/liveclientdata/{endpoint}?summonerName={summoner}")
+        let endpoint = if let Some(riot_id) = riot_id {
+            format!("/liveclientdata/{endpoint}?riotId={riot_id}")
         } else {
             format!("/liveclientdata/{endpoint}")
         };

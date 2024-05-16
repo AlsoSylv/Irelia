@@ -10,12 +10,13 @@ use futures_util::{
     SinkExt, StreamExt,
 };
 use rustls::ClientConfig;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver};
 use tokio::{
     net::TcpStream,
     sync::mpsc::{self, UnboundedSender},
     task::JoinHandle,
 };
+use tokio_tungstenite::tungstenite::handshake::client::Request;
 use tokio_tungstenite::{
     connect_async_tls_with_config,
     tungstenite::{client::IntoClientRequest, http::HeaderValue, Message},
@@ -32,7 +33,7 @@ use crate::{
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<ChannelMessage>,
-    handle: JoinHandle<()>,
+    handle: JoinHandle<Result<(), Error>>,
     id_receiver: Receiver<usize>,
     url: String,
     auth_header: String,
@@ -49,14 +50,17 @@ pub trait Subscriber: Send + Sync {
 }
 
 pub trait ErrorHandler: Send + Sync {
-    fn on_error(&mut self, error: Error) -> ControlFlow<(), Flow> {
-        panic!("{error:?}")
-    }
+    fn on_error(&mut self, error: Error) -> ControlFlow<(), Flow>;
 }
 
 pub struct DefaultErrorHandler;
 
-impl ErrorHandler for DefaultErrorHandler {}
+impl ErrorHandler for DefaultErrorHandler {
+    fn on_error(&mut self, error: Error) -> ControlFlow<(), Flow> {
+        eprintln!("{error}");
+        ControlFlow::Break(())
+    }
+}
 
 type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 type Reader = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
@@ -71,6 +75,34 @@ enum ChannelMessage {
 pub struct SubscriberID(usize);
 
 impl LCUWebSocket {
+    /// Creates a new connection to the LCU websocket
+    ///
+    /// # Errors
+    /// This function will return an error if the LCU is not running,
+    /// or if it cannot connect to the websocket
+    ///
+    /// # Panics
+    ///
+    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
+    pub fn new_with_error_handler(
+        error_handler: impl ErrorHandler + 'static,
+    ) -> Result<Self, Error> {
+        Self::new_internal(error_handler)
+    }
+
+    /// Creates a new connection to the LCU websocket
+    ///
+    /// # Errors
+    /// This function will return an error if the LCU is not running,
+    /// or if it cannot connect to the websocket
+    ///
+    /// # Panics
+    ///
+    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
+    pub fn new() -> Result<Self, Error> {
+        Self::new_internal(DefaultErrorHandler)
+    }
+
     #[allow(clippy::too_many_lines)]
     /// Creates a new connection to the LCU websocket
     ///
@@ -81,10 +113,9 @@ impl LCUWebSocket {
     /// # Panics
     ///
     /// If the auth header returned is somehow invalid (though I have not seen this in practice)
-    pub async fn new(error_handler: Option<impl ErrorHandler + 'static>) -> Result<Self, Error> {
+    pub fn new_internal(error_handler: impl ErrorHandler + 'static) -> Result<Self, Error> {
         let tls = setup_tls_connector();
         let tls = Arc::new(tls);
-        let connector = Some(Connector::Rustls(tls.clone()));
         let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
         let str_req = format!("wss://{url}");
 
@@ -94,128 +125,16 @@ impl LCUWebSocket {
 
         request.headers_mut().insert("Authorization", auth_header);
 
-        let (stream, _) = connect_async_tls_with_config(request, None, false, connector).await?;
-
-        let (ws_sender, mut ws_receiver) = mpsc::unbounded_channel::<ChannelMessage>();
+        let (ws_sender, ws_receiver) = mpsc::unbounded_channel::<ChannelMessage>();
         let (id_sender, id_receiver) = mpsc::channel(10);
-        let (mut write, mut read) = stream.split();
 
-        let handle = tokio::spawn(async move {
-            type SubscriberMap = HashMap<EventKind, Vec<Option<Box<dyn Subscriber>>>>;
-
-            let mut subscribers: SubscriberMap = HashMap::new();
-            let mut error_handler = error_handler;
-            let error_handler: &mut dyn ErrorHandler = if let Some(handler) = &mut error_handler {
-                handler
-            } else {
-                &mut DefaultErrorHandler
-            };
-
-            'outer: loop {
-                if let Ok(message) = ws_receiver.try_recv() {
-                    match message {
-                        ChannelMessage::Subscribe(code, endpoint, subscriber) => {
-                            if let Some(subscribers) = subscribers.get_mut(&endpoint) {
-                                let mut idx = subscribers.len();
-
-                                for (first_none_idx, maybe_subscriber) in
-                                    subscribers.iter_mut().enumerate()
-                                {
-                                    if maybe_subscriber.is_none() {
-                                        idx = first_none_idx;
-                                        break;
-                                    }
-                                }
-
-                                if idx == subscribers.len() {
-                                    subscribers.push(Some(subscriber));
-                                } else {
-                                    subscribers[idx] = Some(subscriber);
-                                }
-
-                                id_sender.send(idx).await.unwrap();
-                            } else {
-                                let endpoint_str = endpoint.to_string();
-
-                                let command =
-                                    format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
-
-                                if let Err(e) = write.send(command.into()).await {
-                                    let mut control = error_handler.on_error(e.into());
-
-                                    #[rustfmt::skip]
-                                        let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
-
-                                    if !continues {
-                                        break;
-                                    }
-                                };
-
-                                subscribers.insert(endpoint, vec![Some(subscriber)]);
-                            }
-                        }
-                        ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
-                            if let Some(subscribers) = subscribers.get_mut(&event_kind) {
-                                if subscribers.iter().flatten().count() == 0 {
-                                    let unsub = format!(
-                                        "[{}, \"{}\"]",
-                                        RequestType::Unsubscribe as u8,
-                                        event_kind.to_string()
-                                    );
-                                    if let Err(e) = write.send(unsub.into()).await {
-                                        let mut control = error_handler.on_error(e.into());
-
-                                        #[rustfmt::skip]
-                                            let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
-
-                                        if !continues {
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                subscribers[subscriber_id.0] = None;
-                            }
-                        }
-                    }
-                };
-
-                if let Some(Ok(message)) = read.next().await {
-                    let data = message.into_data();
-                    if !data.is_empty() {
-                        let maybe_json = serde_json::from_slice::<Event>(&data);
-                        match maybe_json {
-                            Ok(json) => {
-                                if let Some(subscribers) = subscribers.get_mut(&json.1) {
-                                    for subscriber in subscribers.iter_mut().flatten() {
-                                        let mut control = subscriber.on_event(&json);
-
-                                        #[rustfmt::skip]
-                                            let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
-
-                                        if !continues {
-                                            break 'outer;
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let mut control = error_handler.on_error(e.into());
-
-                                #[rustfmt::skip]
-                                let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
-
-                                if !continues {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                println!("H");
-            }
-        });
+        let handle = tokio::spawn(event_loop(
+            request,
+            error_handler,
+            ws_receiver,
+            id_sender,
+            tls,
+        ));
 
         Ok(Self {
             ws_sender,
@@ -289,10 +208,152 @@ impl LCUWebSocket {
         self.handle.abort();
     }
 
+    /// # Errors
+    ///
+    /// # Panics
+    pub async fn wait_until_close(self) -> Result<(), Error> {
+        self.handle.await.unwrap()
+    }
+
     #[must_use]
     pub fn is_finished(&self) -> bool {
         self.handle.is_finished()
     }
+}
+
+async fn event_loop(
+    request: Request,
+    mut error_handler: impl ErrorHandler,
+    mut ws_receiver: UnboundedReceiver<ChannelMessage>,
+    id_sender: Sender<usize>,
+    tls: Arc<ClientConfig>,
+) -> Result<(), Error> {
+    type SubscriberMap = HashMap<EventKind, Vec<Option<Box<dyn Subscriber>>>>;
+
+    let (stream, _) =
+        connect_async_tls_with_config(request, None, false, Some(Connector::Rustls(tls.clone())))
+            .await?;
+
+    let (mut write, mut read) = stream.split();
+
+    let mut subscribers: SubscriberMap = HashMap::new();
+    let error_handler: &mut dyn ErrorHandler = &mut error_handler;
+
+    'outer: loop {
+        if let Ok(message) = ws_receiver.try_recv() {
+            match message {
+                ChannelMessage::Subscribe(code, endpoint, subscriber) => {
+                    if let Some(subscribers) = subscribers.get_mut(&endpoint) {
+                        let mut idx = subscribers.len();
+
+                        for (first_none_idx, maybe_subscriber) in subscribers.iter_mut().enumerate()
+                        {
+                            if maybe_subscriber.is_none() {
+                                idx = first_none_idx;
+                                break;
+                            }
+                        }
+
+                        if idx == subscribers.len() {
+                            subscribers.push(Some(subscriber));
+                        } else {
+                            subscribers[idx] = Some(subscriber);
+                        }
+
+                        id_sender.send(idx).await.unwrap();
+                    } else {
+                        let endpoint_str = endpoint.to_string();
+
+                        let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
+
+                        let continues =
+                            send_command(error_handler, &mut write, &mut read, &tls, &command)
+                                .await;
+                        if !continues {
+                            break;
+                        }
+
+                        subscribers.insert(endpoint, vec![Some(subscriber)]);
+                    }
+                }
+                ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
+                    if let Some(subscribers) = subscribers.get_mut(&event_kind) {
+                        if subscribers.iter().flatten().count() == 0 {
+                            let unsub = format!(
+                                "[{}, \"{}\"]",
+                                RequestType::Unsubscribe as u8,
+                                event_kind.to_string()
+                            );
+                            let continues =
+                                send_command(error_handler, &mut write, &mut read, &tls, &unsub)
+                                    .await;
+                            if !continues {
+                                break;
+                            }
+                        }
+
+                        subscribers[subscriber_id.0] = None;
+                    }
+                }
+            }
+        };
+
+        if let Some(Ok(message)) = read.next().await {
+            let data = message.into_data();
+            if !data.is_empty() {
+                let maybe_json = serde_json::from_slice::<Event>(&data);
+                match maybe_json {
+                    Ok(json) => {
+                        if let Some(subscribers) = subscribers.get_mut(&json.1) {
+                            for subscriber in subscribers.iter_mut().flatten() {
+                                let mut control = subscriber.on_event(&json);
+
+                                #[rustfmt::skip]
+                                let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
+
+                                if !continues {
+                                    break 'outer;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let mut control = error_handler.on_error(e.into());
+
+                        #[rustfmt::skip]
+                        let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
+
+                        if !continues {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn send_command(
+    error_handler: &mut dyn ErrorHandler,
+    write: &mut Writer,
+    read: &mut Reader,
+    tls: &Arc<ClientConfig>,
+    command: &str,
+) -> bool {
+    if let Err(e) = write.send(command.into()).await {
+        let mut control = error_handler.on_error(e.into());
+
+        #[rustfmt::skip]
+            let continues = budget_recursive(&mut control, tls, write, read, error_handler).await;
+
+        if !continues {
+            return false;
+        }
+    }
+
+    true
 }
 
 async fn budget_recursive(
@@ -341,14 +402,14 @@ async fn reconnect(
 
 #[cfg(test)]
 mod test {
-    use super::{DefaultErrorHandler, Flow, LCUWebSocket, Subscriber};
+    use super::{Flow, LCUWebSocket, Subscriber};
     use crate::ws::types::{Event, EventKind};
     use serde_json::json;
     use std::ops::ControlFlow;
     use std::time::Duration;
 
-    #[tokio::test]
-    async fn it_inits() {
+    #[test]
+    fn it_inits() {
         struct EventCounter(u32);
 
         impl Subscriber for EventCounter {
@@ -361,14 +422,12 @@ mod test {
             }
         }
 
-        let mut ws_client = LCUWebSocket::new(None::<DefaultErrorHandler>)
-            .await
-            .unwrap();
+        let mut ws_client = LCUWebSocket::new().unwrap();
 
-        ws_client.subscribe_async(EventKind::JsonApiEvent, EventCounter(0)).await;
+        ws_client.subscribe(EventKind::JsonApiEvent, EventCounter(0));
 
         while !ws_client.is_finished() {
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            std::thread::sleep(Duration::from_secs(1));
         }
     }
 
