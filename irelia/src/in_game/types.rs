@@ -7,6 +7,7 @@
 //! to the same value
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::IgnoredAny;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use time::Duration;
@@ -24,54 +25,24 @@ pub struct AllGameData {
 fn deserialize_active_player<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<ActivePlayer>, D::Error> {
-    #[derive(Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    #[serde(deny_unknown_fields)]
-    pub struct OptionalActivePlayer {
-        abilities: Option<Abilities>,
-        champion_stats: Option<ChampionStats>,
-        current_gold: Option<f64>,
-        full_runes: Option<Runes>,
-        level: Option<i64>,
-        riot_id: Option<String>,
-        riot_id_game_name: Option<String>,
-        riot_id_tag_line: Option<String>,
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    #[allow(clippy::large_enum_variant)]
+    enum ActivePlayerOrNull {
+        ActivePlayer(ActivePlayer),
+        Error {
+            #[serde(rename = "error")]
+            /// This error will always be "This feature is not supported in spectator mode, so it can be ignored
+            _error: IgnoredAny
+        },
     }
+    
+    let maybe_player = ActivePlayerOrNull::deserialize(deserializer)?;
 
-    let optional_active_player = OptionalActivePlayer::deserialize(deserializer)?;
-
-    if let (
-        Some(abilities),
-        Some(champion_stats),
-        Some(current_gold),
-        Some(full_runes),
-        Some(level),
-        Some(riot_id),
-        Some(riot_id_game_name),
-        Some(riot_id_tag_line),
-    ) = (
-        optional_active_player.abilities,
-        optional_active_player.champion_stats,
-        optional_active_player.current_gold,
-        optional_active_player.full_runes,
-        optional_active_player.level,
-        optional_active_player.riot_id,
-        optional_active_player.riot_id_game_name,
-        optional_active_player.riot_id_tag_line,
-    ) {
-        Ok(Some(ActivePlayer {
-            abilities,
-            champion_stats,
-            current_gold,
-            full_runes,
-            level,
-            riot_id,
-            riot_id_game_name,
-            riot_id_tag_line,
-        }))
-    } else {
-        Ok(None)
-    }
+    Ok(match maybe_player {
+        ActivePlayerOrNull::ActivePlayer(player) => Some(player),
+        ActivePlayerOrNull::Error {..} => None,
+    })
 }
 
 impl AllGameData {

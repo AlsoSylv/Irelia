@@ -151,6 +151,7 @@ pub fn get_running_client(
 
 #[cfg(test)]
 mod tests {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
     use super::{get_running_client, CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
@@ -159,5 +160,42 @@ mod tests {
         let (port, pass) =
             get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false).unwrap();
         println!("{port} {pass}");
+    }
+
+    #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
+    #[test]
+    fn test_process_args() {
+        // No matter what, the path to the process is required
+        let refresh_kind = ProcessRefreshKind::new()
+            .with_cwd(sysinfo::UpdateKind::OnlyIfNotSet)
+            .with_root(sysinfo::UpdateKind::OnlyIfNotSet)
+            .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
+            .with_cmd(sysinfo::UpdateKind::OnlyIfNotSet);
+
+        // Get the current list of processes
+        let system = System::new_with_specifics(
+            // This creates a new instance of `system` every time, so this only
+            //  needs to be updated if it's not set
+            RefreshKind::new().with_processes(refresh_kind),
+        );
+
+        let process = system
+            .processes()
+            .values()
+            .find(|process| {
+                process.name() == GAME_PROCESS_NAME
+            }).unwrap();
+
+        println!("{:?}", process.exe());
+        println!("{:?}", process.root());
+        println!("{:?}", process.cmd());
+        println!("{:?}", process.cwd());
+        println!("{:?}", process.environ());
+
+        let parent = process.parent().unwrap();
+
+        let process = system.process(parent).unwrap();
+
+        println!("{process:?}");
     }
 }
