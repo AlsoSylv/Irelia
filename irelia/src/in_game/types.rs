@@ -6,10 +6,12 @@
 //! Well the types and returned values do not match, the format will serialize
 //! to the same value
 
+use serde::de::{Error, IgnoredAny, Unexpected, Visitor};
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde::de::IgnoredAny;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use std::fmt::Formatter;
 use time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -32,16 +34,16 @@ fn deserialize_active_player<'de, D: Deserializer<'de>>(
         ActivePlayer(ActivePlayer),
         Error {
             #[serde(rename = "error")]
-            /// This error will always be "This feature is not supported in spectator mode, so it can be ignored
-            _error: IgnoredAny
+            // This error will always be "This feature is not supported in spectator mode, so it can be ignored
+            _error: IgnoredAny,
         },
     }
-    
+
     let maybe_player = ActivePlayerOrNull::deserialize(deserializer)?;
 
     Ok(match maybe_player {
         ActivePlayerOrNull::ActivePlayer(player) => Some(player),
-        ActivePlayerOrNull::Error {..} => None,
+        ActivePlayerOrNull::Error { .. } => None,
     })
 }
 
@@ -55,8 +57,8 @@ impl AllGameData {
         &self.all_players
     }
     #[must_use]
-    pub fn events(&self) -> &Events {
-        &self.events
+    pub fn events(&self) -> &[Event] {
+        &self.events.events
     }
     #[must_use]
     pub fn game_data(&self) -> &GameData {
@@ -71,10 +73,76 @@ pub struct ActivePlayer {
     champion_stats: ChampionStats,
     current_gold: f64,
     full_runes: Runes,
-    level: i64,
-    riot_id: String,
-    riot_id_game_name: String,
-    riot_id_tag_line: String,
+    level: u8,
+    #[serde(flatten)]
+    riot_id: RiotId,
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+struct RiotId {
+    riot_id: Box<str>,
+    separator_index: usize,
+}
+
+impl RiotId {
+    #[must_use]
+    fn riot_id(&self) -> &str {
+        &self.riot_id
+    }
+    #[must_use]
+    fn game_name(&self) -> &str {
+        &self.riot_id[0..self.separator_index]
+    }
+    #[must_use]
+    fn tag_line(&self) -> &str {
+        &self.riot_id[self.separator_index + 1..]
+    }
+}
+
+impl<'de> Deserialize<'de> for RiotId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        #[allow(clippy::struct_field_names)]
+        struct TmpRiotId {
+            riot_id: Box<str>,
+        }
+
+        let active_player = TmpRiotId::deserialize(deserializer)?;
+
+        let separator_index = active_player.riot_id.find('#').ok_or_else(|| {
+            Error::invalid_value(
+                Unexpected::Other(&format!(
+                    "Riot ID did not contain a separator '#', expected: GameName#TagLine, instead found found: {}",
+                    active_player.riot_id
+                )),
+                &"A string in the format GameName#TagLine"
+            )
+        })?;
+
+        Ok(RiotId {
+            riot_id: active_player.riot_id,
+            separator_index,
+        })
+    }
+}
+
+impl Serialize for RiotId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut id_struct = serializer.serialize_struct("RiotId", 3)?;
+
+        id_struct.serialize_field("RiotId", &self.riot_id)?;
+        id_struct.serialize_field("RiotIdGameName", self.game_name())?;
+        id_struct.serialize_field("RiotIdTagLine", self.tag_line())?;
+
+        id_struct.end()
+    }
 }
 
 impl ActivePlayer {
@@ -95,20 +163,20 @@ impl ActivePlayer {
         &self.full_runes
     }
     #[must_use]
-    pub fn level(&self) -> i64 {
+    pub fn level(&self) -> u8 {
         self.level
     }
     #[must_use]
     pub fn riot_id(&self) -> &str {
-        &self.riot_id
+        self.riot_id.riot_id()
     }
     #[must_use]
     pub fn game_name(&self) -> &str {
-        &self.riot_id_game_name
+        self.riot_id.game_name()
     }
     #[must_use]
     pub fn tag_line(&self) -> &str {
-        &self.riot_id_tag_line
+        self.riot_id.tag_line()
     }
 }
 
@@ -148,10 +216,10 @@ impl Abilities {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityInfo {
-    display_name: String,
-    id: String,
-    raw_description: String,
-    raw_display_name: String,
+    display_name: Box<str>,
+    id: Box<str>,
+    raw_description: Box<str>,
+    raw_display_name: Box<str>,
 }
 
 impl AbilityInfo {
@@ -176,14 +244,14 @@ impl AbilityInfo {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ability {
-    ability_level: i64,
+    ability_level: u8,
     #[serde(flatten)]
     ability_info: AbilityInfo,
 }
 
 impl Ability {
     #[must_use]
-    pub fn ability_level(&self) -> i64 {
+    pub fn ability_level(&self) -> u8 {
         self.ability_level
     }
     #[must_use]
@@ -391,10 +459,11 @@ impl Runes {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rune {
-    display_name: String,
-    id: i64,
-    raw_description: String,
-    raw_display_name: String,
+    display_name: Box<str>,
+    // This never goes above 8500
+    id: u16,
+    raw_description: Box<str>,
+    raw_display_name: Box<str>,
 }
 
 impl Rune {
@@ -403,7 +472,7 @@ impl Rune {
         &self.display_name
     }
     #[must_use]
-    pub fn id(&self) -> i64 {
+    pub fn id(&self) -> u16 {
         self.id
     }
     #[must_use]
@@ -419,13 +488,14 @@ impl Rune {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatRune {
-    id: i64,
-    raw_description: String,
+    // These are around 5000
+    id: u16,
+    raw_description: Box<str>,
 }
 
 impl StatRune {
     #[must_use]
-    pub fn id(&self) -> i64 {
+    pub fn id(&self) -> u16 {
         self.id
     }
     #[must_use]
@@ -437,26 +507,25 @@ impl StatRune {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllPlayer {
-    champion_name: String,
+    champion_name: Box<str>,
     is_bot: bool,
     is_dead: bool,
     items: Box<[Item]>,
     level: i64,
     position: Position,
-    raw_champion_name: String,
+    raw_champion_name: Box<str>,
     #[serde(with = "duration")]
     respawn_timer: Duration,
     runes: Runes,
     scores: Scores,
     #[serde(rename = "skinID")]
     skin_id: i64,
-    riot_id: String,
-    riot_id_game_name: String,
-    riot_id_tag_line: String,
+    #[serde(flatten)]
+    riot_id: RiotId,
     summoner_spells: SummonerSpells,
     team: TeamID,
-    skin_name: Option<String>,
-    raw_skin_name: Option<String>,
+    skin_name: Option<Box<str>>,
+    raw_skin_name: Option<Box<str>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -470,7 +539,7 @@ pub enum Position {
     Support,
     None,
     #[serde(untagged)]
-    Unknown(String),
+    Unknown(Box<str>),
 }
 
 impl AllPlayer {
@@ -520,15 +589,15 @@ impl AllPlayer {
     }
     #[must_use]
     pub fn riot_id(&self) -> &str {
-        &self.riot_id
+        self.riot_id.riot_id()
     }
     #[must_use]
     pub fn game_name(&self) -> &str {
-        &self.riot_id_game_name
+        self.riot_id.game_name()
     }
     #[must_use]
     pub fn tag_line(&self) -> &str {
-        &self.riot_id_tag_line
+        self.riot_id.tag_line()
     }
     #[must_use]
     pub fn summoner_spells(&self) -> &SummonerSpells {
@@ -618,9 +687,9 @@ impl core::ops::Index<usize> for SummonerSpells {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpell {
-    display_name: String,
-    raw_description: String,
-    raw_display_name: String,
+    display_name: Box<str>,
+    raw_description: Box<str>,
+    raw_display_name: Box<str>,
 }
 
 impl SummonerSpell {
@@ -643,14 +712,17 @@ impl SummonerSpell {
 pub struct Item {
     can_use: bool,
     consumable: bool,
-    count: i64,
-    display_name: String,
+    // The max consumable stack is 5
+    count: u8,
+    display_name: Box<str>,
     #[serde(rename = "itemID")]
-    item_id: i64,
-    price: i64,
-    raw_description: String,
-    raw_display_name: String,
-    slot: i64,
+    item_id: u32,
+    // This price never goes over 8000
+    price: u16,
+    raw_description: Box<str>,
+    raw_display_name: Box<str>,
+    // This is a value between 1 and 7
+    slot: u8,
 }
 
 impl Item {
@@ -663,7 +735,7 @@ impl Item {
         self.consumable
     }
     #[must_use]
-    pub fn count(&self) -> i64 {
+    pub fn count(&self) -> u8 {
         self.count
     }
     #[must_use]
@@ -671,11 +743,11 @@ impl Item {
         &self.display_name
     }
     #[must_use]
-    pub fn item_id(&self) -> i64 {
+    pub fn item_id(&self) -> u32 {
         self.item_id
     }
     #[must_use]
-    pub fn price(&self) -> i64 {
+    pub fn price(&self) -> u16 {
         self.price
     }
     #[must_use]
@@ -687,7 +759,7 @@ impl Item {
         &self.raw_display_name
     }
     #[must_use]
-    pub fn slot(&self) -> i64 {
+    pub fn slot(&self) -> u8 {
         self.slot
     }
 }
@@ -696,21 +768,6 @@ impl Item {
 #[serde(rename_all = "PascalCase")]
 pub struct Events {
     events: Box<[Event]>,
-}
-
-impl Events {
-    #[must_use]
-    pub fn events(&self) -> &[Event] {
-        &self.events
-    }
-}
-
-impl core::ops::Index<usize> for Events {
-    type Output = Event;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.events[index]
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -731,21 +788,21 @@ pub enum EventDetails {
     GameStart,
     MinionsSpawning,
     Ace {
-        acer: String,
+        acer: Box<str>,
         acing_team: TeamID,
     },
     ChampionKill {
         #[serde(flatten)]
         kill_info: KillInfo,
-        victim_name: String,
+        victim_name: Box<str>,
     },
     FirstBlood {
-        recipient: String,
+        recipient: Box<str>,
     },
     #[serde(rename = "Multikill")]
     MultiKill {
         kill_streak: u16,
-        killer_name: String,
+        killer_name: Box<str>,
     },
     TurretKilled {
         #[serde(flatten)]
@@ -753,7 +810,7 @@ pub enum EventDetails {
         turret_killed: Structure,
     },
     FirstBrick {
-        killer_name: String,
+        killer_name: Box<str>,
     },
     DragonKill {
         dragon_type: DragonType,
@@ -772,7 +829,7 @@ pub enum EventDetails {
         inhib_respawned: Structure,
     },
     GameEnd {
-        result: String,
+        result: Box<str>,
     },
     #[serde(untagged)]
     Unknown(serde_json::Value),
@@ -788,7 +845,7 @@ pub enum DragonType {
     Chemtech,
     Elder,
     #[serde(untagged)]
-    Unknown(String),
+    Unknown(Box<str>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -872,29 +929,65 @@ impl<'de> serde::Deserialize<'de> for Structure {
             }
         }
 
-        let data: &str = Deserialize::deserialize(deserializer)?;
+        fn determine_structure_type(ty: &str) -> StructureType {
+            match ty {
+                "Turret" => StructureType::Turret,
+                "Barracks" => StructureType::Barracks,
+                unrecognized => unreachable!("{}", unrecognized),
+            }
+        }
 
-        let split: Box<[&str]> = data.split('_').collect();
+        struct StructureVisitor;
 
-        let structure = match split.as_ref() {
-            // The last value here is always A
-            &["Turret", team, lane, number, _] => Structure {
-                structure_type: StructureType::Turret,
-                team_id: determine_structure_team(team),
-                place: number.parse().unwrap(),
-                lane: determine_structure_lane(lane.as_bytes()[0]),
-            },
-            &["Barracks", team, lane] => Structure {
-                structure_type: StructureType::Barracks,
-                team_id: determine_structure_team(team),
-                // This is always 1, as all lanes have one inhib
-                place: 1,
-                lane: determine_structure_lane(lane.as_bytes()[0]),
-            },
-            todo => unreachable!("A new type of structure must have been added, please open an issue with the following info: {:?}", todo),
-        };
+        impl<'a> Visitor<'a> for StructureVisitor {
+            type Value = Structure;
 
-        Ok(structure)
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("A string in one of the formats in StructureNames.png")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                let mut split = v.split('_');
+
+                let structure_type = split
+                    .next()
+                    .expect("The first string in the split is the structure name");
+
+                let team = split
+                    .next()
+                    .expect("The second string in the split is the team");
+
+                let lane = split
+                    .next()
+                    .expect("The third string in the split is the lane");
+
+                let structure_type = determine_structure_type(structure_type);
+                // This is always a single byte
+                let lane = determine_structure_lane(lane.as_bytes()[0]);
+                let team_id = determine_structure_team(team);
+
+                let place = if structure_type == StructureType::Turret {
+                    let place = split
+                        .next()
+                        .expect("The fourth string in the split is the place");
+                    place.parse().expect("This is always a number")
+                } else {
+                    1
+                };
+
+                Ok(Structure {
+                    structure_type,
+                    team_id,
+                    lane,
+                    place,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(StructureVisitor)
     }
 }
 
@@ -997,7 +1090,7 @@ pub struct GameData {
     #[serde(with = "duration")]
     game_time: Duration,
     map_name: MapName,
-    map_number: i64,
+    map_number: u8,
     map_terrain: MapTerrain,
 }
 
@@ -1030,7 +1123,7 @@ pub enum GameMode {
     /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/gameModes.json>
     /// However, this may not be up-to-date
     #[serde(untagged)]
-    Other(String),
+    Other(Box<str>),
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -1054,7 +1147,7 @@ pub enum MapName {
     /// However, this may be out of date, if that's the case, look at <https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/maps.json>
     /// for the latest maps that patch
     #[serde(untagged)]
-    Other(String),
+    Other(Box<str>),
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -1082,7 +1175,7 @@ impl GameData {
         &self.map_name
     }
     #[must_use]
-    pub fn map_number(&self) -> i64 {
+    pub fn map_number(&self) -> u8 {
         self.map_number
     }
     #[must_use]
@@ -1136,9 +1229,9 @@ mod string_to_bool {
     where
         D: Deserializer<'de>,
     {
-        let stolen: &str = Deserialize::deserialize(deserializer)?;
+        let stolen = String::deserialize(deserializer)?;
 
-        Ok(match stolen {
+        Ok(match stolen.as_str() {
             "False" => false,
             "True" => true,
             _ => unreachable!(),

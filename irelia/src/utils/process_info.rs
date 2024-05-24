@@ -151,8 +151,8 @@ pub fn get_running_client(
 
 #[cfg(test)]
 mod tests {
-    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
     use super::{get_running_client, CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
     #[test]
@@ -182,9 +182,8 @@ mod tests {
         let process = system
             .processes()
             .values()
-            .find(|process| {
-                process.name() == GAME_PROCESS_NAME
-            }).unwrap();
+            .find(|process| process.name() == GAME_PROCESS_NAME)
+            .unwrap();
 
         println!("{:?}", process.exe());
         println!("{:?}", process.root());
