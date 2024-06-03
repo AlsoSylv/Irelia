@@ -323,11 +323,11 @@ pub struct Render {
     /// Near camera clipping distance
     pub near_clip: f64,
     /// Display outlines on champions when the mouse is hovered over
-    pub outline_hover: Option<bool>,
+    pub outline_hover: bool,
     /// Display outlines on champions when selected
-    pub outline_select: Option<bool>,
+    pub outline_select: bool,
     /// Display particles
-    pub particles: Option<bool>,
+    pub particles: bool,
     /// Sets the selection to the given name, case-insensitive
     pub selection_name: String,
     /// Sets the camera location to the selection's location adding the given offset

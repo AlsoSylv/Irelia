@@ -136,7 +136,7 @@ impl GameClient {
         &self,
         team: Option<TeamID>,
         request_client: &RequestClient,
-    ) -> Result<Vec<AllPlayer>, Error> {
+    ) -> Result<Box<[AllPlayer]>, Error> {
         let team = team.map_or_else(
             || "",
             |team| match team {
@@ -207,7 +207,7 @@ impl GameClient {
         &self,
         riot_id: impl AsRef<str>,
         request_client: &RequestClient,
-    ) -> Result<Vec<Item>, Error> {
+    ) -> Result<Box<[Item]>, Error> {
         self.live_client("playeritems", Some(riot_id.as_ref()), request_client)
             .await
     }

@@ -57,8 +57,8 @@ impl AllGameData {
         &self.all_players
     }
     #[must_use]
-    pub fn events(&self) -> &[Event] {
-        &self.events.events
+    pub fn events(&self) -> &Events {
+        &self.events
     }
     #[must_use]
     pub fn game_data(&self) -> &GameData {
@@ -285,7 +285,8 @@ pub struct ChampionStats {
     magic_resist: f64,
     max_health: f64,
     move_speed: f64,
-    omnivamp: f64,
+    #[serde(rename = "omnivamp")]
+    omni_vamp: f64,
     physical_lethality: f64,
     physical_vamp: f64,
     resource_max: f64,
@@ -414,8 +415,8 @@ impl ChampionStats {
         self.heal_shield_power
     }
     #[must_use]
-    pub fn omnivamp(&self) -> f64 {
-        self.omnivamp
+    pub fn omni_vamp(&self) -> f64 {
+        self.omni_vamp
     }
     #[must_use]
     pub fn physical_vamp(&self) -> f64 {
@@ -510,8 +511,9 @@ pub struct AllPlayer {
     champion_name: Box<str>,
     is_bot: bool,
     is_dead: bool,
-    items: Box<[Item]>,
-    level: i64,
+    #[serde(with = "fixed_option_array")]
+    items: [Option<Item>; 7],
+    level: u8,
     position: Position,
     raw_champion_name: Box<str>,
     #[serde(with = "duration")]
@@ -556,11 +558,19 @@ impl AllPlayer {
         self.is_dead
     }
     #[must_use]
-    pub fn items(&self) -> &[Item] {
+    pub fn items(&self) -> &[Option<Item>; 7] {
         &self.items
     }
     #[must_use]
-    pub fn level(&self) -> i64 {
+    pub fn purchased_items(&self) -> &[Option<Item>] {
+        &self.items[0..6]
+    }
+    #[must_use]
+    pub fn ward(&self) -> &Option<Item> {
+        &self.items[6]
+    }
+    #[must_use]
+    pub fn level(&self) -> u8 {
         self.level
     }
     #[must_use]
@@ -622,33 +632,40 @@ impl AllPlayer {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores {
-    assists: i64,
-    creep_score: i64,
-    deaths: i64,
-    kills: i64,
+    kills: u8,
+    deaths: u8,
+    assists: u8,
+    creep_score: u16,
     ward_score: f64,
 }
 
 impl Scores {
     #[must_use]
-    pub fn assists(&self) -> i64 {
-        self.assists
+    pub fn kills(&self) -> u8 {
+        self.kills
     }
     #[must_use]
-    pub fn creep_score(&self) -> i64 {
-        self.creep_score
-    }
-    #[must_use]
-    pub fn deaths(&self) -> i64 {
+    pub fn deaths(&self) -> u8 {
         self.deaths
     }
     #[must_use]
-    pub fn kills(&self) -> i64 {
-        self.kills
+    pub fn assists(&self) -> u8 {
+        self.assists
+    }
+    #[must_use]
+    pub fn creep_score(&self) -> u16 {
+        self.creep_score
     }
     #[must_use]
     pub fn ward_score(&self) -> f64 {
         self.ward_score
+    }
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    #[must_use]
+    /// This should match how it's displayed on the tab screen
+    pub fn ward_score_u64(&self) -> u64 {
+        self.ward_score as u64
     }
 }
 
@@ -770,6 +787,19 @@ pub struct Events {
     events: Box<[Event]>,
 }
 
+impl Events {
+    #[must_use]
+    pub fn dragons_killed(&self) -> u8 {
+        self.events.iter().fold(0, |acc, event| {
+            acc + if let EventDetails::DragonKill { .. } = event.event_details {
+                1
+            } else {
+                0
+            }
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Event {
@@ -848,28 +878,65 @@ pub enum DragonType {
     Unknown(Box<str>),
 }
 
+/// This represents all the data concerning a Turret or Inhibitor
 #[derive(Debug, Clone, PartialEq)]
 pub struct Structure {
+    /// This is either `StructureType::Turret` or `StructureType::Barracks` aka inhibitor
     structure_type: StructureType,
-    /// Blue side = Order
-    /// Red side = Chaos,
+    /// Blue side is `TeamID::Order`,
+    /// Red side is `TeamID::Chaos`
     team_id: TeamID,
-    /// This still exists in aram, but it's useless
+    /// This is either `Lane::Top`, `Lane::Mid` or `Lane::Bot`
+    /// ARAM:
+    /// - `TeamID::Order` is `Lane::Mid`
+    /// - `TeamID::Chaos` is `Lane::Top`
     lane: Lane,
-    /// This gets tricky, on summoners rift, this is 1-3 for top
-    /// and bot lane, and 1-5 for mid, going in reverse. So the outer turret is
-    /// 3 or 5, and the inner is 1 or 2.
+    /// The place of inhibitors are always 1.
     ///
-    /// On Nexus blitz, it's 4-1, with 4 and 1 being the top outer and inner
-    /// while 3 and 2 are the bottom outer and inner turrets
+    /// The place of turrets is map dependent, a guide has been laid out below.
     ///
-    /// However, on Aram, on aram, the red side is 1-4 where 1 is the outermost turret
-    /// And blue side being 8-10, with 8 as the outermost, 7 as the inner, while 9 and 10
-    /// are the innermost nexus turrets!
+    /// On summoners rift side-lanes are 1 through 3, and mid-lane is 1 through 5
+    /// The outermost turret is always the greatest integer, while the innermost is always 1
+    ///
+    /// On Nexus blitz turrets are between 4 and 1, the order being:
+    /// Top left - 4
+    /// Bottom left - 3
+    /// Top right - 2
+    /// Bottom right - 1
+    ///
+    /// On Aram the order is side specific
+    ///
+    /// Red side is laid out as:
+    /// Outermost Turret - 1
+    /// Inhibitor Turret - 2
+    /// Top Nexus Turret - 3
+    /// Bot Nexus Turret - 4
+    ///
+    /// Blue side is laid out as:
+    /// Outermost Turret - 8
+    /// Inhibitor Turret - 7
+    /// Top Nexus Turret - 10
+    /// Bot Nexus Turret - 9
+    ///
+    /// <div>
+    /// <img src="https://raw.githubusercontent.com/AlsoSylv/Irelia/master/irelia/src/in_game/StructureNames.png" />
+    /// </div>
     place: u8,
 }
 
 impl Structure {
+    #[must_use]
+    /// Returns true if the structure is a turret and false otherwise
+    pub fn is_turret(&self) -> bool {
+        self.structure_type == StructureType::Turret
+    }
+
+    #[must_use]
+    /// Returns true if the structure is an inhibitor and false otherwise
+    pub fn is_inhibitor(&self) -> bool {
+        self.structure_type == StructureType::Barracks
+    }
+
     #[must_use]
     /// Either Turret or Barracks (aka inhibitor)
     pub fn structure_type(&self) -> &StructureType {
@@ -883,6 +950,18 @@ impl Structure {
     }
 
     #[must_use]
+    /// Returns true if the team the structure belongs to is blue-side, aka Order
+    pub fn is_blue_side(&self) -> bool {
+        self.team_id == TeamID::Order
+    }
+
+    #[must_use]
+    /// Returns true if the team the structure belongs to is red-side, aka Chaos
+    pub fn is_red_side(&self) -> bool {
+        self.team_id == TeamID::Chaos
+    }
+
+    #[must_use]
     /// Blue side = Order
     /// Red side = Chaos
     pub fn team_id(&self) -> &TeamID {
@@ -890,20 +969,95 @@ impl Structure {
     }
 
     #[must_use]
-    /// This gets tricky, on summoners rift, this is `1..3` for top
-    /// and bot lane, and `1..5` for mid, going in reverse. So the outer turret is
-    /// 3 or 5, and the inner is 1 or 2.
+    /// <h1>Inhibitors: </h1>
+    /// The place of inhibitors is always 1
     ///
-    /// On Nexus blitz, it's `4..1`, with 4 and 1 being the top outer and inner
-    /// while 3 and 2 are the bottom outer and inner turrets
+    /// <h1>Turrets: </h1>
+    /// The place of turrets is map dependent
     ///
-    /// However, on Aram, on aram, the red side is `1..4` where 1 is the outermost turret
-    /// And blue side being `8..10`, with 8 as the outermost, 7 as the inner, while 9 and 10
-    /// are the innermost nexus turrets!
+    /// <h2> Summoners Rift: </h2>
+    /// <h3> Side Lanes: </h3>
+    /// <ul>
+    ///     <li> Outermost Turret - 3 </li>
+    ///     <li> Middle Turret - 2 </li>
+    ///     <li> Inhibitor Turret - 1 </li>
+    /// </ul>
+    /// <h3> Mid-Lane: </h3>
+    /// <ul>
+    ///     <li> Outermost Turret - 5 </li>
+    ///     <li> Middle Turret - 4 </li>
+    ///     <li> Inhibitor Turret - 3 </li>
+    ///     <li> Top Nexus Turret - 2 </li>   
+    ///     <li> Bot Nexus Turret - 1 </li>
+    /// </ul>
     ///
-    /// See `StructureNames.png` for a diagram
+    /// <h2> Nexus Blitz: </h2>
+    /// <ul>
+    ///     <li> Top left - 4 </li>
+    ///     <li> Bottom left - 3 </li>
+    ///     <li> Top right - 2 </li>
+    ///     <li> Bottom right - 1 </li>
+    /// </ul>
+    ///
+    /// <h2> Aram: </h2>
+    /// <h3> Red Side: </h3>
+    /// <ul>
+    ///     <li> Outermost Turret - 1 </li>
+    ///     <li> Inhibitor Turret - 2 </li>
+    ///     <li> Top Nexus Turret - 3 </li>
+    ///     <li> Bot Nexus Turret - 4 </li>
+    /// </ul>
+    /// <h3> Blue Side: </h3>
+    /// <ul>
+    ///     <li> Outermost Turret - 8 </li>
+    ///     <li> Inhibitor Turret - 7 </li>
+    ///     <li> Top Nexus Turret - 10 </li>
+    ///     <li> Bot Nexus Turret - 9 </li>
+    /// </ul>
+    ///
+    /// <img src="https://raw.githubusercontent.com/AlsoSylv/Irelia/master/irelia/src/in_game/StructureNames.png" width="600" height = "200"/>
     pub fn place(&self) -> u8 {
         self.place
+    }
+
+    #[must_use]
+    /// Using the information above, this returns an enum describing the position of the Structure relative to the map
+    pub fn place_determined(&self, map: &MapName) -> StructurePlace {
+        if self.is_inhibitor() {
+            return StructurePlace::Inner;
+        }
+
+        match map {
+            MapName::SummonersRift | MapName::TutorialMap => match self.place {
+                5 => StructurePlace::Outer,
+                4 => StructurePlace::Middle,
+                3 if self.lane != Lane::Mid => StructurePlace::Outer,
+                3 if self.lane == Lane::Mid => StructurePlace::Inner,
+                2 if self.lane != Lane::Mid => StructurePlace::Middle,
+                2 if self.lane == Lane::Mid => StructurePlace::TopNexus,
+                1 if self.lane != Lane::Mid => StructurePlace::Inner,
+                1 if self.lane == Lane::Mid => StructurePlace::BotNexus,
+                _ => unreachable!("Side lanes have three turrets, while mid has five"),
+            },
+            MapName::HowlingAbyss => match self.place {
+                1 | 8 => StructurePlace::Outer,
+                2 | 7 => StructurePlace::Inner,
+                3 | 10 => StructurePlace::TopNexus,
+                4 | 9 => StructurePlace::BotNexus,
+                _ => unreachable!("At the time of writing, aram has 4 towers on each side"),
+            },
+            MapName::NexusBlitz => match self.place {
+                1 | 2 => StructurePlace::Inner,
+                3 | 4 => StructurePlace::Outer,
+                _ => unreachable!("Nexus Blitz only has four turrets"),
+            },
+            MapName::Arena | MapName::TwistedTreeline | MapName::TFT => {
+                unreachable!("These game modes either do not have structures, or no longer exist")
+            }
+            MapName::Other(other) => unimplemented!(
+                "Map {other} is new and unsupported, report this on github and it will be fixed"
+            ),
+        }
     }
 }
 
@@ -1031,6 +1185,15 @@ pub enum Lane {
     Top,
     Mid,
     Bot,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StructurePlace {
+    Outer,
+    Middle,
+    Inner,
+    TopNexus,
+    BotNexus,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1243,6 +1406,57 @@ mod string_to_bool {
     pub fn serialize<S: Serializer>(stolen: &bool, serializer: S) -> Result<S::Ok, S::Error> {
         let value = if *stolen { "True" } else { "False" };
         serializer.serialize_str(value)
+    }
+}
+
+mod fixed_option_array {
+    use crate::in_game::types::Item;
+    use serde::de::{SeqAccess, Visitor};
+    use serde::ser::SerializeSeq;
+    use serde::{Deserializer, Serializer};
+    use std::fmt::Formatter;
+
+    pub fn serialize<S: Serializer>(
+        items: &[Option<Item>; 7],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq(None)?;
+
+        for item in items.iter().flatten() {
+            seq.serialize_element(item)?;
+        }
+
+        seq.end()
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[Option<Item>; 7], D::Error> {
+        struct SequenceVisitor;
+
+        impl<'a> Visitor<'a> for SequenceVisitor {
+            type Value = [Option<Item>; 7];
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("Expecting an array between 1 and 7")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'a>,
+            {
+                let mut arr: [Option<Item>; 7] = std::array::from_fn(|_| None);
+
+                while let Some(item) = seq.next_element::<Item>()? {
+                    let tmp = item.slot;
+                    arr[tmp as usize] = Some(item);
+                }
+
+                Ok(arr)
+            }
+        }
+
+        deserializer.deserialize_seq(SequenceVisitor)
     }
 }
 

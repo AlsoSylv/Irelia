@@ -5,6 +5,7 @@
 //! of the processes for `macOS`, and `Windows`
 
 use irelia_encoder::Encoder;
+use std::io::Read;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 use crate::Error;
@@ -44,6 +45,8 @@ pub(crate) const ENCODER: Encoder = Encoder::new();
 /// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
 ///
+/// # Panics
+/// If the lock file is not valid UTF-8
 pub fn get_running_client(
     client_process_name: &str,
     game_process_name: &str,
@@ -90,31 +93,42 @@ pub fn get_running_client(
         })
         .ok_or_else(|| Error::LCUProcessNotRunning)?;
 
-    // Move these to an earlier scope to avoid an allocation
-    // And deduplicate some code later on
-    let lock_file: String;
+    // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
+    let mut lock_file: [u8; 60] = [0; 60];
     let port: &str;
     let auth: &str;
 
     if client && !force_lock_file {
         let cmd = process.cmd();
-        // Assuming the order doesn't change (which I haven't seen it do)
-        // we can avoid a second iteration over the cmd args
-        let mut iter = cmd.iter();
+        // Use a variable in a higher scope to make sure that port and auth get initialized
+        let mut scoped_auth = None;
+        let mut scoped_port = None;
 
-        // Look for an auth key to put inside the command line, otherwise return an error.
-        auth = iter
-            .find_map(|s| s.strip_prefix("--remoting-auth-token="))
-            .ok_or_else(|| Error::AuthTokenNotFound)?;
+        // Iterate through the command args, updating the scoped values as we go
+        for s in cmd {
+            if scoped_auth.is_none() {
+                scoped_auth = s.strip_prefix("--remoting-auth-token=");
+            }
 
-        // Look for a port to connect to the LCU with, otherwise return an error.
-        port = iter
-            .find_map(|s| s.strip_prefix("--app-port="))
-            .ok_or_else(|| Error::PortNotFound)?;
+            if scoped_port.is_none() {
+                scoped_port = s.strip_prefix("--app-port=");
+            }
+
+            if scoped_auth.is_some() && scoped_port.is_some() {
+                break;
+            }
+        }
+
+        // Check that we found an auth key, otherwise error
+        auth = scoped_auth.ok_or_else(|| Error::AuthTokenNotFound)?;
+
+        // Check that a port was found, otherwise error
+        port = scoped_port.ok_or_else(|| Error::PortNotFound)?;
     } else {
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
         let path = process.exe().ok_or_else(|| Error::LockFileNotFound)?;
+
         let dir = path.parent().ok_or_else(|| Error::LockFileNotFound)?;
         // Sadly, we're relying on how the client structures things here
         // Walking back a whole folder in order to get the lock file
@@ -126,8 +140,21 @@ pub fn get_running_client(
             dir.parent().ok_or_else(|| Error::LockFileNotFound)?
         };
 
-        // Read the lock file, putting the value in a higher scope
-        lock_file = std::fs::read_to_string(base_dir.join("lockfile")).map_err(Error::StdIo)?;
+        let mut file = std::fs::File::open(base_dir.join("lockfile"))?;
+        // This len shouldn't be more than a few bytes
+        #[allow(clippy::cast_possible_truncation)]
+        let len = file.metadata()?.len() as usize;
+
+        // Read the file initially
+        let mut read = file.read(&mut lock_file)?;
+
+        // Make sure the entire file was read, though it is so small I can't imagine it wouldn't be
+        while read != len {
+            read += file.read(&mut lock_file[read..])?;
+        }
+
+        // Make sure that we're not over reading into 0's
+        let lock_file = std::str::from_utf8(&lock_file[..len]).unwrap();
 
         // Split the lock file on `:` which separates the different fields
         // Because lock_file is from a higher scope, we can split the string here
@@ -158,7 +185,7 @@ mod tests {
     #[test]
     fn test_process_info() {
         let (port, pass) =
-            get_running_client(GAME_PROCESS_NAME, CLIENT_PROCESS_NAME, false).unwrap();
+            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, true).unwrap();
         println!("{port} {pass}");
     }
 
