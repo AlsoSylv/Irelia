@@ -33,7 +33,7 @@ use crate::{
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<ChannelMessage>,
-    handle: JoinHandle<Result<(), Error>>,
+    handle: JoinHandle<()>,
     id_receiver: Receiver<usize>,
     url: String,
     auth_header: String,
@@ -208,131 +208,144 @@ impl LCUWebSocket {
         self.handle.abort();
     }
 
-    /// # Errors
-    ///
-    /// # Panics
-    pub async fn wait_until_close(self) -> Result<(), Error> {
-        self.handle.await.unwrap()
-    }
-
     #[must_use]
     pub fn is_finished(&self) -> bool {
         self.handle.is_finished()
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn event_loop(
     request: Request,
     mut error_handler: impl ErrorHandler,
     mut ws_receiver: UnboundedReceiver<ChannelMessage>,
     id_sender: Sender<usize>,
     tls: Arc<ClientConfig>,
-) -> Result<(), Error> {
+) {
     type SubscriberMap = HashMap<EventKind, Vec<Option<Box<dyn Subscriber>>>>;
 
-    let (stream, _) =
-        connect_async_tls_with_config(request, None, false, Some(Connector::Rustls(tls.clone())))
-            .await?;
-
-    let (mut write, mut read) = stream.split();
+    let (mut maybe_write, mut maybe_read) = (None, None);
 
     let mut subscribers: SubscriberMap = HashMap::new();
     let error_handler: &mut dyn ErrorHandler = &mut error_handler;
 
     'outer: loop {
-        if let Ok(message) = ws_receiver.try_recv() {
-            match message {
-                ChannelMessage::Subscribe(code, endpoint, subscriber) => {
-                    if let Some(subscribers) = subscribers.get_mut(&endpoint) {
-                        let mut idx = subscribers.len();
+        if let (Some(write), Some(read)) = (&mut maybe_write, &mut maybe_read) {
+            if let Ok(message) = ws_receiver.try_recv() {
+                match message {
+                    ChannelMessage::Subscribe(code, endpoint, subscriber) => {
+                        if let Some(subscribers) = subscribers.get_mut(&endpoint) {
+                            let mut idx = subscribers.len();
 
-                        for (first_none_idx, maybe_subscriber) in subscribers.iter_mut().enumerate()
-                        {
-                            if maybe_subscriber.is_none() {
-                                idx = first_none_idx;
+                            for (first_none_idx, maybe_subscriber) in
+                                subscribers.iter_mut().enumerate()
+                            {
+                                if maybe_subscriber.is_none() {
+                                    idx = first_none_idx;
+                                    break;
+                                }
+                            }
+
+                            if idx == subscribers.len() {
+                                subscribers.push(Some(subscriber));
+                            } else {
+                                subscribers[idx] = Some(subscriber);
+                            }
+
+                            id_sender.send(idx).await.unwrap();
+                        } else {
+                            let endpoint_str = endpoint.to_string();
+
+                            let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
+
+                            let continues =
+                                send_command(error_handler, write, read, &tls, &command).await;
+                            if !continues {
                                 break;
                             }
+
+                            subscribers.insert(endpoint, vec![Some(subscriber)]);
                         }
+                    }
+                    ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
+                        if let Some(subscribers) = subscribers.get_mut(&event_kind) {
+                            if subscribers.iter().flatten().count() == 0 {
+                                let unsub = format!(
+                                    "[{}, \"{}\"]",
+                                    RequestType::Unsubscribe as u8,
+                                    event_kind.to_string()
+                                );
+                                let continues =
+                                    send_command(error_handler, write, read, &tls, &unsub).await;
+                                if !continues {
+                                    break;
+                                }
+                            }
 
-                        if idx == subscribers.len() {
-                            subscribers.push(Some(subscriber));
-                        } else {
-                            subscribers[idx] = Some(subscriber);
+                            subscribers[subscriber_id.0] = None;
                         }
-
-                        id_sender.send(idx).await.unwrap();
-                    } else {
-                        let endpoint_str = endpoint.to_string();
-
-                        let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
-
-                        let continues =
-                            send_command(error_handler, &mut write, &mut read, &tls, &command)
-                                .await;
-                        if !continues {
-                            break;
-                        }
-
-                        subscribers.insert(endpoint, vec![Some(subscriber)]);
                     }
                 }
-                ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
-                    if let Some(subscribers) = subscribers.get_mut(&event_kind) {
-                        if subscribers.iter().flatten().count() == 0 {
-                            let unsub = format!(
-                                "[{}, \"{}\"]",
-                                RequestType::Unsubscribe as u8,
-                                event_kind.to_string()
-                            );
-                            let continues =
-                                send_command(error_handler, &mut write, &mut read, &tls, &unsub)
-                                    .await;
+            };
+
+            if let Some(Ok(message)) = read.next().await {
+                let data = message.into_data();
+                if !data.is_empty() {
+                    let maybe_json = serde_json::from_slice::<Event>(&data);
+                    match maybe_json {
+                        Ok(json) => {
+                            if let Some(subscribers) = subscribers.get_mut(&json.1) {
+                                for subscriber in subscribers.iter_mut().flatten() {
+                                    let mut control = subscriber.on_event(&json);
+
+                                    #[rustfmt::skip]
+                                        let continues = budget_recursive(&mut control, &tls, write, read, error_handler).await;
+
+                                    if !continues {
+                                        break 'outer;
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let mut control = error_handler.on_error(e.into());
+
+                            #[rustfmt::skip]
+                                let continues = budget_recursive(&mut control, &tls, write, read, error_handler).await;
+
                             if !continues {
                                 break;
                             }
                         }
-
-                        subscribers[subscriber_id.0] = None;
                     }
                 }
             }
-        };
+        } else {
+            let result = connect_async_tls_with_config(
+                request.clone(),
+                None,
+                false,
+                Some(Connector::Rustls(tls.clone())),
+            )
+            .await;
 
-        if let Some(Ok(message)) = read.next().await {
-            let data = message.into_data();
-            if !data.is_empty() {
-                let maybe_json = serde_json::from_slice::<Event>(&data);
-                match maybe_json {
-                    Ok(json) => {
-                        if let Some(subscribers) = subscribers.get_mut(&json.1) {
-                            for subscriber in subscribers.iter_mut().flatten() {
-                                let mut control = subscriber.on_event(&json);
+            match result {
+                Ok((stream, _)) => {
+                    let (write, read) = stream.split();
+                    (maybe_write, maybe_read) = (Some(write), Some(read));
+                }
+                Err(e) => {
+                    let control = error_handler.on_error(e.into());
 
-                                #[rustfmt::skip]
-                                let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
+                    let continues = control == ControlFlow::Break(());
 
-                                if !continues {
-                                    break 'outer;
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let mut control = error_handler.on_error(e.into());
-
-                        #[rustfmt::skip]
-                        let continues = budget_recursive(&mut control, &tls, &mut write, &mut read, error_handler).await;
-
-                        if !continues {
-                            break;
-                        }
+                    if !continues {
+                        break;
                     }
                 }
             }
         }
     }
-
-    Ok(())
 }
 
 async fn send_command(

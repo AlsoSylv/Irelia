@@ -175,11 +175,11 @@ pub fn get_running_client(
 
     // The auth header has to be base64 encoded, so that's happens here
     let auth_header = ENCODER.encode(needs_encoding);
-    
+
     let mut formatted_url = String::with_capacity(LOCAL_HOST_URL.len() + port.len());
     formatted_url.push_str(LOCAL_HOST_URL);
     formatted_url.push_str(port);
-    
+
     let mut formatted_auth = String::with_capacity(6 + auth_header.len());
     formatted_auth.push_str("Basic ");
     formatted_auth.push_str(&auth_header);
