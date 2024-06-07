@@ -34,6 +34,8 @@ pub(crate) const GAME_PROCESS_NAME: &str = "";
 /// const copy of the encoder
 pub(crate) const ENCODER: Encoder = Encoder::new();
 
+const LOCAL_HOST_URL: &str = "127.0.0.1:";
+
 /// Gets the port and auth for the client via the process id
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
@@ -119,17 +121,15 @@ pub fn get_running_client(
             }
         }
 
-        // Check that we found an auth key, otherwise error
-        auth = scoped_auth.ok_or_else(|| Error::AuthTokenNotFound)?;
-
-        // Check that a port was found, otherwise error
-        port = scoped_port.ok_or_else(|| Error::PortNotFound)?;
+        // Check that we found a port and auth key, otherwise error
+        auth = scoped_auth.ok_or(Error::AuthTokenNotFound)?;
+        port = scoped_port.ok_or(Error::PortNotFound)?;
     } else {
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
-        let path = process.exe().ok_or_else(|| Error::LockFileNotFound)?;
+        let path = process.exe().ok_or(Error::LockFileNotFound)?;
 
-        let dir = path.parent().ok_or_else(|| Error::LockFileNotFound)?;
+        let dir = path.parent().ok_or(Error::LockFileNotFound)?;
         // Sadly, we're relying on how the client structures things here
         // Walking back a whole folder in order to get the lock file
         let base_dir = if client {
@@ -137,7 +137,7 @@ pub fn get_running_client(
             dir
         } else {
             // Otherwise it is the game, and we need to go back once
-            dir.parent().ok_or_else(|| Error::LockFileNotFound)?
+            dir.parent().ok_or(Error::LockFileNotFound)?
         };
 
         let mut file = std::fs::File::open(base_dir.join("lockfile"))?;
@@ -162,18 +162,31 @@ pub fn get_running_client(
         let mut split = lock_file.split(':');
 
         // Get the 3rd field, which should be the port
-        port = split.nth(2).ok_or_else(|| Error::PortNotFound)?;
+        port = split.nth(2).ok_or(Error::PortNotFound)?;
         // We moved the cursor, so the fourth element is the very next one
         // Which should be the auth string
-        auth = split.next().ok_or_else(|| Error::AuthTokenNotFound)?;
+        auth = split.next().ok_or(Error::AuthTokenNotFound)?;
     }
 
+    // Format the header without
+    let mut needs_encoding = String::with_capacity(5 + auth.len());
+    needs_encoding.push_str("riot:");
+    needs_encoding.push_str(auth);
+
     // The auth header has to be base64 encoded, so that's happens here
-    let auth_header = ENCODER.encode(format!("riot:{auth}"));
+    let auth_header = ENCODER.encode(needs_encoding);
+    
+    let mut formatted_url = String::with_capacity(LOCAL_HOST_URL.len() + port.len());
+    formatted_url.push_str(LOCAL_HOST_URL);
+    formatted_url.push_str(port);
+    
+    let mut formatted_auth = String::with_capacity(6 + auth_header.len());
+    formatted_auth.push_str("Basic ");
+    formatted_auth.push_str(&auth_header);
 
     // Format the port and header so that they can be used as headers
     // For the LCU API
-    Ok((format!("127.0.0.1:{port}"), format!("Basic {auth_header}",)))
+    Ok((formatted_url, formatted_auth))
 }
 
 #[cfg(test)]

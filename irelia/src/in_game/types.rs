@@ -97,6 +97,20 @@ impl RiotId {
     fn tag_line(&self) -> &str {
         &self.riot_id[self.separator_index + 1..]
     }
+    #[must_use]
+    fn url_encoded_riot_id(&self) -> String {
+        let game_name = self.game_name();
+        let tag_line = self.tag_line();
+
+        let len = game_name.len() + 1 + tag_line.len();
+        let mut url_encoded = String::with_capacity(len);
+
+        url_encoded.push_str(game_name);
+        url_encoded.push('%');
+        url_encoded.push_str(tag_line);
+
+        url_encoded
+    }
 }
 
 impl<'de> Deserialize<'de> for RiotId {
@@ -177,6 +191,10 @@ impl ActivePlayer {
     #[must_use]
     pub fn tag_line(&self) -> &str {
         self.riot_id.tag_line()
+    }
+    #[must_use]
+    pub fn url_encoded_riot_id(&self) -> String {
+        self.riot_id.url_encoded_riot_id()
     }
 }
 
@@ -626,6 +644,10 @@ impl AllPlayer {
     /// These will be `None` in spectator mode
     pub fn skin_name(&self) -> Option<&str> {
         self.skin_name.as_deref()
+    }
+    #[must_use]
+    pub fn url_encoded_riot_id(&self) -> String {
+        self.riot_id.url_encoded_riot_id()
     }
 }
 

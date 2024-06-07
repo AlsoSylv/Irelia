@@ -400,10 +400,10 @@ impl LcuClient {
         let client =
             hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
                 .build::<_, http_body_util::Full<hyper::body::Bytes>>(https);
-        let mut request = client.get(uri).await.map_err(Error::HyperClientError)?;
+        let mut request = client.get(uri).await?;
         let tmp = request.body_mut();
-        let body = tmp.collect().await.map_err(Error::HyperError)?.to_bytes();
-        serde_json::from_slice(&body).map_err(Error::SerdeJsonError)
+        let body = tmp.collect().await?.to_bytes();
+        Ok(serde_json::from_slice(&body)?)
     }
 
     /// Makes a `Request` to the LCU client, using the details entered
