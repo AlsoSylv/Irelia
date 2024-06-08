@@ -4,6 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::default::Default;
 use std::fmt::Debug;
+use sysinfo::Pid;
 use time::Duration;
 
 mod hidden {
@@ -84,17 +85,32 @@ pub enum EasingType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Game {
     #[serde(rename = "processID")]
-    pub process_id: u32,
+    #[serde(with = "pid")]
+    process_id: Pid,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl Game {
+    #[must_use]
+    pub fn process_id(&self) -> Pid {
+        self.process_id
+    }
+}
+
+/// Note: There is no sane default for the camera position, as sometimes
+/// Top just does not work, and sometimes it will just force FPS camera mode
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HudCameraMode {
-    #[default]
+    /// This is the top-down camera
     Top,
+    /// This camera can be controlled like an FPS camera in the client
+    /// Using the arrow keys
     Fps,
+    /// This always crashes
     Tps,
+    /// This always crashes
     Focus,
+    /// This always crashes
     Path,
 }
 
@@ -481,4 +497,43 @@ pub struct Vector3f {
     pub x: f64,
     pub y: f64,
     pub z: f64,
+}
+
+mod pid {
+    use std::fmt::Formatter;
+    use serde::{Deserializer, Serializer};
+    use serde::de::{Error, Visitor};
+    use sysinfo::Pid;
+
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub(crate) fn serialize<S: Serializer>(
+        pid: &Pid,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u32(pid.as_u32())
+    }
+
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Pid, D::Error> {
+        struct PidVisitor;
+
+        impl<'a> Visitor<'a> for PidVisitor {
+            type Value = Pid;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("A number corresponding to the PID of league")
+            }
+
+            fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> where E: Error {
+                Ok(Pid::from_u32(v))
+            }
+
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> where E: Error {
+                Ok(Pid::from(usize::try_from(v).map_err(E::custom)?))
+            }
+        }
+
+        deserializer.deserialize_u32(PidVisitor)
+    }
 }
