@@ -1,6 +1,6 @@
 //! Module containing all the data on the websocket LCU bindings
 
-mod types;
+pub mod types;
 
 use std::collections::HashMap;
 use std::{ops::ControlFlow, sync::Arc};
