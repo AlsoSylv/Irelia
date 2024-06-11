@@ -429,32 +429,13 @@ impl Sequence {
     pub fn new() -> Self {
         Self::default()
     }
-
     #[must_use]
-    pub fn new_with_name(name: String) -> Self {
-        let mut sequence = Self::default();
-
-        sequence.name(name);
-
-        sequence
-    }
-
-    #[must_use]
-    pub fn from_render(name: String, render: &Render, playback_speed: f64, time: Duration) -> Self {
+    pub fn from_render(render: &Render, playback_speed: f64, time: Duration) -> Self {
         let mut sequence = Self::default();
 
         sequence.push_render(render, playback_speed, time);
-        sequence.name(name);
 
         sequence
-    }
-
-    pub fn name(&mut self, name: String) {
-        self.selection_name.push(KeyFrameString::new(
-            name,
-            Duration::default(),
-            EasingType::Linear,
-        ));
     }
 
     #[rustfmt::skip]
@@ -482,8 +463,13 @@ impl Sequence {
         self.nav_grid_offset.push(KeyFrameT::new_default_blending(render.nav_grid_offset, time));
         self.near_clip.push(KeyFrameT::new_default_blending(render.near_clip, time));
         self.playback_speed.push(KeyFrameT::new_default_blending(playback_speed, time));
-        // The name does not need to be set more than once
-        // self.selection_name.push(KeyFrameT::new_default_blending(render.camera_position, time));
+        
+        if let Some(selection) = self.selection_name.last() {
+            if selection.value != render.selection_name {
+                self.selection_name.push(KeyFrameT::new_default_blending(render.selection_name.clone(), time));
+            }
+        }
+        
         self.selection_offset.push(KeyFrameT::new_default_blending(render.selection_offset, time));
         self.skybox_offset.push(KeyFrameT::new_default_blending(render.skybox_offset, time));
         self.skybox_radius.push(KeyFrameT::new_default_blending(render.skybox_radius, time));
@@ -500,22 +486,17 @@ pub struct Vector3f {
 }
 
 mod pid {
-    use std::fmt::Formatter;
-    use serde::{Deserializer, Serializer};
     use serde::de::{Error, Visitor};
+    use serde::{Deserializer, Serializer};
+    use std::fmt::Formatter;
     use sysinfo::Pid;
 
     #[allow(clippy::trivially_copy_pass_by_ref)]
-    pub(crate) fn serialize<S: Serializer>(
-        pid: &Pid,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(pid: &Pid, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_u32(pid.as_u32())
     }
 
-    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Pid, D::Error> {
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Pid, D::Error> {
         struct PidVisitor;
 
         impl<'a> Visitor<'a> for PidVisitor {
@@ -525,11 +506,17 @@ mod pid {
                 formatter.write_str("A number corresponding to the PID of league")
             }
 
-            fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> where E: Error {
+            fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
                 Ok(Pid::from_u32(v))
             }
 
-            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> where E: Error {
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
                 Ok(Pid::from(usize::try_from(v).map_err(E::custom)?))
             }
         }
