@@ -66,7 +66,7 @@ impl AllGameData {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivePlayer {
     abilities: Abilities,
@@ -78,7 +78,7 @@ pub struct ActivePlayer {
     riot_id: RiotId,
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct RiotId {
     riot_id: Box<str>,
     separator_index: usize,
@@ -198,7 +198,7 @@ impl ActivePlayer {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Abilities {
     passive: AbilityInfo,
@@ -231,7 +231,7 @@ impl Abilities {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityInfo {
     display_name: Box<str>,
@@ -259,7 +259,7 @@ impl AbilityInfo {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ability {
     ability_level: u8,
@@ -278,7 +278,7 @@ impl Ability {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChampionStats {
     ability_power: f64,
@@ -442,7 +442,7 @@ impl ChampionStats {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Runes {
     keystone: Rune,
@@ -475,7 +475,7 @@ impl Runes {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rune {
     display_name: Box<str>,
@@ -504,7 +504,7 @@ impl Rune {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatRune {
     // These are around 5000
@@ -651,7 +651,7 @@ impl AllPlayer {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores {
     kills: u8,
@@ -691,7 +691,7 @@ impl Scores {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpells {
     summoner_spell_one: SummonerSpell,
@@ -723,7 +723,7 @@ impl core::ops::Index<usize> for SummonerSpells {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpell {
     display_name: Box<str>,
@@ -746,7 +746,7 @@ impl SummonerSpell {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
     can_use: bool,
@@ -803,7 +803,7 @@ impl Item {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Events {
     events: Box<[Event]>,
@@ -813,11 +813,28 @@ impl Events {
     #[must_use]
     pub fn dragons_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
-            acc + if let EventDetails::DragonKill { .. } = event.event_details {
-                1
-            } else {
-                0
-            }
+            acc + u8::from(matches!(
+                event.event_details,
+                EventDetails::DragonKill { .. }
+            ))
+        })
+    }
+    #[must_use]
+    pub fn harold_killed(&self) -> bool {
+        self.events
+            .iter()
+            .any(|event| matches!(event.event_details, EventDetails::HeraldKill(_)))
+    }
+    #[must_use]
+    pub fn grub_groups_killed(&self) -> u8 {
+        self.events.iter().fold(0, |acc, event| {
+            acc + u8::from(matches!(event.event_details, EventDetails::HordeKill(_)))
+        })
+    }
+    #[must_use]
+    pub fn barons_killed(&self) -> u8 {
+        self.events.iter().fold(0, |acc, event| {
+            acc + u8::from(matches!(event.event_details, EventDetails::BaronKill(_)))
         })
     }
 }
@@ -1044,23 +1061,26 @@ impl Structure {
 
     #[must_use]
     /// Using the information above, this returns an enum describing the position of the Structure relative to the map
+    ///
+    /// Inhibitors always return `StructurePlace::Inner`
+    /// 
+    /// In Nexus Blitz, Turrets are either inner or outer 
     pub fn place_determined(&self, map: &MapName) -> StructurePlace {
         if self.is_inhibitor() {
             return StructurePlace::Inner;
         }
 
         match map {
-            MapName::SummonersRift | MapName::TutorialMap => match self.place {
-                5 => StructurePlace::Outer,
-                4 => StructurePlace::Middle,
-                3 if self.lane != Lane::Mid => StructurePlace::Outer,
-                3 if self.lane == Lane::Mid => StructurePlace::Inner,
-                2 if self.lane != Lane::Mid => StructurePlace::Middle,
-                2 if self.lane == Lane::Mid => StructurePlace::TopNexus,
-                1 if self.lane != Lane::Mid => StructurePlace::Inner,
-                1 if self.lane == Lane::Mid => StructurePlace::BotNexus,
-                _ => unreachable!("Side lanes have three turrets, while mid has five"),
-            },
+            MapName::SummonersRift | MapName::TutorialMap => {
+                match (self.place, self.lane == Lane::Mid) {
+                    (5, true) | (3, false) => StructurePlace::Outer,
+                    (4, true) | (2, false) => StructurePlace::Middle,
+                    (3, true) | (1, false) => StructurePlace::Inner,
+                    (2, true) => StructurePlace::TopNexus,
+                    (1, true) => StructurePlace::BotNexus,
+                    _ => unreachable!("Side lanes have three turrets, while mid has five"),
+                }
+            }
             MapName::HowlingAbyss => match self.place {
                 1 | 8 => StructurePlace::Outer,
                 2 | 7 => StructurePlace::Inner,
@@ -1381,13 +1401,10 @@ pub enum TeamID {
     Unknown,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 /// Ability Resource
-///
-/// This defaults to Mana
 pub enum AbilityResource {
-    #[default]
     Mana,
     Energy,
     None,
