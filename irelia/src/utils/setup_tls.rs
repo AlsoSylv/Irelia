@@ -10,10 +10,13 @@ pub(crate) fn setup_tls_connector() -> rustls::ClientConfig {
     let rustls_pemfile::Item::X509Certificate(pem) = pem else {
         unreachable!()
     };
+
+    let anchor = webpki::anchor_from_trusted_cert(&pem).unwrap();
+
     // Create a new empty cert store
-    let mut roots = rustls::RootCertStore::empty();
-    // Add the pem file
-    roots.add(pem).unwrap();
+    let roots = rustls::RootCertStore {
+        roots: vec![anchor.to_owned()],
+    };
     // Return the new client config with just the riot cert
     rustls::ClientConfig::builder()
         .with_root_certificates(roots)

@@ -1063,8 +1063,8 @@ impl Structure {
     /// Using the information above, this returns an enum describing the position of the Structure relative to the map
     ///
     /// Inhibitors always return `StructurePlace::Inner`
-    /// 
-    /// In Nexus Blitz, Turrets are either inner or outer 
+    ///
+    /// In Nexus Blitz, Turrets are either inner or outer
     pub fn place_determined(&self, map: &MapName) -> StructurePlace {
         if self.is_inhibitor() {
             return StructurePlace::Inner;

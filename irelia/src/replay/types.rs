@@ -463,13 +463,13 @@ impl Sequence {
         self.nav_grid_offset.push(KeyFrameT::new_default_blending(render.nav_grid_offset, time));
         self.near_clip.push(KeyFrameT::new_default_blending(render.near_clip, time));
         self.playback_speed.push(KeyFrameT::new_default_blending(playback_speed, time));
-        
+
         if let Some(selection) = self.selection_name.last() {
             if selection.value != render.selection_name {
                 self.selection_name.push(KeyFrameT::new_default_blending(render.selection_name.clone(), time));
             }
         }
-        
+
         self.selection_offset.push(KeyFrameT::new_default_blending(render.selection_offset, time));
         self.skybox_offset.push(KeyFrameT::new_default_blending(render.skybox_offset, time));
         self.skybox_radius.push(KeyFrameT::new_default_blending(render.skybox_radius, time));
