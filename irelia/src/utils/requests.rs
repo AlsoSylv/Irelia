@@ -9,7 +9,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use serde::Serialize;
 
-use super::setup_tls::setup_tls_connector;
+use super::setup_tls::connector;
 
 /// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
 ///
@@ -33,10 +33,10 @@ impl RequestClient {
     /// Creates a client to be passed to the LCU and in game structs
     pub fn new() -> RequestClient {
         // Get a client config using the riotgames.pem file
-        let tls = setup_tls_connector();
+        let tls = connector();
         // Set up an HTTPS only client, with just the client config
         let https = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(tls)
+            .with_tls_config(tls.clone())
             .https_only()
             .enable_http1()
             .build();

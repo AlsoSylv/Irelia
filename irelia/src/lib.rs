@@ -126,7 +126,6 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-#[cfg(feature = "tauri")]
 impl serde::Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

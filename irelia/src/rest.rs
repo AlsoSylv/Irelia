@@ -2,8 +2,6 @@
 
 pub mod types;
 
-use http_body_util::BodyExt;
-use hyper::Uri;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -295,7 +293,7 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request(endpoint.as_ref(), "DELETE", None::<()>, request_client)
+        self.lcu_request_maybe_no_response(endpoint.as_ref(), "DELETE", None::<()>, request_client)
             .await
     }
 
@@ -314,7 +312,7 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request(endpoint.as_ref(), "GET", None::<()>, request_client)
+        self.lcu_request_maybe_no_response(endpoint.as_ref(), "GET", None::<()>, request_client)
             .await
     }
 
@@ -349,7 +347,7 @@ impl LcuClient {
         body: T,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request(endpoint.as_ref(), "PATCH", Some(body), request_client)
+        self.lcu_request_maybe_no_response(endpoint.as_ref(), "PATCH", Some(body), request_client)
             .await
     }
 
@@ -363,7 +361,7 @@ impl LcuClient {
         body: T,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request(endpoint.as_ref(), "POST", Some(body), request_client)
+        self.lcu_request_maybe_no_response(endpoint.as_ref(), "POST", Some(body), request_client)
             .await
     }
 
@@ -377,33 +375,8 @@ impl LcuClient {
         body: T,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request(endpoint.as_ref(), "PUT", Some(body), request_client)
+        self.lcu_request_maybe_no_response(endpoint.as_ref(), "PUT", Some(body), request_client)
             .await
-    }
-
-    /// Fetches the schema from a remote endpoint, for example:
-    /// <`https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json/`>
-    ///
-    /// # Errors
-    ///
-    /// This function will error if it fails to connect to the given remote,
-    /// or if the given remote cannot be deserialized to match the `Schema` type
-    pub async fn schema(remote: &'static str) -> Result<types::Schema, Error> {
-        let uri = Uri::from_static(remote);
-        // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside here
-        let https = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .map_err(Error::StdIo)?
-            .https_only()
-            .enable_http1()
-            .build();
-        let client =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                .build::<_, http_body_util::Full<hyper::body::Bytes>>(https);
-        let mut request = client.get(uri).await?;
-        let tmp = request.body_mut();
-        let body = tmp.collect().await?.to_bytes();
-        Ok(serde_json::from_slice(&body)?)
     }
 
     /// Makes a `Request` to the LCU client, using the details entered
@@ -419,7 +392,7 @@ impl LcuClient {
         request: Request<'_, T>,
         request_client: &RequestClient,
     ) -> Result<Option<R>, Error> {
-        self.lcu_request(
+        self.lcu_request_maybe_no_response(
             request.endpoint.as_ref(),
             request.method.as_str(),
             request.body,
@@ -431,9 +404,11 @@ impl LcuClient {
     /// Makes a request to the LCU with an unspecified method, valid options being
     /// "PUT", "GET", "POST", "HEAD", "DELETE"
     ///
+    /// This method catches an empty response body, and instead converts it to `Option<R>`
+    ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn lcu_request<T: Serialize, R: DeserializeOwned>(
+    pub async fn lcu_request_maybe_no_response<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
@@ -460,6 +435,69 @@ impl LcuClient {
         };
 
         Ok(body)
+    }
+
+    /// Makes a request to the LCU with an unspecified method, valid options being
+    /// "PUT", "GET", "POST", "HEAD", "DELETE"
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
+    ///
+    /// If the response body is empty, this will return an unexpected EOF error
+    pub async fn lcu_request_always_responds<T: Serialize, R: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        body: Option<T>,
+        request_client: &RequestClient,
+    ) -> Result<R, Error> {
+        use hyper::body::Buf;
+
+        let buf = request_client
+            .request_template(
+                &self.url,
+                endpoint,
+                method,
+                body,
+                Some(&self.auth_header),
+                SerializeFormat::Json,
+            )
+            .await?;
+
+        Ok(serde_json::from_reader(buf.reader())?)
+    }
+
+    /// Makes a request to the LCU with an unspecified method, valid options being
+    /// "PUT", "GET", "POST", "HEAD", "DELETE"
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
+    ///
+    /// # Panics
+    /// The response has a body
+    pub async fn lcu_request_no_response<T: Serialize>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        body: Option<T>,
+        request_client: &RequestClient,
+    ) -> Result<(), Error> {
+        use hyper::body::Buf;
+
+        let buf = request_client
+            .request_template(
+                &self.url,
+                endpoint,
+                method,
+                body,
+                Some(&self.auth_header),
+                SerializeFormat::Json,
+            )
+            .await?;
+
+        assert!(!buf.has_remaining());
+
+        Ok(())
     }
 }
 
@@ -554,11 +592,46 @@ impl<'a, T: Serialize> Request<'a, T> {
     }
 }
 
+/// Fetches the schema from a remote endpoint, for example:
+/// <`https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json/`>
+///
+/// This return `None` if the http client could not be build
+///
+/// # Errors
+///
+/// This function will error if it fails to connect to the given remote,
+/// or if the given remote cannot be deserialized to match the `Schema` type
+///
+/// # Panics
+/// This panics if no valid
+pub async fn schema(remote: &'static str) -> Result<Option<types::Schema>, Error> {
+    use http_body_util::BodyExt;
+
+    let uri = hyper::Uri::from_static(remote);
+    // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside here
+    let https = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .ok();
+
+    let https = if let Some(https) = https {
+        https.https_only().enable_http1().build()
+    } else {
+        return Ok(None);
+    };
+
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build::<_, http_body_util::Full<hyper::body::Bytes>>(https);
+    let mut request = client.get(uri).await?;
+    let tmp = request.body_mut();
+    let body = tmp.collect().await?.to_bytes();
+    Ok(Some(serde_json::from_slice(&body)?))
+}
+
 #[cfg(feature = "batched")]
 #[cfg(test)]
 mod tests {
     use crate::rest::Method;
-    use crate::{rest::LcuClient, RequestClient};
+    use crate::RequestClient;
 
     #[tokio::test]
     async fn batch_test() {
@@ -631,7 +704,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_schema_des() {
-        let _schema = LcuClient::schema(
+        let _schema = super::schema(
             "https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json",
         )
         .await

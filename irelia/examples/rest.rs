@@ -1,10 +1,8 @@
-// this is for the example, don't use this in your code
 extern crate irelia;
 extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate tokio;
-//
 
 use serde_derive::{Deserialize, Serialize};
 
@@ -18,10 +16,8 @@ async fn main() {
         .await
         .unwrap();
 
-    if let Some(value) = current_summoner {
-        let summoner_id = value.summoner_id;
-
-        println!("{summoner_id}");
+    if let Some(current_summoner) = current_summoner {
+        println!("{current_summoner:?}");
     }
 }
 

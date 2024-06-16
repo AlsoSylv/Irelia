@@ -1,7 +1,9 @@
+static RUSTLS_CLIENT_CONFIG: LazyLock<rustls::ClientConfig> = LazyLock::new(connector_internal);
+
 //noinspection SpellCheckingInspection
 /// Setups up the TLS connector, this is outside the hyper client as
 /// It is required inside the websocket implementation
-pub(crate) fn setup_tls_connector() -> rustls::ClientConfig {
+fn connector_internal() -> rustls::ClientConfig {
     // Get a copy of the pem file
     let mut cert: &[u8] = include_bytes!("../riotgames.pem");
     // Make it rustls compatible
@@ -21,4 +23,30 @@ pub(crate) fn setup_tls_connector() -> rustls::ClientConfig {
     rustls::ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth()
+}
+
+pub(crate) fn connector() -> &'static rustls::ClientConfig {
+    &RUSTLS_CLIENT_CONFIG
+}
+
+struct LazyLock<T, F = fn() -> T> {
+    data: std::sync::OnceLock<T>,
+    f: F,
+}
+
+impl<T, F> LazyLock<T, F> {
+    const fn new(f: F) -> LazyLock<T, F> {
+        Self {
+            data: ::std::sync::OnceLock::new(),
+            f,
+        }
+    }
+}
+
+impl<T> std::ops::Deref for LazyLock<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.data.get_or_init(self.f)
+    }
 }

@@ -1516,7 +1516,7 @@ mod option_slice {
         let mut seq = serializer.serialize_seq(len)?;
 
         if let Some(slice) = slice {
-            for player in slice.iter() {
+            for player in slice.as_ref() {
                 seq.serialize_element(player)?;
             }
         }

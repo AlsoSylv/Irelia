@@ -114,10 +114,17 @@ impl EventKind {
             EventKind::ServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
             EventKind::ServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
             EventKind::JsonApiEventCallback(callback) => {
-                format!("OnJsonApiEvent{}", callback.replace('/', "_")).into()
+                let mut callback = callback.replace('/', "_");
+                if &callback[0..1] == "_" {
+                    callback.remove(0);
+                }
+                format!("OnJsonApiEvent_{callback}").into()
             }
             EventKind::LcdsEventCallback(callback) => {
-                format!("OnLcdsEvent{}", callback.replace('/', "_")).into()
+                let mut callback = callback.replace('/', "_");
+                callback.remove(0);
+
+                format!("OnLcdsEvent_{callback}").into()
             }
         }
     }

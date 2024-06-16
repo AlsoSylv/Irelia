@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.7.0-alpha.2"
+version = "0.7.0-alpha.3"
 edition = "2021"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
@@ -78,11 +78,11 @@ features = ["sync", "rt", "macros", "rt-multi-thread"]
 default = [
     "full",
     ]
+
 full = [
     "rest", 
     "in_game", 
     "ws",
-    "tauri",
     "batched",
     ]
 
@@ -120,15 +120,12 @@ ws = [
 replay = [
     "in_game",
     ]
-
 batched = [
     "dep:erased-serde",
     "dep:futures-util",
     "rest",
     ]
 
-tauri = [
-    ]
 encoder_nightly = ["irelia_encoder/nightly"]
 encoder_simd = ["irelia_encoder/simd"]
 

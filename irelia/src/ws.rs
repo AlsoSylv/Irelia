@@ -1,8 +1,9 @@
 //! Module containing all the data on the websocket LCU bindings
 
 pub mod types;
+mod utils;
 
-use std::collections::HashMap;
+use std::fmt::Debug;
 use std::{ops::ControlFlow, sync::Arc};
 
 use futures_util::{
@@ -10,7 +11,7 @@ use futures_util::{
     SinkExt, StreamExt,
 };
 use rustls::ClientConfig;
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::{
     net::TcpStream,
     sync::mpsc::{self, UnboundedSender},
@@ -25,8 +26,9 @@ use tokio_tungstenite::{
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::ws::types::{Event, EventKind, RequestType};
+use crate::ws::utils::EventMap;
 use crate::{
-    utils::{process_info::get_running_client, setup_tls::setup_tls_connector},
+    utils::{process_info::get_running_client, setup_tls::connector},
     Error,
 };
 
@@ -34,7 +36,7 @@ use crate::{
 pub struct LCUWebSocket {
     ws_sender: UnboundedSender<ChannelMessage>,
     handle: JoinHandle<()>,
-    id_receiver: Receiver<usize>,
+    id_free_list: EventMap<(usize, Vec<usize>)>,
     url: String,
     auth_header: String,
 }
@@ -45,7 +47,7 @@ pub enum Flow {
     Continue,
 }
 
-pub trait Subscriber: Send + Sync {
+pub trait Subscriber: Debug + Send + Sync {
     fn on_event(&mut self, event: &Event) -> ControlFlow<(), Flow>;
 }
 
@@ -53,6 +55,7 @@ pub trait ErrorHandler: Send + Sync {
     fn on_error(&mut self, error: Error) -> ControlFlow<(), Flow>;
 }
 
+/// This is a zero sized struct which calls `eprintln!()` and then breaks on error
 pub struct DefaultErrorHandler;
 
 impl ErrorHandler for DefaultErrorHandler {
@@ -75,6 +78,19 @@ enum ChannelMessage {
 pub struct SubscriberID(usize);
 
 impl LCUWebSocket {
+    /// Creates a new connection to the LCU websocket using the default error handler
+    ///
+    /// # Errors
+    /// This function will return an error if the LCU is not running,
+    /// or if it cannot connect to the websocket
+    ///
+    /// # Panics
+    ///
+    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
+    pub fn new() -> Result<Self, Error> {
+        Self::new_with_error_handler(DefaultErrorHandler)
+    }
+
     /// Creates a new connection to the LCU websocket
     ///
     /// # Errors
@@ -87,35 +103,8 @@ impl LCUWebSocket {
     pub fn new_with_error_handler(
         error_handler: impl ErrorHandler + 'static,
     ) -> Result<Self, Error> {
-        Self::new_internal(error_handler)
-    }
-
-    /// Creates a new connection to the LCU websocket
-    ///
-    /// # Errors
-    /// This function will return an error if the LCU is not running,
-    /// or if it cannot connect to the websocket
-    ///
-    /// # Panics
-    ///
-    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
-    pub fn new() -> Result<Self, Error> {
-        Self::new_internal(DefaultErrorHandler)
-    }
-
-    #[allow(clippy::too_many_lines)]
-    /// Creates a new connection to the LCU websocket
-    ///
-    /// # Errors
-    /// This function will return an error if the LCU is not running,
-    /// or if it cannot connect to the websocket
-    ///
-    /// # Panics
-    ///
-    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
-    pub fn new_internal(error_handler: impl ErrorHandler + 'static) -> Result<Self, Error> {
-        let tls = setup_tls_connector();
-        let tls = Arc::new(tls);
+        let tls = connector();
+        let tls = Arc::new(tls.clone());
         let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
         let str_req = format!("wss://{url}");
 
@@ -126,22 +115,15 @@ impl LCUWebSocket {
         request.headers_mut().insert("Authorization", auth_header);
 
         let (ws_sender, ws_receiver) = mpsc::unbounded_channel::<ChannelMessage>();
-        let (id_sender, id_receiver) = mpsc::channel(10);
 
-        let handle = tokio::spawn(event_loop(
-            request,
-            error_handler,
-            ws_receiver,
-            id_sender,
-            tls,
-        ));
+        let handle = tokio::spawn(event_loop(request, error_handler, ws_receiver, tls));
 
         Ok(Self {
             ws_sender,
             handle,
             url,
+            id_free_list: EventMap::new(),
             auth_header: auth,
-            id_receiver,
         })
     }
 
@@ -165,22 +147,8 @@ impl LCUWebSocket {
         event_kind: EventKind,
         subscriber: impl Subscriber + 'static,
     ) -> Option<SubscriberID> {
-        self.ws_sender
-            .send(ChannelMessage::Subscribe(
-                RequestType::Subscribe,
-                event_kind,
-                Box::new(subscriber),
-            ))
-            .ok()?;
-        let id = self.id_receiver.blocking_recv()?;
-        Some(SubscriberID(id))
-    }
+        let (next_id, returned) = self.id_free_list.get_mut(&event_kind);
 
-    pub async fn subscribe_async(
-        &mut self,
-        event_kind: EventKind,
-        subscriber: impl Subscriber + 'static,
-    ) -> Option<SubscriberID> {
         self.ws_sender
             .send(ChannelMessage::Subscribe(
                 RequestType::Subscribe,
@@ -188,7 +156,15 @@ impl LCUWebSocket {
                 Box::new(subscriber),
             ))
             .ok()?;
-        let id = self.id_receiver.recv().await?;
+
+        let id = if returned.is_empty() {
+            let tmp = *next_id;
+            *next_id += 1;
+            tmp
+        } else {
+            returned.remove(0)
+        };
+
         Some(SubscriberID(id))
     }
 
@@ -197,9 +173,13 @@ impl LCUWebSocket {
     /// If all subscribers have been removed, this will unsubscribe from the event as a whole
     ///
     /// Returns `None` if the connection to the websocket was already closed
-    pub fn unsubscribe(&mut self, endpoint: EventKind, id: SubscriberID) -> Option<()> {
+    pub fn unsubscribe(&mut self, event_kind: EventKind, id: SubscriberID) -> Option<()> {
+        let (_, returned) = self.id_free_list.get_mut(&event_kind);
+
+        returned.push(id.0);
+
         self.ws_sender
-            .send(ChannelMessage::Unsubscribe(id, endpoint))
+            .send(ChannelMessage::Unsubscribe(id, event_kind))
             .ok()
     }
 
@@ -214,76 +194,73 @@ impl LCUWebSocket {
     }
 }
 
+//noinspection DuplicatedCode
 #[allow(clippy::too_many_lines)]
 async fn event_loop(
     request: Request,
     mut error_handler: impl ErrorHandler,
     mut ws_receiver: UnboundedReceiver<ChannelMessage>,
-    id_sender: Sender<usize>,
     tls: Arc<ClientConfig>,
 ) {
-    type SubscriberMap = HashMap<EventKind, Vec<Option<Box<dyn Subscriber>>>>;
+    type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
 
     let (mut maybe_write, mut maybe_read) = (None, None);
 
-    let mut subscribers: SubscriberMap = HashMap::new();
+    let mut subscribers: SubscriberMap = SubscriberMap::new();
     let error_handler: &mut dyn ErrorHandler = &mut error_handler;
 
     'outer: loop {
         if let (Some(write), Some(read)) = (&mut maybe_write, &mut maybe_read) {
             if let Ok(message) = ws_receiver.try_recv() {
                 match message {
-                    ChannelMessage::Subscribe(code, endpoint, subscriber) => {
-                        if let Some(subscribers) = subscribers.get_mut(&endpoint) {
-                            let mut idx = subscribers.len();
+                    ChannelMessage::Subscribe(code, event_kind, subscriber) => {
+                        let subscribers = subscribers.get_mut(&event_kind);
 
-                            for (first_none_idx, maybe_subscriber) in
-                                subscribers.iter_mut().enumerate()
-                            {
-                                if maybe_subscriber.is_none() {
-                                    idx = first_none_idx;
-                                    break;
-                                }
-                            }
-
-                            if idx == subscribers.len() {
-                                subscribers.push(Some(subscriber));
-                            } else {
-                                subscribers[idx] = Some(subscriber);
-                            }
-
-                            id_sender.send(idx).await.unwrap();
-                        } else {
-                            let endpoint_str = endpoint.to_string();
+                        if subscribers.is_empty() {
+                            let endpoint_str = event_kind.to_string();
 
                             let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
 
                             let continues =
                                 send_command(error_handler, write, read, &tls, &command).await;
                             if !continues {
+                                break 'outer;
+                            }
+                        }
+
+                        let mut idx = subscribers.len();
+
+                        for (first_none_idx, maybe_subscriber) in subscribers.iter_mut().enumerate()
+                        {
+                            if maybe_subscriber.is_none() {
+                                idx = first_none_idx;
                                 break;
                             }
+                        }
 
-                            subscribers.insert(endpoint, vec![Some(subscriber)]);
+                        if idx == subscribers.len() {
+                            subscribers.push(Some(subscriber));
+                        } else {
+                            subscribers[idx] = Some(subscriber);
                         }
                     }
                     ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
-                        if let Some(subscribers) = subscribers.get_mut(&event_kind) {
-                            if subscribers.iter().flatten().count() == 0 {
-                                let unsub = format!(
-                                    "[{}, \"{}\"]",
-                                    RequestType::Unsubscribe as u8,
-                                    event_kind.to_string()
-                                );
-                                let continues =
-                                    send_command(error_handler, write, read, &tls, &unsub).await;
-                                if !continues {
-                                    break;
-                                }
-                            }
+                        let subscribers = subscribers.get_mut(&event_kind);
 
-                            subscribers[subscriber_id.0] = None;
+                        if subscribers.iter().flatten().count() == 0 {
+                            let unsub = format!(
+                                "[{}, \"{}\"]",
+                                RequestType::Unsubscribe as u8,
+                                event_kind.to_string()
+                            );
+                            let continues =
+                                send_command(error_handler, write, read, &tls, &unsub).await;
+                            if !continues {
+                                break;
+                            }
                         }
+
+                        subscribers[subscriber_id.0] = None;
                     }
                 }
             };
@@ -292,18 +269,17 @@ async fn event_loop(
                 let data = message.into_data();
                 if !data.is_empty() {
                     let maybe_json = serde_json::from_slice::<Event>(&data);
+
                     match maybe_json {
                         Ok(json) => {
-                            if let Some(subscribers) = subscribers.get_mut(&json.1) {
-                                for subscriber in subscribers.iter_mut().flatten() {
-                                    let mut control = subscriber.on_event(&json);
+                            let subscribers = subscribers.get_mut(&json.1);
 
-                                    #[rustfmt::skip]
-                                        let continues = budget_recursive(&mut control, &tls, write, read, error_handler).await;
-
-                                    if !continues {
-                                        break 'outer;
-                                    }
+                            for subscriber in subscribers.iter_mut().flatten() {
+                                let mut control = subscriber.on_event(&json);
+                                #[rustfmt::skip]
+                                    let continues = budget_recursive(&mut control, &tls, write, read, error_handler).await;
+                                if !continues {
+                                    break 'outer;
                                 }
                             }
                         }
@@ -415,34 +391,8 @@ async fn reconnect(
 
 #[cfg(test)]
 mod test {
-    use super::{Flow, LCUWebSocket, Subscriber};
-    use crate::ws::types::{Event, EventKind};
+    use crate::ws::types::Event;
     use serde_json::json;
-    use std::ops::ControlFlow;
-    use std::time::Duration;
-
-    #[test]
-    fn it_inits() {
-        struct EventCounter(u32);
-
-        impl Subscriber for EventCounter {
-            fn on_event(&mut self, event: &Event) -> ControlFlow<(), Flow> {
-                println!("{event:?}");
-                self.0 += 1;
-                println!("{}", self.0);
-
-                ControlFlow::Continue(Flow::Continue)
-            }
-        }
-
-        let mut ws_client = LCUWebSocket::new().unwrap();
-
-        ws_client.subscribe(EventKind::JsonApiEvent, EventCounter(0));
-
-        while !ws_client.is_finished() {
-            std::thread::sleep(Duration::from_secs(1));
-        }
-    }
 
     #[test]
     fn test_deserialize() {

@@ -11,7 +11,7 @@ pub mod types;
 /// A number of endpoints are also shared
 /// Hence why the replay API enables the `in_game` feature
 pub use super::in_game::URL;
-use crate::replay::types::{Playback, Recording, Render, Sequence};
+use crate::replay::types::{Playback, RecordingState, Render, Sequence};
 use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 use serde::de::DeserializeOwned;
@@ -90,7 +90,10 @@ impl ReplayClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    pub async fn get_recording(&self, request_client: &RequestClient) -> Result<Recording, Error> {
+    pub async fn get_recording(
+        &self,
+        request_client: &RequestClient,
+    ) -> Result<RecordingState, Error> {
         self.replay("recording", "GET", None::<()>, request_client)
             .await
     }
@@ -101,9 +104,9 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn post_recording(
         &self,
-        body: impl Borrow<Recording>,
+        body: impl Borrow<RecordingState>,
         request_client: &RequestClient,
-    ) -> Result<Recording, Error> {
+    ) -> Result<RecordingState, Error> {
         self.replay("recording", "POST", Some(body.borrow()), request_client)
             .await
     }

@@ -202,7 +202,7 @@ pub struct Playback {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Recording State
-pub struct Recording {
+pub struct RecordingState {
     /// Indicates the output format of the recording (for example webm or png)
     pub codec: AVContainer,
     #[serde(with = "duration")]
@@ -221,7 +221,6 @@ pub struct Recording {
     pub lossless: bool,
     /// File path or directory where the recording should be saved
     pub path: String,
-    #[allow(clippy::struct_field_names)]
     /// True if we are currently recording a replay
     pub recording: bool,
     /// Playback speed used when recording
