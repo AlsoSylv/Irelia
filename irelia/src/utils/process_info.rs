@@ -5,10 +5,9 @@
 //! of the processes for `macOS`, and `Windows`
 
 use irelia_encoder::Encoder;
+use std::fmt::{Display, Formatter};
 use std::io::Read;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
-
-use crate::Error;
 
 // Linux will be unplayable soon, so support has been removed
 #[cfg(target_os = "windows")]
@@ -93,7 +92,7 @@ pub fn get_running_client(
                 name == game_process_name
             }
         })
-        .ok_or_else(|| Error::LCUProcessNotRunning)?;
+        .ok_or(Error::new(ErrorKind::NotRunning, "The Process for either the LCU or the game was not running, and as such the lock file cannot be found"))?;
 
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file: [u8; 60] = [0; 60];
@@ -122,14 +121,25 @@ pub fn get_running_client(
         }
 
         // Check that we found a port and auth key, otherwise error
-        auth = scoped_auth.ok_or(Error::AuthTokenNotFound)?;
-        port = scoped_port.ok_or(Error::PortNotFound)?;
+        port = scoped_port.ok_or(Error::new(
+            ErrorKind::PortNotFound,
+            "No port was found in the command line of the program",
+        ))?;
+        auth = scoped_auth.ok_or(Error::new(
+            ErrorKind::AuthTokenNotFound,
+            "No auth token was found in the command line of the program",
+        ))?;
     } else {
+        const LOCK_FILE_NOT_FOUND_ERROR: Error = Error::new(
+            ErrorKind::LockFileNotFound,
+            "Did not follow the typical install structure",
+        );
+
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
-        let path = process.exe().ok_or(Error::LockFileNotFound)?;
+        let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND_ERROR)?;
 
-        let dir = path.parent().ok_or(Error::LockFileNotFound)?;
+        let dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND_ERROR)?;
         // Sadly, we're relying on how the client structures things here
         // Walking back a whole folder in order to get the lock file
         let base_dir = if client {
@@ -137,7 +147,7 @@ pub fn get_running_client(
             dir
         } else {
             // Otherwise it is the game, and we need to go back once
-            dir.parent().ok_or(Error::LockFileNotFound)?
+            dir.parent().ok_or(LOCK_FILE_NOT_FOUND_ERROR)?
         };
 
         let mut file = std::fs::File::open(base_dir.join("lockfile"))?;
@@ -162,10 +172,16 @@ pub fn get_running_client(
         let mut split = lock_file.split(':');
 
         // Get the 3rd field, which should be the port
-        port = split.nth(2).ok_or(Error::PortNotFound)?;
+        port = split.nth(2).ok_or(Error::new(
+            ErrorKind::PortNotFound,
+            "No port was found in the lock file for the client",
+        ))?;
         // We moved the cursor, so the fourth element is the very next one
         // Which should be the auth string
-        auth = split.next().ok_or(Error::AuthTokenNotFound)?;
+        auth = split.next().ok_or(Error::new(
+            ErrorKind::AuthTokenNotFound,
+            "No auth token was found in the command line of the program",
+        ))?;
     }
 
     // Format the header without
@@ -187,6 +203,57 @@ pub fn get_running_client(
     // Format the port and header so that they can be used as headers
     // For the LCU API
     Ok((formatted_url, formatted_auth))
+}
+
+#[derive(Debug)]
+pub struct Error {
+    kind: ErrorKind,
+    message: std::borrow::Cow<'static, str>,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl Error {
+    const fn new(kind: ErrorKind, message: &'static str) -> Error {
+        Self {
+            kind,
+            message: std::borrow::Cow::Borrowed(message),
+        }
+    }
+
+    #[must_use]
+    pub fn kind(&self) -> ErrorKind {
+        self.kind.clone()
+    }
+
+    #[must_use]
+    pub fn reason(&self) -> &str {
+        &self.message
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum ErrorKind {
+    Io(std::io::ErrorKind),
+    LockFileNotFound,
+    AuthTokenNotFound,
+    PortNotFound,
+    NotRunning,
+}
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Self {
+            kind: ErrorKind::Io(value.kind()),
+            message: value.to_string().into(),
+        }
+    }
 }
 
 #[cfg(test)]

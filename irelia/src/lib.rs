@@ -35,14 +35,10 @@ pub enum Error {
     #[cfg(feature = "ws")]
     WebsocketError(tokio_tungstenite::tungstenite::Error),
     #[cfg(any(feature = "ws", feature = "rest"))]
-    StdIo(std::io::Error),
+    ProcessInfoError(process_info::Error),
     SerdeJsonError(serde_json::Error),
     RmpSerdeEncode(rmp_serde::encode::Error),
     RmpSerdeDecode(rmp_serde::decode::Error),
-    LCUProcessNotRunning,
-    PortNotFound,
-    AuthTokenNotFound,
-    LockFileNotFound,
 }
 
 #[cfg(any(feature = "in_game", feature = "rest"))]
@@ -91,9 +87,9 @@ impl From<rmp_serde::decode::Error> for Error {
     }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(value: std::io::Error) -> Self {
-        Self::StdIo(value)
+impl From<process_info::Error> for Error {
+    fn from(value: process_info::Error) -> Self {
+        Self::ProcessInfoError(value)
     }
 }
 
@@ -110,13 +106,7 @@ impl std::fmt::Display for Error {
             #[cfg(feature = "ws")]
             Error::WebsocketError(err) => err.to_string().into(),
             #[cfg(any(feature = "ws", feature = "rest"))]
-            Error::StdIo(err) => err.to_string().into(),
-            Error::LCUProcessNotRunning => "LCU Process is not running!".into(),
-            Error::PortNotFound => "Port Not Found!".into(),
-            Error::AuthTokenNotFound => "Auth Token Not Found!".into(),
-            Error::LockFileNotFound => {
-                "Unable to the lock file, but the process was running!".into()
-            }
+            Error::ProcessInfoError(err) => err.reason().into(),
             Error::RmpSerdeEncode(err) => err.to_string().into(),
             Error::RmpSerdeDecode(err) => err.to_string().into(),
         };

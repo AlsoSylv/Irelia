@@ -16,7 +16,7 @@ pub struct EventMap<V> {
     lcds_event_callback: HashMap<String, V>,
 }
 
-impl<V: Debug + Default> EventMap<V> {
+impl<V: Default> EventMap<V> {
     pub fn new() -> Self {
         Self {
             json_api_event: V::default(),

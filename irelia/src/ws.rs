@@ -3,7 +3,6 @@
 pub mod types;
 mod utils;
 
-use std::fmt::Debug;
 use std::{ops::ControlFlow, sync::Arc};
 
 use futures_util::{
@@ -47,7 +46,7 @@ pub enum Flow {
     Continue,
 }
 
-pub trait Subscriber: Debug + Send + Sync {
+pub trait Subscriber: Send + Sync {
     fn on_event(&mut self, event: &Event) -> ControlFlow<(), Flow>;
 }
 

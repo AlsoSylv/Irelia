@@ -712,13 +712,11 @@ impl SummonerSpells {
 impl core::ops::Index<usize> for SummonerSpells {
     type Output = SummonerSpell;
 
-    // RustRover is falsely saying that this does not get used
-    //noinspection RsLiveness
     fn index(&self, index: usize) -> &Self::Output {
         match index {
             0 => self.summoner_spell_one(),
             1 => self.summoner_spell_two(),
-            e => panic!("Index Out Of Bounds, expected 0 or 1, but found {e}!"),
+            _ => panic!("Index Out Of Bounds, expected 0 or 1, but found {index}!"),
         }
     }
 }
