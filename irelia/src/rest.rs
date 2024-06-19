@@ -17,6 +17,24 @@ pub struct LcuClient {
     auth_header: String,
 }
 
+pub trait EofIntoOptional {
+    /// Returns the result as Option<T>, converting `Err(serde_json::Eof)` into `Ok(None)` instead
+    /// 
+    /// # Errors
+    /// If the result was an error before, and it was not an Eof Error
+    fn eof_into_optional<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
+        match result {
+            Ok(t) => Ok(Some(t)),
+            Err(e) => match e {
+                Error::SerdeJsonError(err) if err.is_eof() => Ok(None),
+                e => Err(e)
+            }
+        }
+    } 
+}
+
+impl<T> EofIntoOptional for Result<T, Error> {}
+
 #[cfg(feature = "batched")]
 pub mod batch {
     use crate::rest::LcuClient;
@@ -238,13 +256,10 @@ impl LcuClient {
     #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
-    pub fn new_with_credentials(auth: &str, port: u16) -> LcuClient {
+    pub fn new_with_credentials(auth: &str, url: &str) -> LcuClient {
         LcuClient {
-            url: format!("127.0.0.1:{port}"),
-            auth_header: format!(
-                "Basic {}",
-                crate::utils::process_info::ENCODER.encode(format!("riot:{auth}"))
-            ),
+            url: url.to_string(),
+            auth_header: auth.to_string(),
         }
     }
 
@@ -262,14 +277,9 @@ impl LcuClient {
     }
 
     /// Sets the url and auth header according to the auth and port provided
-    pub fn reconnect_with_credentials(&mut self, auth: &str, port: u16) {
-        let port = format!("127.0.0.1:{port}");
-        let pass = format!(
-            "Basic {}",
-            crate::utils::process_info::ENCODER.encode(format!("riot:{auth}"))
-        );
-        self.url = port;
-        self.auth_header = pass;
+    pub fn reconnect_with_credentials(&mut self, auth: &str, url: &str) {
+        self.url = url.to_string();
+        self.auth_header = auth.to_string();
     }
 
     #[must_use]
@@ -292,8 +302,8 @@ impl LcuClient {
         &self,
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        self.lcu_request_maybe_no_response(endpoint.as_ref(), "DELETE", None::<()>, request_client)
+    ) -> Result<R, Error> {
+        self.lcu_request(endpoint.as_ref(), "DELETE", None::<()>, request_client)
             .await
     }
 
@@ -311,8 +321,8 @@ impl LcuClient {
         &self,
         endpoint: impl AsRef<str>,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        self.lcu_request_maybe_no_response(endpoint.as_ref(), "GET", None::<()>, request_client)
+    ) -> Result<R, Error> {
+        self.lcu_request(endpoint.as_ref(), "GET", None::<()>, request_client)
             .await
     }
 
@@ -346,8 +356,8 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         body: T,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        self.lcu_request_maybe_no_response(endpoint.as_ref(), "PATCH", Some(body), request_client)
+    ) -> Result<R, Error> {
+        self.lcu_request(endpoint.as_ref(), "PATCH", Some(body), request_client)
             .await
     }
 
@@ -360,8 +370,8 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         body: T,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        self.lcu_request_maybe_no_response(endpoint.as_ref(), "POST", Some(body), request_client)
+    ) -> Result<R, Error> {
+        self.lcu_request(endpoint.as_ref(), "POST", Some(body), request_client)
             .await
     }
 
@@ -374,8 +384,8 @@ impl LcuClient {
         endpoint: impl AsRef<str>,
         body: T,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        self.lcu_request_maybe_no_response(endpoint.as_ref(), "PUT", Some(body), request_client)
+    ) -> Result<R, Error> {
+        self.lcu_request(endpoint.as_ref(), "PUT", Some(body), request_client)
             .await
     }
 
@@ -391,8 +401,8 @@ impl LcuClient {
         &self,
         request: Request<'_, T>,
         request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        self.lcu_request_maybe_no_response(
+    ) -> Result<R, Error> {
+        self.lcu_request(
             request.endpoint.as_ref(),
             request.method.as_str(),
             request.body,
@@ -404,47 +414,11 @@ impl LcuClient {
     /// Makes a request to the LCU with an unspecified method, valid options being
     /// "PUT", "GET", "POST", "HEAD", "DELETE"
     ///
-    /// This method catches an empty response body, and instead converts it to `Option<R>`
-    ///
-    /// # Errors
-    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn lcu_request_maybe_no_response<T: Serialize, R: DeserializeOwned>(
-        &self,
-        endpoint: &str,
-        method: &str,
-        body: Option<T>,
-        request_client: &RequestClient,
-    ) -> Result<Option<R>, Error> {
-        use hyper::body::Buf;
-
-        let buf = request_client
-            .request_template(
-                &self.url,
-                endpoint,
-                method,
-                body,
-                Some(&self.auth_header),
-                SerializeFormat::Json,
-            )
-            .await?;
-
-        let body = if buf.has_remaining() {
-            Some(serde_json::from_reader(buf.reader())?)
-        } else {
-            None
-        };
-
-        Ok(body)
-    }
-
-    /// Makes a request to the LCU with an unspecified method, valid options being
-    /// "PUT", "GET", "POST", "HEAD", "DELETE"
-    ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     ///
     /// If the response body is empty, this will return an unexpected EOF error
-    pub async fn lcu_request_always_responds<T: Serialize, R: DeserializeOwned>(
+    pub async fn lcu_request<T: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
@@ -473,8 +447,7 @@ impl LcuClient {
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     ///
-    /// # Panics
-    /// The response has a body
+    /// Returns a `serde_json` error if the response would have a body
     pub async fn lcu_request_no_response<T: Serialize>(
         &self,
         endpoint: &str,
@@ -495,7 +468,11 @@ impl LcuClient {
             )
             .await?;
 
-        assert!(!buf.has_remaining());
+        if buf.has_remaining() {
+            use serde::de::Error as _;
+            
+            Err(serde_json::Error::custom("response contained a body"))?;
+        }
 
         Ok(())
     }
@@ -663,7 +640,6 @@ mod tests {
         let request: serde_json::Value = lcu_client
             .get("/lol-summoner/v1/current-summoner", &client)
             .await
-            .unwrap()
             .unwrap();
 
         let id = &request["summonerId"];
@@ -673,7 +649,6 @@ mod tests {
         let mut json: serde_json::Value = lcu_client
             .get(endpoint.as_str(), &client)
             .await
-            .unwrap()
             .unwrap();
 
         json["itemSets"].as_array_mut().unwrap().push(page);

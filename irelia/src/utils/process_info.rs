@@ -2,7 +2,7 @@
 //! <https://hextechdocs.dev/getting-started-with-the-lcu-api/>
 
 //! This module also contains a list of constants for the different names
-//! of the processes for `macOS`, and `Windows`
+//! of the processes for `OSX`, and `Windows`
 
 use irelia_encoder::Encoder;
 use std::fmt::{Display, Formatter};
@@ -20,16 +20,6 @@ pub const GAME_PROCESS_NAME: &str = "League of Legends.exe";
 #[cfg(target_os = "macos")]
 pub const GAME_PROCESS_NAME: &str = "League of Legends";
 
-// These ONLY exist so that this will compile in a dev env
-// Linux support will not be re-added unless someone comes
-// up with a solution to running the game on Linux natively
-#[cfg(debug_assertions)]
-#[cfg(target_os = "linux")]
-pub(crate) const CLIENT_PROCESS_NAME: &str = "";
-#[cfg(debug_assertions)]
-#[cfg(target_os = "linux")]
-pub(crate) const GAME_PROCESS_NAME: &str = "";
-
 /// const copy of the encoder
 pub(crate) const ENCODER: Encoder = Encoder::new();
 
@@ -45,9 +35,6 @@ const LOCAL_HOST_URL: &str = "127.0.0.1:";
 /// or the lock file is inaccessibly for some reason.
 /// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
-///
-/// # Panics
-/// If the lock file is not valid UTF-8
 pub fn get_running_client(
     client_process_name: &str,
     game_process_name: &str,
@@ -92,7 +79,10 @@ pub fn get_running_client(
                 name == game_process_name
             }
         })
-        .ok_or(Error::new(ErrorKind::NotRunning, "The Process for either the LCU or the game was not running, and as such the lock file cannot be found"))?;
+        .ok_or(Error::new(
+            ErrorKind::NotRunning,
+            "neither the game or client process were running",
+        ))?;
 
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file: [u8; 60] = [0; 60];
@@ -123,11 +113,11 @@ pub fn get_running_client(
         // Check that we found a port and auth key, otherwise error
         port = scoped_port.ok_or(Error::new(
             ErrorKind::PortNotFound,
-            "No port was found in the command line of the program",
+            "port was not found in command line",
         ))?;
         auth = scoped_auth.ok_or(Error::new(
             ErrorKind::AuthTokenNotFound,
-            "No auth token was found in the command line of the program",
+            "auth token was not found in command line",
         ))?;
     } else {
         const LOCK_FILE_NOT_FOUND_ERROR: Error = Error::new(
@@ -164,7 +154,7 @@ pub fn get_running_client(
         }
 
         // Make sure that we're not over reading into 0's
-        let lock_file = std::str::from_utf8(&lock_file[..len]).unwrap();
+        let lock_file = std::str::from_utf8(&lock_file[..len])?;
 
         // Split the lock file on `:` which separates the different fields
         // Because lock_file is from a higher scope, we can split the string here
@@ -174,13 +164,13 @@ pub fn get_running_client(
         // Get the 3rd field, which should be the port
         port = split.nth(2).ok_or(Error::new(
             ErrorKind::PortNotFound,
-            "No port was found in the lock file for the client",
+            "port was not found in lock file",
         ))?;
         // We moved the cursor, so the fourth element is the very next one
         // Which should be the auth string
         auth = split.next().ok_or(Error::new(
             ErrorKind::AuthTokenNotFound,
-            "No auth token was found in the command line of the program",
+            "password was not found in lock file",
         ))?;
     }
 
@@ -205,7 +195,8 @@ pub fn get_running_client(
     Ok((formatted_url, formatted_auth))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+/// Error retaining to getting the auth key and url for the LCU
 pub struct Error {
     kind: ErrorKind,
     message: std::borrow::Cow<'static, str>,
@@ -225,6 +216,12 @@ impl Error {
             kind,
             message: std::borrow::Cow::Borrowed(message),
         }
+    }
+
+    #[must_use]
+    /// Returns true if it's an IO error, false otherwise
+    pub fn is_io_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Io(_))
     }
 
     #[must_use]
@@ -252,6 +249,17 @@ impl From<std::io::Error> for Error {
         Self {
             kind: ErrorKind::Io(value.kind()),
             message: value.to_string().into(),
+        }
+    }
+}
+
+impl From<std::str::Utf8Error> for Error {
+    fn from(_: std::str::Utf8Error) -> Self {
+        const {
+            Self::new(
+                ErrorKind::Io(std::io::ErrorKind::InvalidData),
+                "stream did not contain valid UTF-8",
+            )
         }
     }
 }

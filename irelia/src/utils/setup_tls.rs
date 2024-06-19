@@ -37,7 +37,7 @@ struct LazyLock<T, F = fn() -> T> {
 impl<T, F> LazyLock<T, F> {
     const fn new(f: F) -> LazyLock<T, F> {
         Self {
-            data: ::std::sync::OnceLock::new(),
+            data: std::sync::OnceLock::new(),
             f,
         }
     }
