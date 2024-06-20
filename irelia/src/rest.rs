@@ -19,18 +19,22 @@ pub struct LcuClient {
 
 pub trait EofIntoOptional {
     /// Returns the result as Option<T>, converting `Err(serde_json::Eof)` into `Ok(None)` instead
-    /// 
+    ///
     /// # Errors
     /// If the result was an error before, and it was not an Eof Error
     fn eof_into_optional<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
         match result {
             Ok(t) => Ok(Some(t)),
             Err(e) => match e {
-                Error::SerdeJsonError(err) if err.is_eof() => Ok(None),
-                e => Err(e)
-            }
+                Error::SerdeJsonError(err)
+                    if err.is_eof() && err.line() == 0 && err.column() == 0 =>
+                {
+                    Ok(None)
+                }
+                e => Err(e),
+            },
         }
-    } 
+    }
 }
 
 impl<T> EofIntoOptional for Result<T, Error> {}
@@ -440,42 +444,6 @@ impl LcuClient {
 
         Ok(serde_json::from_reader(buf.reader())?)
     }
-
-    /// Makes a request to the LCU with an unspecified method, valid options being
-    /// "PUT", "GET", "POST", "HEAD", "DELETE"
-    ///
-    /// # Errors
-    /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    ///
-    /// Returns a `serde_json` error if the response would have a body
-    pub async fn lcu_request_no_response<T: Serialize>(
-        &self,
-        endpoint: &str,
-        method: &str,
-        body: Option<T>,
-        request_client: &RequestClient,
-    ) -> Result<(), Error> {
-        use hyper::body::Buf;
-
-        let buf = request_client
-            .request_template(
-                &self.url,
-                endpoint,
-                method,
-                body,
-                Some(&self.auth_header),
-                SerializeFormat::Json,
-            )
-            .await?;
-
-        if buf.has_remaining() {
-            use serde::de::Error as _;
-            
-            Err(serde_json::Error::custom("response contained a body"))?;
-        }
-
-        Ok(())
-    }
 }
 
 mod request_builder {
@@ -646,10 +614,7 @@ mod tests {
 
         let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
 
-        let mut json: serde_json::Value = lcu_client
-            .get(endpoint.as_str(), &client)
-            .await
-            .unwrap();
+        let mut json: serde_json::Value = lcu_client.get(endpoint.as_str(), &client).await.unwrap();
 
         json["itemSets"].as_array_mut().unwrap().push(page);
 
