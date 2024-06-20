@@ -19,21 +19,20 @@ pub struct LcuClient {
 
 pub trait EofIntoOptional {
     /// Returns the result as Option<T>, converting `Err(serde_json::Eof)` into `Ok(None)` instead
+    /// Only when line and column equal 0
     ///
     /// # Errors
     /// If the result was an error before, and it was not an Eof Error
     fn eof_into_optional<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
-        match result {
-            Ok(t) => Ok(Some(t)),
-            Err(e) => match e {
-                Error::SerdeJsonError(err)
-                    if err.is_eof() && err.line() == 0 && err.column() == 0 =>
-                {
-                    Ok(None)
-                }
-                e => Err(e),
-            },
+        let result = result.map(Some);
+
+        if let Err(Error::SerdeJsonError(err)) = &result {
+            if err.is_eof() && err.line() == 0 && err.column() == 0 {
+                return Ok(None);
+            }
         }
+
+        result
     }
 }
 
@@ -260,11 +259,8 @@ impl LcuClient {
     #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
-    pub fn new_with_credentials(auth: &str, url: &str) -> LcuClient {
-        LcuClient {
-            url: url.to_string(),
-            auth_header: auth.to_string(),
-        }
+    pub fn new_with_credentials(auth_header: String, url: String) -> LcuClient {
+        LcuClient { url, auth_header }
     }
 
     /// Queries the client or lock file, getting a new url and auth header
@@ -281,9 +277,9 @@ impl LcuClient {
     }
 
     /// Sets the url and auth header according to the auth and port provided
-    pub fn reconnect_with_credentials(&mut self, auth: &str, url: &str) {
-        self.url = url.to_string();
-        self.auth_header = auth.to_string();
+    pub fn reconnect_with_credentials(&mut self, auth: String, url: String) {
+        self.url = url;
+        self.auth_header = auth;
     }
 
     #[must_use]
