@@ -44,16 +44,6 @@ features = ["sink"]
 optional = true
 default-features = false
 
-[dependencies.tokio]
-version = "1.37"
-default-features = false
-optional = true
-
-[dependencies.tokio-tungstenite]
-version = "0.23"
-features = ["__rustls-tls"]
-optional = true
-
 [dependencies.tungstenite]
 version = "0.23"
 features = ["__rustls-tls"]
@@ -74,8 +64,6 @@ optional = true
 [dev-dependencies]
 rand = "0.8.5"
 base64 = "0.22.0"
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
 
 [dev-dependencies.tokio]
 version = "1.37"
@@ -115,14 +103,10 @@ in_game = [
     ]
 
 ws = [
-    "dep:tokio-tungstenite",
     "dep:tungstenite",
-    "dep:tokio", 
     "dep:futures-util",
     "dep:sysinfo",
     "dep:serde_derive",
-    "tokio/sync",
-    "tokio/rt"
     ]
 
 replay = [

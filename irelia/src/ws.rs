@@ -22,13 +22,12 @@ use crate::ws::utils::EventMap;
 use crate::{
     process_info,
     utils::{process_info::get_running_client, setup_tls::connector},
-    Error,
 };
 
 type WebSocketStream = WebSocket<MaybeTlsStream<StreamOwned<ClientConnection, TcpStream>>>;
 
 /// Struct representing a connection to the LCU websocket
-pub struct LCUWebSocket {
+pub struct LcuWebSocket {
     ws_sender: Sender<ChannelMessage>,
     handle: JoinHandle<()>,
     id_free_list: EventMap<(usize, Vec<usize>)>,
@@ -61,13 +60,21 @@ impl ErrorHandler for DefaultErrorHandler {
 enum ChannelMessage {
     Subscribe(RequestType, EventKind, Box<dyn Subscriber>),
     Unsubscribe(SubscriberID, EventKind),
+    Abort,
 }
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct SubscriberID(usize);
 
-impl LCUWebSocket {
+impl Default for LcuWebSocket {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LcuWebSocket {
+    #[must_use]
     /// Creates a new connection to the LCU websocket using the default error handler
     ///
     /// # Errors
@@ -77,10 +84,11 @@ impl LCUWebSocket {
     /// # Panics
     ///
     /// If the auth header returned is somehow invalid (though I have not seen this in practice)
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Self {
         Self::new_with_error_handler(DefaultErrorHandler)
     }
 
+    #[must_use]
     /// Creates a new connection to the LCU websocket
     ///
     /// # Errors
@@ -92,7 +100,7 @@ impl LCUWebSocket {
     /// If the auth header returned is somehow invalid (though I have not seen this in practice)
     pub fn new_with_error_handler(
         error_handler: impl ErrorHandler + 'static,
-    ) -> Result<Self, Error> {
+    ) -> Self {
         let tls = connector();
         let tls = Arc::new(tls.clone());
 
@@ -105,11 +113,11 @@ impl LCUWebSocket {
             event_loop(error_handler, &ws_receiver, &tls);
         });
 
-        Ok(Self {
+        Self {
             ws_sender,
             handle,
             id_free_list: EventMap::new(),
-        })
+        }
     }
 
     /// Subscribes to a specific event kind using the subscriber
@@ -158,8 +166,8 @@ impl LCUWebSocket {
 
     #[must_use]
     /// Terminate the event loop
-    pub fn join(self) -> Option<()> {
-        self.handle.join().ok()
+    pub fn abort(self) -> Option<()> {
+        self.ws_sender.send(ChannelMessage::Abort).ok()
     }
 
     #[must_use]
@@ -233,40 +241,47 @@ fn event_loop(
 
                         subscribers[subscriber_id.0] = None;
                     }
+                    ChannelMessage::Abort => {
+                        break 'outer;
+                    }
                 }
             };
 
             let read = stream.read();
 
-            if let Ok(Some(message)) = read.no_block() {
-                let data = message.into_data();
-                if !data.is_empty() {
-                    let maybe_json = serde_json::from_slice::<Event>(&data);
+            if let Ok(maybe_message) = read.no_block() {
+                if let Some(message) = maybe_message {
+                    let data = message.into_data();
+                    if !data.is_empty() {
+                        let maybe_json = serde_json::from_slice::<Event>(&data);
 
-                    match maybe_json {
-                        Ok(json) => {
-                            let subscribers = subscribers.get_mut(&json.1);
+                        match maybe_json {
+                            Ok(json) => {
+                                let subscribers = subscribers.get_mut(&json.1);
 
-                            for subscriber in subscribers.iter_mut().flatten() {
-                                let mut control = subscriber.on_event(&json);
-                                #[rustfmt::skip]
+                                for subscriber in subscribers.iter_mut().flatten() {
+                                    let mut control = subscriber.on_event(&json);
+                                    #[rustfmt::skip]
                                     let continues = budget_recursive(&mut control, tls, stream, error_handler);
+                                    if !continues {
+                                        break 'outer;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let mut control = error_handler.on_error(e.into());
+
+                                #[rustfmt::skip]
+                                let continues = budget_recursive(&mut control, tls, stream, error_handler);
+
                                 if !continues {
-                                    break 'outer;
+                                    break;
                                 }
                             }
                         }
-                        Err(e) => {
-                            let mut control = error_handler.on_error(e.into());
-
-                            #[rustfmt::skip]
-                                let continues = budget_recursive(&mut control, tls, stream, error_handler);
-
-                            if !continues {
-                                break;
-                            }
-                        }
                     }
+                } else {
+                    thread::sleep(Duration::from_millis(10));
                 }
             }
         } else {
@@ -291,7 +306,6 @@ fn send_command(
     command: String,
 ) -> bool {
     if let Err(e) = stream.send(Message::Text(command)) {
-        println!("{e}");
         let mut control = error_handler.on_error(e.into());
 
         #[rustfmt::skip]
