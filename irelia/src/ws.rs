@@ -3,25 +3,17 @@
 pub mod types;
 mod utils;
 
-use std::{ops::ControlFlow, sync::Arc};
+use std::net::{SocketAddr, TcpStream};
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread::JoinHandle;
+use std::time::Duration;
+use std::{ops::ControlFlow, sync::Arc, thread};
 
-use futures_util::{
-    stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
-};
-use rustls::ClientConfig;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::{
-    net::TcpStream,
-    sync::mpsc::{self, UnboundedSender},
-    task::JoinHandle,
-};
-use tokio_tungstenite::tungstenite::handshake::client::Request;
-use tokio_tungstenite::{
-    connect_async_tls_with_config,
-    tungstenite::{client::IntoClientRequest, http::HeaderValue, Message},
-    Connector, MaybeTlsStream, WebSocketStream,
-};
+use rustls::pki_types::ServerName;
+use rustls::{ClientConfig, ClientConnection, StreamOwned};
+use tungstenite::handshake::client::Request;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{client::IntoClientRequest, http::HeaderValue, Connector, Message, WebSocket};
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::ws::types::{Event, EventKind, RequestType};
@@ -31,9 +23,11 @@ use crate::{
     Error,
 };
 
+type WebSocketStream = WebSocket<MaybeTlsStream<StreamOwned<ClientConnection, TcpStream>>>;
+
 /// Struct representing a connection to the LCU websocket
 pub struct LCUWebSocket {
-    ws_sender: UnboundedSender<ChannelMessage>,
+    ws_sender: Sender<ChannelMessage>,
     handle: JoinHandle<()>,
     id_free_list: EventMap<(usize, Vec<usize>)>,
     url: String,
@@ -63,9 +57,6 @@ impl ErrorHandler for DefaultErrorHandler {
         ControlFlow::Break(())
     }
 }
-
-type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
-type Reader = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 
 enum ChannelMessage {
     Subscribe(RequestType, EventKind, Box<dyn Subscriber>),
@@ -105,6 +96,7 @@ impl LCUWebSocket {
         let tls = connector();
         let tls = Arc::new(tls.clone());
         let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+
         let str_req = format!("wss://{url}");
 
         let auth_header = HeaderValue::from_str(&auth).unwrap();
@@ -113,9 +105,18 @@ impl LCUWebSocket {
 
         request.headers_mut().insert("Authorization", auth_header);
 
-        let (ws_sender, ws_receiver) = mpsc::unbounded_channel::<ChannelMessage>();
+        let (ws_sender, ws_receiver) = std::sync::mpsc::channel::<ChannelMessage>();
 
-        let handle = tokio::spawn(event_loop(request, error_handler, ws_receiver, tls));
+        let url_clone = url.clone();
+
+        let handle = thread::spawn(move || {
+            let ws_receiver = ws_receiver;
+            let request = request;
+            let url = url_clone;
+            let tls = tls;
+
+            event_loop(&request, error_handler, &ws_receiver, &tls, &url);
+        });
 
         Ok(Self {
             ws_sender,
@@ -182,9 +183,10 @@ impl LCUWebSocket {
             .ok()
     }
 
+    #[must_use]
     /// Terminate the event loop
-    pub fn terminate(&self) {
-        self.handle.abort();
+    pub fn join(self) -> Option<()> {
+        self.handle.join().ok()
     }
 
     #[must_use]
@@ -195,21 +197,22 @@ impl LCUWebSocket {
 
 //noinspection DuplicatedCode
 #[allow(clippy::too_many_lines)]
-async fn event_loop(
-    request: Request,
+fn event_loop(
+    request: &Request,
     mut error_handler: impl ErrorHandler,
-    mut ws_receiver: UnboundedReceiver<ChannelMessage>,
-    tls: Arc<ClientConfig>,
+    ws_receiver: &Receiver<ChannelMessage>,
+    tls: &Arc<ClientConfig>,
+    url: &str,
 ) {
     type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
 
-    let (mut maybe_write, mut maybe_read) = (None, None);
+    let mut maybe_stream = None;
 
     let mut subscribers: SubscriberMap = SubscriberMap::new();
     let error_handler: &mut dyn ErrorHandler = &mut error_handler;
 
     'outer: loop {
-        if let (Some(write), Some(read)) = (&mut maybe_write, &mut maybe_read) {
+        if let Some(stream) = &mut maybe_stream {
             if let Ok(message) = ws_receiver.try_recv() {
                 match message {
                     ChannelMessage::Subscribe(code, event_kind, subscriber) => {
@@ -220,8 +223,9 @@ async fn event_loop(
 
                             let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
 
-                            let continues =
-                                send_command(error_handler, write, read, &tls, &command).await;
+                            println!("{command}");
+
+                            let continues = send_command(error_handler, stream, tls, command);
                             if !continues {
                                 break 'outer;
                             }
@@ -252,8 +256,7 @@ async fn event_loop(
                                 RequestType::Unsubscribe as u8,
                                 event_kind.to_string()
                             );
-                            let continues =
-                                send_command(error_handler, write, read, &tls, &unsub).await;
+                            let continues = send_command(error_handler, stream, tls, unsub);
                             if !continues {
                                 break;
                             }
@@ -264,7 +267,9 @@ async fn event_loop(
                 }
             };
 
-            if let Some(Ok(message)) = read.next().await {
+            let read = stream.read();
+
+            if let Ok(message) = read {
                 let data = message.into_data();
                 if !data.is_empty() {
                     let maybe_json = serde_json::from_slice::<Event>(&data);
@@ -276,7 +281,7 @@ async fn event_loop(
                             for subscriber in subscribers.iter_mut().flatten() {
                                 let mut control = subscriber.on_event(&json);
                                 #[rustfmt::skip]
-                                    let continues = budget_recursive(&mut control, &tls, write, read, error_handler).await;
+                                    let continues = budget_recursive(&mut control, tls, stream, error_handler);
                                 if !continues {
                                     break 'outer;
                                 }
@@ -286,7 +291,7 @@ async fn event_loop(
                             let mut control = error_handler.on_error(e.into());
 
                             #[rustfmt::skip]
-                                let continues = budget_recursive(&mut control, &tls, write, read, error_handler).await;
+                                let continues = budget_recursive(&mut control, tls, stream, error_handler);
 
                             if !continues {
                                 break;
@@ -296,45 +301,46 @@ async fn event_loop(
                 }
             }
         } else {
-            let result = connect_async_tls_with_config(
+            use std::str::FromStr;
+
+            const TIMEOUT: Duration = Duration::from_millis(100);
+
+            let socket_addr = SocketAddr::from_str(url).unwrap();
+
+            // TODO: This is where the real connection error would be, and it needs to be handled
+            let tcp_stream = TcpStream::connect_timeout(&socket_addr, TIMEOUT).expect("TODO");
+            tcp_stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+
+            let addr = ServerName::IpAddress(socket_addr.ip().into());
+
+            let client_connection = ClientConnection::new(tls.clone(), addr).unwrap();
+            let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
+
+            let (stream, _) = tungstenite::client_tls_with_config(
                 request.clone(),
+                rustls_stream,
                 None,
-                false,
                 Some(Connector::Rustls(tls.clone())),
             )
-            .await;
+            .expect("The TLS handshake should never fail");
 
-            match result {
-                Ok((stream, _)) => {
-                    let (write, read) = stream.split();
-                    (maybe_write, maybe_read) = (Some(write), Some(read));
-                }
-                Err(e) => {
-                    let control = error_handler.on_error(e.into());
-
-                    let continues = control == ControlFlow::Break(());
-
-                    if !continues {
-                        break;
-                    }
-                }
-            }
+            maybe_stream = Some(stream);
         }
     }
 }
 
-async fn send_command(
+fn send_command(
     error_handler: &mut dyn ErrorHandler,
-    write: &mut Writer,
-    read: &mut Reader,
+    stream: &mut WebSocketStream,
     tls: &Arc<ClientConfig>,
-    command: &str,
+    command: String,
 ) -> bool {
-    if let Err(e) = write.send(command.into()).await {
+    if let Err(e) = stream.send(Message::Text(command)) {
+        println!("{e}");
         let mut control = error_handler.on_error(e.into());
 
         #[rustfmt::skip]
-            let continues = budget_recursive(&mut control, tls, write, read, error_handler).await;
+        let continues = budget_recursive(&mut control, tls, stream, error_handler);
 
         if !continues {
             return false;
@@ -344,11 +350,10 @@ async fn send_command(
     true
 }
 
-async fn budget_recursive(
+fn budget_recursive(
     c: &mut ControlFlow<(), Flow>,
     tls: &Arc<ClientConfig>,
-    write: &mut Writer,
-    read: &mut Reader,
+    stream: &mut WebSocketStream,
     f: &mut dyn ErrorHandler,
 ) -> bool {
     while *c != ControlFlow::Continue(Flow::Continue) {
@@ -356,8 +361,7 @@ async fn budget_recursive(
             return false;
         }
 
-        let tls = tls.clone();
-        let rec = reconnect(tls, write, read).await;
+        let rec = reconnect(tls, stream);
         if let Err(e) = rec {
             *c = f.on_error(e);
         } else {
@@ -368,12 +372,18 @@ async fn budget_recursive(
     true
 }
 
-async fn reconnect(
-    tls: Arc<ClientConfig>,
-    write: &mut Writer,
-    read: &mut Reader,
-) -> Result<(), Error> {
+// TODO: This needs to become a more general "connect" function
+// TODO: TCP stream needs a timeout
+// TODO: TCP stream should be set not to block
+// TODO: Code cleanup
+fn reconnect(tls: &Arc<ClientConfig>, web_socket: &mut WebSocketStream) -> Result<(), Error> {
     let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+
+    let tcp_stream = TcpStream::connect(&url).expect("Need to handle");
+    let client_connection = ClientConnection::new(tls.clone(), "127.0.0.1".try_into().unwrap())
+        .expect("Would have already failed?");
+    let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
+
     let str_req = format!("wss://{url}");
 
     let auth_header = HeaderValue::from_str(&auth).unwrap();
@@ -382,9 +392,11 @@ async fn reconnect(
 
     request.headers_mut().insert("Authorization", auth_header);
 
-    let connector = Connector::Rustls(tls.clone());
-    let (stream, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
-    (*write, *read) = stream.split();
+    let (new_socket, _) =
+        tungstenite::client_tls(request.clone(), rustls_stream).expect("Need to fix this too");
+
+    *web_socket = new_socket;
+
     Ok(())
 }
 
