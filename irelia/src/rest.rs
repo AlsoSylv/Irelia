@@ -5,6 +5,7 @@ pub mod types;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
+use std::net::SocketAddr;
 
 use crate::rest::request_builder::RequestBuilder;
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
@@ -13,7 +14,7 @@ use crate::{utils::process_info::get_running_client, Error, RequestClient};
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
-    url: String,
+    url: SocketAddr,
     auth_header: String,
 }
 
@@ -247,19 +248,16 @@ impl LcuClient {
     /// the client being down, the lock file being unable to be opened, or the LCU
     /// not running at all
     pub fn new(force_lock_file: bool) -> Result<Self, Error> {
-        let (port, pass) =
+        let (addr, pass) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
 
-        Ok(LcuClient {
-            url: port,
-            auth_header: pass,
-        })
+        Ok(Self::new_with_credentials(addr, pass))
     }
 
     #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
-    pub fn new_with_credentials(auth_header: String, url: String) -> LcuClient {
+    pub fn new_with_credentials(url: SocketAddr, auth_header: String) -> LcuClient {
         LcuClient { url, auth_header }
     }
 
@@ -269,23 +267,28 @@ impl LcuClient {
     /// This will return an error if the lock file is inaccessible, or if
     /// the LCU is not running
     pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
-        let (port, pass) =
+        let (addr, pass) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
-        self.url = port;
-        self.auth_header = pass;
+        self.reconnect_with_credentials(addr, pass);
         Ok(())
     }
 
     /// Sets the url and auth header according to the auth and port provided
-    pub fn reconnect_with_credentials(&mut self, auth: String, url: String) {
+    pub fn reconnect_with_credentials(&mut self, url: SocketAddr, auth: String) {
         self.url = url;
         self.auth_header = auth;
     }
 
     #[must_use]
     /// Returns a reference to the URL in use
-    pub fn url(&self) -> &str {
+    pub fn url(&self) -> &SocketAddr {
         &self.url
+    }
+
+    #[must_use]
+    /// Returns a reference to the URL in use
+    pub fn url_string(&self) -> String {
+        self.url.to_string()
     }
 
     #[must_use]
@@ -337,7 +340,7 @@ impl LcuClient {
     ) -> Result<hyper::Response<hyper::body::Incoming>, Error> {
         request_client
             .raw_request_template(
-                &self.url,
+                &self.url_string(),
                 endpoint.as_ref(),
                 "HEAD",
                 None::<()>,
@@ -429,7 +432,7 @@ impl LcuClient {
 
         let buf = request_client
             .request_template(
-                &self.url,
+                &self.url_string(),
                 endpoint,
                 method,
                 body,

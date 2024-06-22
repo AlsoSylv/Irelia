@@ -7,6 +7,8 @@
 use irelia_encoder::Encoder;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::num::ParseIntError;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 // Linux will be unplayable soon, so support has been removed
@@ -23,8 +25,6 @@ pub const GAME_PROCESS_NAME: &str = "League of Legends";
 /// const copy of the encoder
 pub(crate) const ENCODER: Encoder = Encoder::new();
 
-const LOCAL_HOST_URL: &str = "127.0.0.1:";
-
 /// Gets the port and auth for the client via the process id
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
@@ -39,7 +39,7 @@ pub fn get_running_client(
     client_process_name: &str,
     game_process_name: &str,
     force_lock_file: bool,
-) -> Result<(String, String), Error> {
+) -> Result<(SocketAddr, String), Error> {
     // If we always read the lock file, we never need to get the command line of the process
     let cmd = if force_lock_file {
         sysinfo::UpdateKind::Never
@@ -182,9 +182,11 @@ pub fn get_running_client(
     // The auth header has to be base64 encoded, so that's happens here
     let auth_header = ENCODER.encode(needs_encoding);
 
-    let mut formatted_url = String::with_capacity(LOCAL_HOST_URL.len() + port.len());
-    formatted_url.push_str(LOCAL_HOST_URL);
-    formatted_url.push_str(port);
+    let port: u16 = port.parse().map_err(|err: ParseIntError| {
+        Error::new_string(ErrorKind::PortNotFound, err.to_string())
+    })?;
+
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
 
     let mut formatted_auth = String::with_capacity(6 + auth_header.len());
     formatted_auth.push_str("Basic ");
@@ -192,7 +194,7 @@ pub fn get_running_client(
 
     // Format the port and header so that they can be used as headers
     // For the LCU API
-    Ok((formatted_url, formatted_auth))
+    Ok((addr, formatted_auth))
 }
 
 #[derive(Debug, Clone)]
@@ -215,6 +217,13 @@ impl Error {
         Self {
             kind,
             message: std::borrow::Cow::Borrowed(message),
+        }
+    }
+
+    fn new_string(kind: ErrorKind, message: String) -> Error {
+        Self {
+            kind,
+            message: std::borrow::Cow::Owned(message),
         }
     }
 

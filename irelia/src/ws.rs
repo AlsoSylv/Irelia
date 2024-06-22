@@ -3,7 +3,8 @@
 pub mod types;
 mod utils;
 
-use std::net::{SocketAddr, TcpStream};
+use std::fmt::{Display, Formatter};
+use std::net::TcpStream;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -11,14 +12,15 @@ use std::{ops::ControlFlow, sync::Arc, thread};
 
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
-use tungstenite::handshake::client::Request;
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::util::NonBlockingResult;
 use tungstenite::{client::IntoClientRequest, http::HeaderValue, Connector, Message, WebSocket};
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::ws::types::{Event, EventKind, RequestType};
 use crate::ws::utils::EventMap;
 use crate::{
+    process_info,
     utils::{process_info::get_running_client, setup_tls::connector},
     Error,
 };
@@ -30,8 +32,6 @@ pub struct LCUWebSocket {
     ws_sender: Sender<ChannelMessage>,
     handle: JoinHandle<()>,
     id_free_list: EventMap<(usize, Vec<usize>)>,
-    url: String,
-    auth_header: String,
 }
 
 #[derive(PartialEq)]
@@ -45,14 +45,14 @@ pub trait Subscriber: Send + Sync {
 }
 
 pub trait ErrorHandler: Send + Sync {
-    fn on_error(&mut self, error: Error) -> ControlFlow<(), Flow>;
+    fn on_error(&mut self, error: WebsocketError) -> ControlFlow<(), Flow>;
 }
 
 /// This is a zero sized struct which calls `eprintln!()` and then breaks on error
 pub struct DefaultErrorHandler;
 
 impl ErrorHandler for DefaultErrorHandler {
-    fn on_error(&mut self, error: Error) -> ControlFlow<(), Flow> {
+    fn on_error(&mut self, error: WebsocketError) -> ControlFlow<(), Flow> {
         eprintln!("{error}");
         ControlFlow::Break(())
     }
@@ -95,48 +95,21 @@ impl LCUWebSocket {
     ) -> Result<Self, Error> {
         let tls = connector();
         let tls = Arc::new(tls.clone());
-        let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
-
-        let str_req = format!("wss://{url}");
-
-        let auth_header = HeaderValue::from_str(&auth).unwrap();
-
-        let mut request = str_req.as_str().into_client_request()?;
-
-        request.headers_mut().insert("Authorization", auth_header);
 
         let (ws_sender, ws_receiver) = std::sync::mpsc::channel::<ChannelMessage>();
 
-        let url_clone = url.clone();
-
         let handle = thread::spawn(move || {
             let ws_receiver = ws_receiver;
-            let request = request;
-            let url = url_clone;
             let tls = tls;
 
-            event_loop(&request, error_handler, &ws_receiver, &tls, &url);
+            event_loop(error_handler, &ws_receiver, &tls);
         });
 
         Ok(Self {
             ws_sender,
             handle,
-            url,
             id_free_list: EventMap::new(),
-            auth_header: auth,
         })
-    }
-
-    #[must_use]
-    /// Returns a reference to the URL in use
-    pub fn url(&self) -> &str {
-        &self.url
-    }
-
-    #[must_use]
-    /// Returns a reference to the auth header in use
-    pub fn auth_header(&self) -> &str {
-        &self.auth_header
     }
 
     /// Subscribes to a specific event kind using the subscriber
@@ -195,14 +168,10 @@ impl LCUWebSocket {
     }
 }
 
-//noinspection DuplicatedCode
-#[allow(clippy::too_many_lines)]
 fn event_loop(
-    request: &Request,
     mut error_handler: impl ErrorHandler,
     ws_receiver: &Receiver<ChannelMessage>,
     tls: &Arc<ClientConfig>,
-    url: &str,
 ) {
     type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
 
@@ -269,7 +238,7 @@ fn event_loop(
 
             let read = stream.read();
 
-            if let Ok(message) = read {
+            if let Ok(Some(message)) = read.no_block() {
                 let data = message.into_data();
                 if !data.is_empty() {
                     let maybe_json = serde_json::from_slice::<Event>(&data);
@@ -301,30 +270,16 @@ fn event_loop(
                 }
             }
         } else {
-            use std::str::FromStr;
+            match connect(tls) {
+                Ok(stream) => maybe_stream = Some(stream),
+                Err(e) => {
+                    let control = error_handler.on_error(e);
 
-            const TIMEOUT: Duration = Duration::from_millis(100);
-
-            let socket_addr = SocketAddr::from_str(url).unwrap();
-
-            // TODO: This is where the real connection error would be, and it needs to be handled
-            let tcp_stream = TcpStream::connect_timeout(&socket_addr, TIMEOUT).expect("TODO");
-            tcp_stream.set_read_timeout(Some(TIMEOUT)).unwrap();
-
-            let addr = ServerName::IpAddress(socket_addr.ip().into());
-
-            let client_connection = ClientConnection::new(tls.clone(), addr).unwrap();
-            let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
-
-            let (stream, _) = tungstenite::client_tls_with_config(
-                request.clone(),
-                rustls_stream,
-                None,
-                Some(Connector::Rustls(tls.clone())),
-            )
-            .expect("The TLS handshake should never fail");
-
-            maybe_stream = Some(stream);
+                    if control == ControlFlow::Break(()) {
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -361,30 +316,73 @@ fn budget_recursive(
             return false;
         }
 
-        let rec = reconnect(tls, stream);
-        if let Err(e) = rec {
-            *c = f.on_error(e);
-        } else {
-            break;
+        match connect(tls) {
+            Ok(new_stream) => {
+                *stream = new_stream;
+                break;
+            }
+            Err(e) => {
+                *c = f.on_error(e);
+            }
         }
     }
 
     true
 }
 
-// TODO: This needs to become a more general "connect" function
-// TODO: TCP stream needs a timeout
-// TODO: TCP stream should be set not to block
-// TODO: Code cleanup
-fn reconnect(tls: &Arc<ClientConfig>, web_socket: &mut WebSocketStream) -> Result<(), Error> {
-    let (url, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+#[derive(Debug)]
+pub enum WebsocketError {
+    Tungstenite(tungstenite::Error),
+    ProcessInfo(process_info::Error),
+    SerdeJson(serde_json::Error),
+    Io(std::io::Error),
+}
 
-    let tcp_stream = TcpStream::connect(&url).expect("Need to handle");
-    let client_connection = ClientConnection::new(tls.clone(), "127.0.0.1".try_into().unwrap())
-        .expect("Would have already failed?");
-    let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
+impl Display for WebsocketError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let string = match self {
+            WebsocketError::Tungstenite(e) => e.to_string(),
+            WebsocketError::ProcessInfo(e) => e.to_string(),
+            WebsocketError::SerdeJson(e) => e.to_string(),
+            WebsocketError::Io(e) => e.to_string(),
+        };
 
-    let str_req = format!("wss://{url}");
+        f.write_str(&string)
+    }
+}
+
+impl std::error::Error for WebsocketError {}
+
+impl From<std::io::Error> for WebsocketError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl From<tungstenite::Error> for WebsocketError {
+    fn from(value: tungstenite::Error) -> Self {
+        Self::Tungstenite(value)
+    }
+}
+
+impl From<serde_json::Error> for WebsocketError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::SerdeJson(value)
+    }
+}
+
+impl From<process_info::Error> for WebsocketError {
+    fn from(value: process_info::Error) -> Self {
+        Self::ProcessInfo(value)
+    }
+}
+
+fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebsocketError> {
+    const TIMEOUT: Duration = Duration::from_millis(100);
+
+    let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+
+    let str_req = format!("wss://{addr}");
 
     let auth_header = HeaderValue::from_str(&auth).unwrap();
 
@@ -392,12 +390,28 @@ fn reconnect(tls: &Arc<ClientConfig>, web_socket: &mut WebSocketStream) -> Resul
 
     request.headers_mut().insert("Authorization", auth_header);
 
-    let (new_socket, _) =
-        tungstenite::client_tls(request.clone(), rustls_stream).expect("Need to fix this too");
+    let tcp_stream = TcpStream::connect_timeout(&addr, TIMEOUT)?;
 
-    *web_socket = new_socket;
+    let addr = ServerName::IpAddress(addr.ip().into());
 
-    Ok(())
+    let client_connection = ClientConnection::new(tls.clone(), addr).unwrap();
+    let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
+
+    let (stream, _) = tungstenite::client_tls_with_config(
+        request.clone(),
+        rustls_stream,
+        None,
+        Some(Connector::Rustls(tls.clone())),
+    )
+    .expect("The TLS handshake should never fail");
+
+    let MaybeTlsStream::Rustls(stream_inner) = stream.get_ref() else {
+        unreachable!();
+    };
+
+    stream_inner.sock.sock.set_nonblocking(true).unwrap();
+
+    Ok(stream)
 }
 
 #[cfg(test)]
