@@ -1,9 +1,9 @@
 # Irelia
 
-![Crates.io Total Downloads](https://img.shields.io/crates/d/irelia?style=flat-square)
-![GitHub Repo stars](https://img.shields.io/github/stars/alsosylv/irelia?style=flat-square)
-![Crates.io Version](https://img.shields.io/crates/v/irelia?style=flat-square)
-![docs.rs](https://img.shields.io/docsrs/irelia?style=flat-square)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/irelia?style=flat-square)](https://crates.io/crates/irelia)
+[![GitHub Repo stars](https://img.shields.io/github/stars/alsosylv/irelia?style=flat-square)](https://github.com/AlsoSylv/Irelia/stargazers)
+[![Crates.io Version](https://img.shields.io/crates/v/irelia?style=flat-square)](https://crates.io/crates/irelia/versions)
+[![docs.rs](https://img.shields.io/docsrs/irelia?style=flat-square)](https://docs.rs/irelia)
 
 **Irelia is a wrapper for the local https APIs provided by riot games for LoL**
 
