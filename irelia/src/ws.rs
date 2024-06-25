@@ -3,7 +3,6 @@
 pub mod types;
 mod utils;
 
-use std::fmt::{Display, Formatter};
 use std::net::TcpStream;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
@@ -17,12 +16,11 @@ use tungstenite::util::NonBlockingResult;
 use tungstenite::{client::IntoClientRequest, http::HeaderValue, Connector, Message, WebSocket};
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
+use crate::utils::{process_info::get_running_client, setup_tls::connector};
 use crate::ws::types::{Event, EventKind, RequestType};
 use crate::ws::utils::EventMap;
-use crate::{
-    process_info,
-    utils::{process_info::get_running_client, setup_tls::connector},
-};
+
+pub use error::Error as WebSocketError;
 
 type WebSocketStream = WebSocket<MaybeTlsStream<StreamOwned<ClientConnection, TcpStream>>>;
 
@@ -33,29 +31,9 @@ pub struct LcuWebSocket {
     id_free_list: EventMap<(usize, Vec<usize>)>,
 }
 
-#[derive(PartialEq)]
-pub enum Flow {
-    TryReconnect,
-    Continue,
-}
-
-pub trait Subscriber: Send + Sync {
-    fn on_event(&mut self, event: &Event) -> ControlFlow<(), Flow>;
-}
-
-pub trait ErrorHandler: Send + Sync {
-    fn on_error(&mut self, error: WebsocketError) -> ControlFlow<(), Flow>;
-}
-
-/// This is a zero sized struct which calls `eprintln!()` and then breaks on error
-pub struct DefaultErrorHandler;
-
-impl ErrorHandler for DefaultErrorHandler {
-    fn on_error(&mut self, error: WebsocketError) -> ControlFlow<(), Flow> {
-        eprintln!("{error}");
-        ControlFlow::Break(())
-    }
-}
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct SubscriberID(usize);
 
 enum ChannelMessage {
     Subscribe(RequestType, EventKind, Box<dyn Subscriber>),
@@ -63,11 +41,37 @@ enum ChannelMessage {
     Abort,
 }
 
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct SubscriberID(usize);
+/// This is a zero sized struct which calls `eprintln!()` and then breaks on error
+pub struct DefaultErrorHandler;
+
+impl ErrorHandler for DefaultErrorHandler {
+    fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow> {
+        eprintln!("{error}");
+        ControlFlow::Break(())
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Flow {
+    TryReconnect,
+    Continue,
+}
+
+/// trait for a subscriber to an endpoint for the websocket
+pub trait Subscriber: Send + Sync {
+    /// Callback for when the `EventKind` occurs
+    fn on_event(&mut self, event: &Event) -> ControlFlow<(), Flow>;
+}
+
+/// Error handler trait, called when the websocket connection errors in an unexpected way
+pub trait ErrorHandler: Send + Sync {
+    /// Callback whenever an unexpected error occurs during the event loop
+    fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow>;
+}
 
 impl Default for LcuWebSocket {
+    #[must_use]
+    /// Creates a new connection to the LCU websocket using the default error handler
     fn default() -> Self {
         Self::new()
     }
@@ -76,41 +80,24 @@ impl Default for LcuWebSocket {
 impl LcuWebSocket {
     #[must_use]
     /// Creates a new connection to the LCU websocket using the default error handler
-    ///
-    /// # Errors
-    /// This function will return an error if the LCU is not running,
-    /// or if it cannot connect to the websocket
-    ///
-    /// # Panics
-    ///
-    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
     pub fn new() -> Self {
         Self::new_with_error_handler(DefaultErrorHandler)
     }
 
     #[must_use]
     /// Creates a new connection to the LCU websocket
-    ///
-    /// # Errors
-    /// This function will return an error if the LCU is not running,
-    /// or if it cannot connect to the websocket
-    ///
-    /// # Panics
-    ///
-    /// If the auth header returned is somehow invalid (though I have not seen this in practice)
-    pub fn new_with_error_handler(
-        error_handler: impl ErrorHandler + 'static,
-    ) -> Self {
+    pub fn new_with_error_handler(error_handler: impl ErrorHandler + 'static) -> Self {
         let tls = connector();
         let tls = Arc::new(tls.clone());
 
         let (ws_sender, ws_receiver) = std::sync::mpsc::channel::<ChannelMessage>();
 
         let handle = thread::spawn(move || {
+            let mut error_handler = error_handler;
             let ws_receiver = ws_receiver;
             let tls = tls;
 
-            event_loop(error_handler, &ws_receiver, &tls);
+            event_loop(&mut error_handler, &ws_receiver, &tls);
         });
 
         Self {
@@ -157,11 +144,13 @@ impl LcuWebSocket {
     pub fn unsubscribe(&mut self, event_kind: EventKind, id: SubscriberID) -> Option<()> {
         let (_, returned) = self.id_free_list.get_mut(&event_kind);
 
-        returned.push(id.0);
-
         self.ws_sender
             .send(ChannelMessage::Unsubscribe(id, event_kind))
-            .ok()
+            .ok()?;
+
+        returned.push(id.0);
+
+        Some(())
     }
 
     #[must_use]
@@ -171,26 +160,25 @@ impl LcuWebSocket {
     }
 
     #[must_use]
+    /// Checks whether the underlying thread is finished or not
     pub fn is_finished(&self) -> bool {
         self.handle.is_finished()
     }
 }
 
 fn event_loop(
-    mut error_handler: impl ErrorHandler,
-    ws_receiver: &Receiver<ChannelMessage>,
+    error_handler: &mut impl ErrorHandler,
+    receiver: &Receiver<ChannelMessage>,
     tls: &Arc<ClientConfig>,
 ) {
     type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
 
     let mut maybe_stream = None;
-
-    let mut subscribers: SubscriberMap = SubscriberMap::new();
-    let error_handler: &mut dyn ErrorHandler = &mut error_handler;
+    let mut subscribers = SubscriberMap::new();
 
     'outer: loop {
         if let Some(stream) = &mut maybe_stream {
-            if let Ok(message) = ws_receiver.try_recv() {
+            if let Ok(message) = receiver.try_recv() {
                 match message {
                     ChannelMessage::Subscribe(code, event_kind, subscriber) => {
                         let subscribers = subscribers.get_mut(&event_kind);
@@ -235,7 +223,7 @@ fn event_loop(
                             );
                             let continues = send_command(error_handler, stream, tls, unsub);
                             if !continues {
-                                break;
+                                break 'outer;
                             }
                         }
 
@@ -261,8 +249,10 @@ fn event_loop(
 
                                 for subscriber in subscribers.iter_mut().flatten() {
                                     let mut control = subscriber.on_event(&json);
+
                                     #[rustfmt::skip]
                                     let continues = budget_recursive(&mut control, tls, stream, error_handler);
+
                                     if !continues {
                                         break 'outer;
                                     }
@@ -275,7 +265,7 @@ fn event_loop(
                                 let continues = budget_recursive(&mut control, tls, stream, error_handler);
 
                                 if !continues {
-                                    break;
+                                    break 'outer;
                                 }
                             }
                         }
@@ -291,7 +281,7 @@ fn event_loop(
                     let control = error_handler.on_error(e);
 
                     if control == ControlFlow::Break(()) {
-                        break;
+                        break 'outer;
                     }
                 }
             }
@@ -300,7 +290,7 @@ fn event_loop(
 }
 
 fn send_command(
-    error_handler: &mut dyn ErrorHandler,
+    error_handler: &mut impl ErrorHandler,
     stream: &mut WebSocketStream,
     tls: &Arc<ClientConfig>,
     command: String,
@@ -323,7 +313,7 @@ fn budget_recursive(
     c: &mut ControlFlow<(), Flow>,
     tls: &Arc<ClientConfig>,
     stream: &mut WebSocketStream,
-    f: &mut dyn ErrorHandler,
+    f: &mut impl ErrorHandler,
 ) -> bool {
     while *c != ControlFlow::Continue(Flow::Continue) {
         if *c == ControlFlow::Break(()) {
@@ -344,54 +334,7 @@ fn budget_recursive(
     true
 }
 
-#[derive(Debug)]
-pub enum WebsocketError {
-    Tungstenite(tungstenite::Error),
-    ProcessInfo(process_info::Error),
-    SerdeJson(serde_json::Error),
-    Io(std::io::Error),
-}
-
-impl Display for WebsocketError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let string = match self {
-            WebsocketError::Tungstenite(e) => e.to_string(),
-            WebsocketError::ProcessInfo(e) => e.to_string(),
-            WebsocketError::SerdeJson(e) => e.to_string(),
-            WebsocketError::Io(e) => e.to_string(),
-        };
-
-        f.write_str(&string)
-    }
-}
-
-impl std::error::Error for WebsocketError {}
-
-impl From<std::io::Error> for WebsocketError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
-    }
-}
-
-impl From<tungstenite::Error> for WebsocketError {
-    fn from(value: tungstenite::Error) -> Self {
-        Self::Tungstenite(value)
-    }
-}
-
-impl From<serde_json::Error> for WebsocketError {
-    fn from(value: serde_json::Error) -> Self {
-        Self::SerdeJson(value)
-    }
-}
-
-impl From<process_info::Error> for WebsocketError {
-    fn from(value: process_info::Error) -> Self {
-        Self::ProcessInfo(value)
-    }
-}
-
-fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebsocketError> {
+fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
     const TIMEOUT: Duration = Duration::from_millis(100);
 
     let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
@@ -428,19 +371,53 @@ fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebsocketError> {
     Ok(stream)
 }
 
-#[cfg(test)]
-mod test {
-    use crate::ws::types::Event;
-    use serde_json::json;
+mod error {
+    use std::fmt::{Display, Formatter};
 
-    #[test]
-    fn test_deserialize() {
-        let json = json!([5, "OnJsonApiEvent", {
-            "data": {},
-            "eventType": "Create",
-            "uri": "/Example/Uri"
-        }]);
-        let event: Event = serde_json::from_value(json).unwrap();
-        println!("{event:?}");
+    #[derive(Debug)]
+    pub enum Error {
+        Tungstenite(tungstenite::Error),
+        ProcessInfo(crate::process_info::Error),
+        SerdeJson(serde_json::Error),
+        Io(std::io::Error),
+    }
+
+    impl Display for Error {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let string = match self {
+                Error::Tungstenite(e) => e.to_string(),
+                Error::ProcessInfo(e) => e.to_string(),
+                Error::SerdeJson(e) => e.to_string(),
+                Error::Io(e) => e.to_string(),
+            };
+
+            f.write_str(&string)
+        }
+    }
+
+    impl std::error::Error for Error {}
+
+    impl From<std::io::Error> for Error {
+        fn from(value: std::io::Error) -> Self {
+            Self::Io(value)
+        }
+    }
+
+    impl From<tungstenite::Error> for Error {
+        fn from(value: tungstenite::Error) -> Self {
+            Self::Tungstenite(value)
+        }
+    }
+
+    impl From<serde_json::Error> for Error {
+        fn from(value: serde_json::Error) -> Self {
+            Self::SerdeJson(value)
+        }
+    }
+
+    impl From<crate::process_info::Error> for Error {
+        fn from(value: crate::process_info::Error) -> Self {
+            Self::ProcessInfo(value)
+        }
     }
 }

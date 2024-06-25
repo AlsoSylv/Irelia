@@ -1,9 +1,11 @@
+use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
+use std::fmt::Formatter;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 pub struct Event(pub RequestType, pub EventKind, pub EventData);
 
 /// Different LCU websocket request types
@@ -19,7 +21,7 @@ pub enum RequestType {
     Publish = 7,
     Event = 8,
 }
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 /// Different event types that can be passed to the
 /// subscribe and unsubscribe methods.
 pub enum EventKind {
@@ -34,7 +36,7 @@ pub enum EventKind {
     LcdsEventCallback(String),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventData {
     pub data: Value,
@@ -78,19 +80,36 @@ impl<'de> Deserialize<'de> for EventKind {
     where
         D: Deserializer<'de>,
     {
-        let v: &str = Deserialize::deserialize(deserializer)?;
+        struct StrVisitor;
 
-        if let Some((event, callback)) = v.split_once('_') {
-            match EventKind::from_str(event) {
-                EventKind::JsonApiEvent => {
-                    Ok(EventKind::JsonApiEventCallback(callback.to_string()))
-                }
-                EventKind::LcdsEvent => Ok(EventKind::LcdsEventCallback(callback.to_string())),
-                _ => unreachable!(),
+        impl<'a> Visitor<'a> for StrVisitor {
+            type Value = EventKind;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("A string in the format of an LCU event kind")
             }
-        } else {
-            Ok(EventKind::from_str(v))
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                if let Some((event, callback)) = v.split_once('_') {
+                    match EventKind::from_str(event) {
+                        EventKind::JsonApiEvent => {
+                            Ok(EventKind::JsonApiEventCallback(callback.to_string()))
+                        }
+                        EventKind::LcdsEvent => {
+                            Ok(EventKind::LcdsEventCallback(callback.to_string()))
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    Ok(EventKind::from_str(v))
+                }
+            }
         }
+
+        deserializer.deserialize_str(StrVisitor)
     }
 }
 
@@ -140,5 +159,34 @@ impl EventKind {
             "OnServiceProxyUuidEvent" => EventKind::ServiceProxyUuidEvent,
             event => unreachable!("{}", event),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Event, EventData, EventKind, RequestType};
+    use serde_json::{json, Map, Value};
+
+    #[test]
+    fn test_deserialize() {
+        let json = json!([5, "OnJsonApiEvent", {
+            "data": {},
+            "eventType": "Create",
+            "uri": "/Example/Uri"
+        }]);
+
+        let event: Event = serde_json::from_value(json).unwrap();
+
+        let baseline_event = Event(
+            RequestType::Subscribe,
+            EventKind::JsonApiEvent,
+            EventData {
+                data: Value::Object(Map::new()),
+                event_type: "Create".into(),
+                uri: "/Example/Uri".into(),
+            },
+        );
+
+        assert_eq!(event, baseline_event);
     }
 }
