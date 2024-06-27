@@ -1,3 +1,5 @@
+//! Types that the Websocket will respond with
+
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
@@ -6,6 +8,7 @@ use std::borrow::Cow;
 use std::fmt::Formatter;
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
+/// Directly corresponds to the tuple that the websocket emits for events
 pub struct Event(pub RequestType, pub EventKind, pub EventData);
 
 /// Different LCU websocket request types
@@ -38,6 +41,7 @@ pub enum EventKind {
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// The data connected to the event, this consists of three fields, the data, event type, and uri the event is from
 pub struct EventData {
     pub data: Value,
     pub event_type: String,

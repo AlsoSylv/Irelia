@@ -1,5 +1,6 @@
 //! Module containing all the data for the rest LCU bindings
 
+/// This is a list of types pertaining to the LCU, currently only containing the types for the schema.
 pub mod types;
 
 use serde::de::DeserializeOwned;
@@ -18,8 +19,9 @@ pub struct LcuClient {
     auth_header: String,
 }
 
+/// Some LCU endpoints don't return a response at all. This is used to convert an Eof row: 0, colum: 0 into an optional
 pub trait EofIntoOptional {
-    /// Returns the result as Option<T>, converting `Err(serde_json::Eof)` into `Ok(None)` instead
+    /// Returns the result as `Option<T>`, converting `Err(serde_json::Eof)` into `Ok(None)` instead
     /// Only when line and column equal 0
     ///
     /// # Errors
@@ -38,203 +40,6 @@ pub trait EofIntoOptional {
 }
 
 impl<T> EofIntoOptional for Result<T, Error> {}
-
-#[cfg(feature = "batched")]
-pub mod batch {
-    use crate::rest::LcuClient;
-    use crate::{Error, RequestClient};
-    use futures_util::StreamExt;
-    use serde::de::DeserializeOwned;
-    use std::borrow::Cow;
-
-    /// Enum representing the different requests that can be sent to the LCU
-    pub enum RequestType<'a> {
-        Delete,
-        Get,
-        Patch(Option<&'a dyn erased_serde::Serialize>),
-        Post(Option<&'a dyn erased_serde::Serialize>),
-        Put(Option<&'a dyn erased_serde::Serialize>),
-    }
-
-    /// Struct representing a batched request, taking the
-    /// request type and endpoint
-    pub struct Request<'a> {
-        pub request_type: RequestType<'a>,
-        pub endpoint: Cow<'static, str>,
-    }
-
-    impl<'a> Request<'a> {
-        /// Creates a new batched request, which can be wrapped in a slice and send to the LCU
-        pub fn new(request_type: RequestType<'a>, endpoint: impl Into<Cow<'static, str>>) -> Self {
-            Request {
-                request_type,
-                endpoint: endpoint.into(),
-            }
-        }
-
-        pub fn delete(endpoint: impl Into<Cow<'static, str>>) -> Self {
-            Self::new(RequestType::Delete, endpoint)
-        }
-
-        pub fn get(endpoint: impl Into<Cow<'static, str>>) -> Self {
-            Self::new(RequestType::Get, endpoint)
-        }
-
-        pub fn patch(
-            endpoint: impl Into<Cow<'static, str>>,
-            body: Option<&'a dyn erased_serde::Serialize>,
-        ) -> Self {
-            Self::new(RequestType::Patch(body), endpoint)
-        }
-
-        pub fn put(
-            endpoint: impl Into<Cow<'static, str>>,
-            body: Option<&'a dyn erased_serde::Serialize>,
-        ) -> Self {
-            Self::new(RequestType::Put(body), endpoint)
-        }
-
-        pub fn post(
-            endpoint: impl Into<Cow<'static, str>>,
-            body: Option<&'a dyn erased_serde::Serialize>,
-        ) -> Self {
-            Self::new(RequestType::Post(body), endpoint)
-        }
-    }
-
-    impl LcuClient {
-        /// System for batching requests to the LCU by sending a slice
-        /// The buffer size is how many requests can be operated on at
-        /// the same time, returns a vector with all the replies
-        ///
-        /// # Errors
-        /// The value will be an error if the provided type is invalid, or the LCU API is not running
-        pub async fn batched<'a, R>(
-            &self,
-            requests: &[Request<'a>],
-            buffer_size: usize,
-            request_client: &RequestClient,
-        ) -> Vec<Result<Option<R>, Error>>
-        where
-            R: DeserializeOwned,
-        {
-            futures_util::stream::iter(requests.iter().map(|request| async {
-                let endpoint = &*request.endpoint;
-                match &request.request_type {
-                    RequestType::Delete => self.delete(endpoint, request_client).await,
-                    RequestType::Get => self.get(endpoint, request_client).await,
-                    RequestType::Patch(body) => self.patch(endpoint, *body, request_client).await,
-                    RequestType::Post(body) => self.post(endpoint, *body, request_client).await,
-                    RequestType::Put(body) => self.put(endpoint, *body, request_client).await,
-                }
-            }))
-            .buffered(buffer_size)
-            .collect()
-            .await
-        }
-    }
-
-    pub struct Builder;
-
-    mod hidden {
-        use crate::rest::batch::Request;
-        use crate::rest::LcuClient;
-        use crate::RequestClient;
-
-        pub struct WithClient<'a> {
-            pub(super) request_client: &'a RequestClient,
-            pub(super) requests: Vec<Request<'a>>,
-        }
-
-        pub struct WithBufferSize<'a> {
-            pub(super) request_client: &'a RequestClient,
-            pub(super) requests: Vec<Request<'a>>,
-            pub(super) buffer_size: usize,
-        }
-
-        pub struct WithLcuClient<'a> {
-            pub(super) request_client: &'a RequestClient,
-            pub(super) requests: Vec<Request<'a>>,
-            pub(super) buffer_size: usize,
-            pub(super) lcu_client: &'a LcuClient,
-        }
-    }
-
-    use crate::rest::batch::hidden::WithLcuClient;
-    use hidden::{WithBufferSize, WithClient};
-
-    impl Builder {
-        #[must_use]
-        pub fn new() -> Self {
-            Self
-        }
-
-        #[must_use]
-        pub fn with_client(self, request_client: &RequestClient) -> WithClient {
-            WithClient {
-                request_client,
-                requests: Vec::new(),
-            }
-        }
-
-        #[must_use]
-        pub fn with_client_and_capacity(
-            self,
-            request_client: &RequestClient,
-            capacity: usize,
-        ) -> WithClient {
-            WithClient {
-                request_client,
-                requests: Vec::with_capacity(capacity),
-            }
-        }
-    }
-
-    impl Default for Builder {
-        fn default() -> Self {
-            Self
-        }
-    }
-
-    impl<'a> WithClient<'a> {
-        pub fn request(mut self, request: Request<'a>) -> Self {
-            self.add_request(request);
-
-            self
-        }
-
-        pub fn add_request(&mut self, request: Request<'a>) {
-            self.requests.push(request);
-        }
-
-        pub fn with_buffer_size(self, buffer_size: usize) -> WithBufferSize<'a> {
-            WithBufferSize {
-                requests: self.requests,
-                request_client: self.request_client,
-                buffer_size,
-            }
-        }
-    }
-
-    impl<'a> WithBufferSize<'a> {
-        pub fn with_lcu_client(self, lcu_client: &'a LcuClient) -> WithLcuClient<'a> {
-            WithLcuClient {
-                requests: self.requests,
-                request_client: self.request_client,
-                buffer_size: self.buffer_size,
-                lcu_client,
-            }
-        }
-    }
-
-    impl<'a> WithLcuClient<'a> {
-        pub async fn execute<R: DeserializeOwned>(self) -> Vec<Result<Option<R>, Error>> {
-            self.lcu_client
-                .batched(&self.requests, self.buffer_size, self.request_client)
-                .await
-        }
-    }
-}
 
 impl LcuClient {
     /// Attempts to create a connection to the LCU, errors if it fails
@@ -485,6 +290,7 @@ mod request_builder {
     }
 }
 
+#[doc(hidden)]
 pub enum Method {
     Delete,
     Get,
@@ -508,6 +314,7 @@ impl Method {
     }
 }
 
+#[doc(hidden)]
 pub struct Request<'a, T> {
     method: Method,
     endpoint: Cow<'a, str>,
@@ -574,73 +381,6 @@ pub async fn schema(remote: &'static str) -> Result<Option<types::Schema>, Error
 #[cfg(feature = "batched")]
 #[cfg(test)]
 mod tests {
-    use crate::rest::Method;
-    use crate::RequestClient;
-
-    #[tokio::test]
-    async fn batch_test() {
-        use crate::rest::{
-            batch::{Request, RequestType},
-            LcuClient,
-        };
-
-        let page = serde_json::json!(
-            {
-              "blocks": [
-                {
-                  "items": [
-                    {
-                      "count": 1,
-                      "id": "3153"
-                    },
-                  ],
-                  "type": "Final Build"
-                }
-              ],
-              "title": "Test Build",
-            }
-        );
-        let client = RequestClient::new();
-
-        let lcu_client = LcuClient::new(false).unwrap();
-
-        let request: serde_json::Value = lcu_client
-            .get("/lol-summoner/v1/current-summoner", &client)
-            .await
-            .unwrap();
-
-        let id = &request["summonerId"];
-
-        let endpoint = format!("/lol-item-sets/v1/item-sets/{id}/sets");
-
-        let mut json: serde_json::Value = lcu_client.get(endpoint.as_str(), &client).await.unwrap();
-
-        json["itemSets"].as_array_mut().unwrap().push(page);
-
-        let req = Request {
-            request_type: RequestType::Put(Some(&json)),
-            endpoint: format!("/lol-item-sets/v1/item-sets/{id}/sets").into(),
-        };
-
-        let result = lcu_client
-            .batched::<serde_json::Value>(&[req], 1, &client)
-            .await;
-
-        println!("{result:?}");
-
-        let request = super::Request::builder()
-            .method(Method::Post)
-            .endpoint(format!("/lol-item-sets/v1/item-sets/{id}/sets"))
-            .body(&json)
-            .build();
-
-        let a = lcu_client
-            .request::<_, serde_json::Value>(request, &client)
-            .await;
-
-        println!("{a:?}");
-    }
-
     #[tokio::test]
     async fn test_schema_des() {
         let _schema = super::schema(

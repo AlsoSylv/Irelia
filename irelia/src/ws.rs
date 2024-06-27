@@ -33,6 +33,7 @@ pub struct LcuWebSocket {
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
+/// This is the ID of the subscriber when it's inserted into the list, corresponding to the index it's stored at
 pub struct SubscriberID(usize);
 
 enum ChannelMessage {
@@ -52,6 +53,7 @@ impl ErrorHandler for DefaultErrorHandler {
 }
 
 #[derive(PartialEq)]
+/// Enum representing what to do next, either continue the loop or attempt to reconnect
 pub enum Flow {
     TryReconnect,
     Continue,
@@ -375,6 +377,7 @@ mod error {
     use std::fmt::{Display, Formatter};
 
     #[derive(Debug)]
+    /// Enum of possible errors that will be passed to the `ErrorHandler`
     pub enum Error {
         Tungstenite(tungstenite::Error),
         ProcessInfo(crate::process_info::Error),
