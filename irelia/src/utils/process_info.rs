@@ -25,6 +25,11 @@ pub const GAME_PROCESS_NAME: &str = "League of Legends";
 /// const copy of the encoder
 pub(crate) const ENCODER: Encoder = Encoder::new();
 
+#[cfg(all(docsrs, target_os = "linux"))]
+pub const GAME_PROCESS_NAME: &str = "";
+#[cfg(all(docsrs, target_os = "linux"))]
+pub const CLIENT_PROCESS_NAME: &str = "";
+
 /// Gets the port and auth for the client via the process id
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
