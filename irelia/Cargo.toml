@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 rust-version = "1.79.0"
 description = "A Rust wrapper around the native LoL APIs"
@@ -110,3 +110,7 @@ encoder_simd = ["irelia_encoder/simd"]
 
 [package.metadata.docs.rs]
 features = ["full", "replay"]
+
+default-toolchain = "x86_64-pc-windows-msvc"
+
+targets = ["x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
