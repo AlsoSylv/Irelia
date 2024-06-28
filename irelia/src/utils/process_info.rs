@@ -245,6 +245,7 @@ impl Error {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
+/// What caused the error
 pub enum ErrorKind {
     Io(std::io::ErrorKind),
     LockFileNotFound,
