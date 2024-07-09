@@ -148,7 +148,7 @@ impl ReplayClient {
     /// This will return an error if there is not an active replay running
     pub async fn post_sequence(
         &self,
-        body: Option<impl Borrow<Sequence> + Serialize>,
+        body: Option<impl Borrow<Sequence> + Serialize + Send + Sync>,
         request_client: &RequestClient,
     ) -> Result<Sequence, Error> {
         self.replay("sequence", "POST", Some(body.borrow()), request_client)
@@ -164,7 +164,7 @@ impl ReplayClient {
         &self,
         endpoint: &str,
         method: &'static str,
-        body: Option<impl Serialize>,
+        body: Option<impl Serialize + Send>,
         request_client: &RequestClient,
     ) -> Result<R, Error>
     where

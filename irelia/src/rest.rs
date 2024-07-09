@@ -15,7 +15,7 @@ use crate::{utils::process_info::get_running_client, Error, RequestClient};
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
-    url: SocketAddr,
+    url: String,
     auth_header: String,
 }
 
@@ -62,8 +62,8 @@ impl LcuClient {
     #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
-    pub fn new_with_credentials(url: SocketAddr, auth_header: String) -> LcuClient {
-        LcuClient { url, auth_header }
+    pub fn new_with_credentials(url: SocketAddr, auth_header: String) -> Self {
+        Self { url: url.to_string(), auth_header }
     }
 
     /// Queries the client or lock file, getting a new url and auth header
@@ -80,20 +80,14 @@ impl LcuClient {
 
     /// Sets the url and auth header according to the auth and port provided
     pub fn reconnect_with_credentials(&mut self, url: SocketAddr, auth: String) {
-        self.url = url;
+        self.url = url.to_string();
         self.auth_header = auth;
     }
 
     #[must_use]
     /// Returns a reference to the URL in use
-    pub fn url(&self) -> &SocketAddr {
+    pub fn url(&self) -> &str {
         &self.url
-    }
-
-    #[must_use]
-    /// Returns a reference to the URL in use
-    pub fn url_string(&self) -> String {
-        self.url.to_string()
     }
 
     #[must_use]
@@ -108,7 +102,7 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running, or the provided type is invalid
     pub async fn delete<R: DeserializeOwned>(
         &self,
-        endpoint: impl AsRef<str>,
+        endpoint: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<R, Error> {
         self.lcu_request(endpoint.as_ref(), "DELETE", None::<()>, request_client)
@@ -127,7 +121,7 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running, or the provided type is invalid
     pub async fn get<R: DeserializeOwned>(
         &self,
-        endpoint: impl AsRef<str>,
+        endpoint: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<R, Error> {
         self.lcu_request(endpoint.as_ref(), "GET", None::<()>, request_client)
@@ -140,12 +134,12 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running
     pub async fn head(
         &self,
-        endpoint: impl AsRef<str>,
+        endpoint: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<hyper::Response<hyper::body::Incoming>, Error> {
         request_client
             .raw_request_template(
-                &self.url_string(),
+                &self.url,
                 endpoint.as_ref(),
                 "HEAD",
                 None::<()>,
@@ -159,9 +153,9 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn patch<T: Serialize, R: DeserializeOwned>(
+    pub async fn patch<T: Serialize + Send, R: DeserializeOwned>(
         &self,
-        endpoint: impl AsRef<str>,
+        endpoint: impl AsRef<str> + Send,
         body: T,
         request_client: &RequestClient,
     ) -> Result<R, Error> {
@@ -173,9 +167,9 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn post<T: Serialize, R: DeserializeOwned>(
+    pub async fn post<T: Serialize + Send, R: DeserializeOwned>(
         &self,
-        endpoint: impl AsRef<str>,
+        endpoint: impl AsRef<str> + Send,
         body: T,
         request_client: &RequestClient,
     ) -> Result<R, Error> {
@@ -187,9 +181,9 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn put<T: Serialize, R: DeserializeOwned>(
+    pub async fn put<T: Serialize + Send, R: DeserializeOwned>(
         &self,
-        endpoint: impl AsRef<str>,
+        endpoint: impl AsRef<str> + Send,
         body: T,
         request_client: &RequestClient,
     ) -> Result<R, Error> {
@@ -205,7 +199,7 @@ impl LcuClient {
     /// - If the provided return type is invalid
     /// - It is unable to connect to the LCU
     /// - The LCU does not have the endpoint specified  
-    pub async fn request<T: Serialize, R: DeserializeOwned>(
+    pub async fn request<T: Serialize + Send, R: DeserializeOwned>(
         &self,
         request: Request<'_, T>,
         request_client: &RequestClient,
@@ -226,7 +220,7 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     ///
     /// If the response body is empty, this will return an unexpected EOF error
-    pub async fn lcu_request<T: Serialize, R: DeserializeOwned>(
+    pub async fn lcu_request<T: Serialize + Send, R: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
@@ -237,7 +231,7 @@ impl LcuClient {
 
         let buf = request_client
             .request_template(
-                &self.url_string(),
+                &self.url,
                 endpoint,
                 method,
                 body,
@@ -274,7 +268,7 @@ mod request_builder {
             self
         }
 
-        pub fn method(mut self, method: Method) -> Self {
+        pub const fn method(mut self, method: Method) -> Self {
             self.method = Some(method);
 
             self
@@ -302,14 +296,14 @@ pub enum Method {
 
 impl Method {
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         match self {
-            Method::Delete => "DELETE",
-            Method::Get => "GET",
-            Method::Head => "HEAD",
-            Method::Patch => "PATCH",
-            Method::Post => "POST",
-            Method::Put => "PUT",
+            Self::Delete => "DELETE",
+            Self::Get => "GET",
+            Self::Head => "HEAD",
+            Self::Patch => "PATCH",
+            Self::Post => "POST",
+            Self::Put => "PUT",
         }
     }
 }
@@ -334,7 +328,7 @@ impl<'a> Request<'a, ()> {
 
 impl<'a, T: Serialize> Request<'a, T> {
     #[must_use]
-    pub fn builder() -> RequestBuilder<'a, T> {
+    pub const fn builder() -> RequestBuilder<'a, T> {
         RequestBuilder {
             method: None,
             endpoint: None,
@@ -378,7 +372,6 @@ pub async fn schema(remote: &'static str) -> Result<Option<types::Schema>, Error
     Ok(Some(serde_json::from_slice(&body)?))
 }
 
-#[cfg(feature = "batched")]
 #[cfg(test)]
 mod tests {
     #[tokio::test]

@@ -8,7 +8,7 @@
 
 use serde::de::{Error, IgnoredAny, Unexpected, Visitor};
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize as DeserializeTrait, Deserializer, Serialize as SerializeTrait, Serializer};
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::fmt::Formatter;
@@ -49,19 +49,19 @@ fn deserialize_active_player<'de, D: Deserializer<'de>>(
 
 impl AllGameData {
     #[must_use]
-    pub fn active_player(&self) -> Option<&ActivePlayer> {
+    pub const fn active_player(&self) -> Option<&ActivePlayer> {
         self.active_player.as_ref()
     }
     #[must_use]
-    pub fn all_players(&self) -> &[AllPlayer] {
+    pub const fn all_players(&self) -> &[AllPlayer] {
         &self.all_players
     }
     #[must_use]
-    pub fn events(&self) -> &Events {
+    pub const fn events(&self) -> &Events {
         &self.events
     }
     #[must_use]
-    pub fn game_data(&self) -> &GameData {
+    pub const fn game_data(&self) -> &GameData {
         &self.game_data
     }
 }
@@ -86,7 +86,7 @@ struct RiotId {
 
 impl RiotId {
     #[must_use]
-    fn riot_id(&self) -> &str {
+    const fn riot_id(&self) -> &str {
         &self.riot_id
     }
     #[must_use]
@@ -113,7 +113,7 @@ impl RiotId {
     }
 }
 
-impl<'de> Deserialize<'de> for RiotId {
+impl<'de> DeserializeTrait<'de> for RiotId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -137,14 +137,14 @@ impl<'de> Deserialize<'de> for RiotId {
             )
         })?;
 
-        Ok(RiotId {
+        Ok(Self {
             riot_id: active_player.riot_id,
             separator_index,
         })
     }
 }
 
-impl Serialize for RiotId {
+impl SerializeTrait for RiotId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -161,27 +161,27 @@ impl Serialize for RiotId {
 
 impl ActivePlayer {
     #[must_use]
-    pub fn abilities(&self) -> &Abilities {
+    pub const fn abilities(&self) -> &Abilities {
         &self.abilities
     }
     #[must_use]
-    pub fn champion_stats(&self) -> &ChampionStats {
+    pub const fn champion_stats(&self) -> &ChampionStats {
         &self.champion_stats
     }
     #[must_use]
-    pub fn current_gold(&self) -> f64 {
+    pub const fn current_gold(&self) -> f64 {
         self.current_gold
     }
     #[must_use]
-    pub fn full_runes(&self) -> &Runes {
+    pub const fn full_runes(&self) -> &Runes {
         &self.full_runes
     }
     #[must_use]
-    pub fn level(&self) -> u8 {
+    pub const fn level(&self) -> u8 {
         self.level
     }
     #[must_use]
-    pub fn riot_id(&self) -> &str {
+    pub const fn riot_id(&self) -> &str {
         self.riot_id.riot_id()
     }
     #[must_use]
@@ -198,7 +198,7 @@ impl ActivePlayer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Abilities {
     passive: AbilityInfo,
@@ -210,28 +210,28 @@ pub struct Abilities {
 
 impl Abilities {
     #[must_use]
-    pub fn passive(&self) -> &AbilityInfo {
+    pub const fn passive(&self) -> &AbilityInfo {
         &self.passive
     }
     #[must_use]
-    pub fn q(&self) -> &Ability {
+    pub const fn q(&self) -> &Ability {
         &self.q
     }
     #[must_use]
-    pub fn w(&self) -> &Ability {
+    pub const fn w(&self) -> &Ability {
         &self.w
     }
     #[must_use]
-    pub fn e(&self) -> &Ability {
+    pub const fn e(&self) -> &Ability {
         &self.e
     }
     #[must_use]
-    pub fn r(&self) -> &Ability {
+    pub const fn r(&self) -> &Ability {
         &self.r
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityInfo {
     display_name: Box<str>,
@@ -242,24 +242,24 @@ pub struct AbilityInfo {
 
 impl AbilityInfo {
     #[must_use]
-    pub fn display_name(&self) -> &str {
+    pub const fn display_name(&self) -> &str {
         &self.display_name
     }
     #[must_use]
-    pub fn id(&self) -> &str {
+    pub const fn id(&self) -> &str {
         &self.id
     }
     #[must_use]
-    pub fn raw_description(&self) -> &str {
+    pub const fn raw_description(&self) -> &str {
         &self.raw_description
     }
     #[must_use]
-    pub fn raw_display_name(&self) -> &str {
+    pub const fn raw_display_name(&self) -> &str {
         &self.raw_display_name
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ability {
     ability_level: u8,
@@ -269,11 +269,11 @@ pub struct Ability {
 
 impl Ability {
     #[must_use]
-    pub fn ability_level(&self) -> u8 {
+    pub const fn ability_level(&self) -> u8 {
         self.ability_level
     }
     #[must_use]
-    pub fn ability_info(&self) -> &AbilityInfo {
+    pub const fn ability_info(&self) -> &AbilityInfo {
         &self.ability_info
     }
 }
@@ -317,132 +317,132 @@ pub struct ChampionStats {
 
 impl ChampionStats {
     #[must_use]
-    pub fn ability_power(&self) -> f64 {
+    pub const fn ability_power(&self) -> f64 {
         self.ability_power
     }
     #[must_use]
-    pub fn armor(&self) -> f64 {
+    pub const fn armor(&self) -> f64 {
         self.armor
     }
     #[must_use]
-    pub fn armor_penetration_flat(&self) -> f64 {
+    pub const fn armor_penetration_flat(&self) -> f64 {
         self.armor_penetration_flat
     }
     #[must_use]
-    pub fn armor_penetration_percent(&self) -> f64 {
+    pub const fn armor_penetration_percent(&self) -> f64 {
         self.armor_penetration_percent
     }
     #[must_use]
-    pub fn attack_damage(&self) -> f64 {
+    pub const fn attack_damage(&self) -> f64 {
         self.attack_damage
     }
     #[must_use]
-    pub fn attack_range(&self) -> f64 {
+    pub const fn attack_range(&self) -> f64 {
         self.attack_range
     }
     #[must_use]
-    pub fn attack_speed(&self) -> f64 {
+    pub const fn attack_speed(&self) -> f64 {
         self.attack_speed
     }
     #[must_use]
-    pub fn bonus_armor_penetration_percent(&self) -> f64 {
+    pub const fn bonus_armor_penetration_percent(&self) -> f64 {
         self.bonus_armor_penetration_percent
     }
     #[must_use]
-    pub fn bonus_magic_penetration_percent(&self) -> f64 {
+    pub const fn bonus_magic_penetration_percent(&self) -> f64 {
         self.bonus_magic_penetration_percent
     }
     #[must_use]
-    pub fn ability_haste(&self) -> f64 {
+    pub const fn ability_haste(&self) -> f64 {
         self.ability_haste
     }
     #[must_use]
-    pub fn crit_chance(&self) -> f64 {
+    pub const fn crit_chance(&self) -> f64 {
         self.crit_chance
     }
     #[must_use]
-    pub fn crit_damage(&self) -> f64 {
+    pub const fn crit_damage(&self) -> f64 {
         self.crit_damage
     }
     #[must_use]
-    pub fn current_health(&self) -> f64 {
+    pub const fn current_health(&self) -> f64 {
         self.current_health
     }
     #[must_use]
-    pub fn health_regen_rate(&self) -> f64 {
+    pub const fn health_regen_rate(&self) -> f64 {
         self.health_regen_rate
     }
     #[must_use]
-    pub fn life_steal(&self) -> f64 {
+    pub const fn life_steal(&self) -> f64 {
         self.life_steal
     }
     #[must_use]
-    pub fn magic_lethality(&self) -> f64 {
+    pub const fn magic_lethality(&self) -> f64 {
         self.magic_lethality
     }
     #[must_use]
-    pub fn magic_penetration_flat(&self) -> f64 {
+    pub const fn magic_penetration_flat(&self) -> f64 {
         self.magic_penetration_flat
     }
     #[must_use]
-    pub fn magic_penetration_percent(&self) -> f64 {
+    pub const fn magic_penetration_percent(&self) -> f64 {
         self.magic_penetration_percent
     }
     #[must_use]
-    pub fn magic_resist(&self) -> f64 {
+    pub const fn magic_resist(&self) -> f64 {
         self.magic_resist
     }
     #[must_use]
-    pub fn max_health(&self) -> f64 {
+    pub const fn max_health(&self) -> f64 {
         self.max_health
     }
     #[must_use]
-    pub fn move_speed(&self) -> f64 {
+    pub const fn move_speed(&self) -> f64 {
         self.move_speed
     }
     #[must_use]
-    pub fn physical_lethality(&self) -> f64 {
+    pub const fn physical_lethality(&self) -> f64 {
         self.physical_lethality
     }
     #[must_use]
-    pub fn resource_max(&self) -> f64 {
+    pub const fn resource_max(&self) -> f64 {
         self.resource_max
     }
     #[must_use]
-    pub fn resource_regen_rate(&self) -> f64 {
+    pub const fn resource_regen_rate(&self) -> f64 {
         self.resource_regen_rate
     }
     #[must_use]
-    pub fn resource_type(&self) -> &AbilityResource {
+    pub const fn resource_type(&self) -> &AbilityResource {
         &self.resource_type
     }
     #[must_use]
-    pub fn resource_value(&self) -> f64 {
+    pub const fn resource_value(&self) -> f64 {
         self.resource_value
     }
     #[must_use]
-    pub fn spell_vamp(&self) -> f64 {
+    pub const fn spell_vamp(&self) -> f64 {
         self.spell_vamp
     }
     #[must_use]
-    pub fn tenacity(&self) -> f64 {
+    pub const fn tenacity(&self) -> f64 {
         self.tenacity
     }
     #[must_use]
-    pub fn heal_shield_power(&self) -> f64 {
+    pub const fn heal_shield_power(&self) -> f64 {
         self.heal_shield_power
     }
     #[must_use]
-    pub fn omni_vamp(&self) -> f64 {
+    pub const fn omni_vamp(&self) -> f64 {
         self.omni_vamp
     }
     #[must_use]
-    pub fn physical_vamp(&self) -> f64 {
+    pub const fn physical_vamp(&self) -> f64 {
         self.physical_vamp
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Runes {
     keystone: Rune,
@@ -454,28 +454,28 @@ pub struct Runes {
 
 impl Runes {
     #[must_use]
-    pub fn keystone(&self) -> &Rune {
+    pub const fn keystone(&self) -> &Rune {
         &self.keystone
     }
     #[must_use]
-    pub fn primary_rune_tree(&self) -> &Rune {
+    pub const fn primary_rune_tree(&self) -> &Rune {
         &self.primary_rune_tree
     }
     #[must_use]
-    pub fn secondary_rune_tree(&self) -> &Rune {
+    pub const fn secondary_rune_tree(&self) -> &Rune {
         &self.secondary_rune_tree
     }
     #[must_use]
-    pub fn general_runes(&self) -> Option<&[Rune; 6]> {
+    pub const fn general_runes(&self) -> Option<&[Rune; 6]> {
         self.general_runes.as_ref()
     }
     #[must_use]
-    pub fn stat_runes(&self) -> Option<&[StatRune; 3]> {
+    pub const fn stat_runes(&self) -> Option<&[StatRune; 3]> {
         self.stat_runes.as_ref()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rune {
     display_name: Box<str>,
@@ -487,24 +487,24 @@ pub struct Rune {
 
 impl Rune {
     #[must_use]
-    pub fn display_name(&self) -> &str {
+    pub const fn display_name(&self) -> &str {
         &self.display_name
     }
     #[must_use]
-    pub fn id(&self) -> u16 {
+    pub const fn id(&self) -> u16 {
         self.id
     }
     #[must_use]
-    pub fn raw_description(&self) -> &str {
+    pub const fn raw_description(&self) -> &str {
         &self.raw_description
     }
     #[must_use]
-    pub fn raw_display_name(&self) -> &str {
+    pub const fn raw_display_name(&self) -> &str {
         &self.raw_display_name
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatRune {
     // These are around 5000
@@ -514,11 +514,11 @@ pub struct StatRune {
 
 impl StatRune {
     #[must_use]
-    pub fn id(&self) -> u16 {
+    pub const fn id(&self) -> u16 {
         self.id
     }
     #[must_use]
-    pub fn raw_description(&self) -> &str {
+    pub const fn raw_description(&self) -> &str {
         &self.raw_description
     }
 }
@@ -548,7 +548,7 @@ pub struct AllPlayer {
     raw_skin_name: Option<Box<str>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Position {
     Top,
@@ -564,19 +564,19 @@ pub enum Position {
 
 impl AllPlayer {
     #[must_use]
-    pub fn champion_name(&self) -> &str {
+    pub const fn champion_name(&self) -> &str {
         &self.champion_name
     }
     #[must_use]
-    pub fn is_bot(&self) -> bool {
+    pub const fn is_bot(&self) -> bool {
         self.is_bot
     }
     #[must_use]
-    pub fn is_dead(&self) -> bool {
+    pub const fn is_dead(&self) -> bool {
         self.is_dead
     }
     #[must_use]
-    pub fn items(&self) -> &[Option<Item>; 7] {
+    pub const fn items(&self) -> &[Option<Item>; 7] {
         &self.items
     }
     #[must_use]
@@ -584,39 +584,39 @@ impl AllPlayer {
         &self.items[0..6]
     }
     #[must_use]
-    pub fn ward(&self) -> &Option<Item> {
+    pub const fn ward(&self) -> &Option<Item> {
         &self.items[6]
     }
     #[must_use]
-    pub fn level(&self) -> u8 {
+    pub const fn level(&self) -> u8 {
         self.level
     }
     #[must_use]
-    pub fn position(&self) -> &Position {
+    pub const fn position(&self) -> &Position {
         &self.position
     }
     #[must_use]
-    pub fn raw_champion_name(&self) -> &str {
+    pub const fn raw_champion_name(&self) -> &str {
         &self.raw_champion_name
     }
     #[must_use]
-    pub fn respawn_timer(&self) -> Duration {
+    pub const fn respawn_timer(&self) -> Duration {
         self.respawn_timer
     }
     #[must_use]
-    pub fn runes(&self) -> &Runes {
+    pub const fn runes(&self) -> &Runes {
         &self.runes
     }
     #[must_use]
-    pub fn scores(&self) -> &Scores {
+    pub const fn scores(&self) -> &Scores {
         &self.scores
     }
     #[must_use]
-    pub fn skin_id(&self) -> i64 {
+    pub const fn skin_id(&self) -> i64 {
         self.skin_id
     }
     #[must_use]
-    pub fn riot_id(&self) -> &str {
+    pub const fn riot_id(&self) -> &str {
         self.riot_id.riot_id()
     }
     #[must_use]
@@ -628,11 +628,11 @@ impl AllPlayer {
         self.riot_id.tag_line()
     }
     #[must_use]
-    pub fn summoner_spells(&self) -> &SummonerSpells {
+    pub const fn summoner_spells(&self) -> &SummonerSpells {
         &self.summoner_spells
     }
     #[must_use]
-    pub fn team(&self) -> &TeamID {
+    pub const fn team(&self) -> &TeamID {
         &self.team
     }
     #[must_use]
@@ -651,7 +651,7 @@ impl AllPlayer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq , Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores {
     kills: u8,
@@ -663,35 +663,35 @@ pub struct Scores {
 
 impl Scores {
     #[must_use]
-    pub fn kills(&self) -> u8 {
+    pub const fn kills(&self) -> u8 {
         self.kills
     }
     #[must_use]
-    pub fn deaths(&self) -> u8 {
+    pub const fn deaths(&self) -> u8 {
         self.deaths
     }
     #[must_use]
-    pub fn assists(&self) -> u8 {
+    pub const fn assists(&self) -> u8 {
         self.assists
     }
     #[must_use]
-    pub fn creep_score(&self) -> u16 {
+    pub const fn creep_score(&self) -> u16 {
         self.creep_score
     }
     #[must_use]
-    pub fn ward_score(&self) -> f64 {
+    pub const fn ward_score(&self) -> f64 {
         self.ward_score
     }
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     #[must_use]
     /// This should match how it's displayed on the tab screen
-    pub fn ward_score_u64(&self) -> u64 {
+    pub const fn ward_score_u64(&self) -> u64 {
         self.ward_score as u64
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpells {
     summoner_spell_one: SummonerSpell,
@@ -700,11 +700,11 @@ pub struct SummonerSpells {
 
 impl SummonerSpells {
     #[must_use]
-    pub fn summoner_spell_one(&self) -> &SummonerSpell {
+    pub const fn summoner_spell_one(&self) -> &SummonerSpell {
         &self.summoner_spell_one
     }
     #[must_use]
-    pub fn summoner_spell_two(&self) -> &SummonerSpell {
+    pub const fn summoner_spell_two(&self) -> &SummonerSpell {
         &self.summoner_spell_two
     }
 }
@@ -721,7 +721,7 @@ impl core::ops::Index<usize> for SummonerSpells {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpell {
     display_name: Box<str>,
@@ -731,20 +731,20 @@ pub struct SummonerSpell {
 
 impl SummonerSpell {
     #[must_use]
-    pub fn display_name(&self) -> &str {
+    pub const fn display_name(&self) -> &str {
         &self.display_name
     }
     #[must_use]
-    pub fn raw_description(&self) -> &str {
+    pub const fn raw_description(&self) -> &str {
         &self.raw_description
     }
     #[must_use]
-    pub fn raw_display_name(&self) -> &str {
+    pub const fn raw_display_name(&self) -> &str {
         &self.raw_display_name
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
     can_use: bool,
@@ -764,44 +764,44 @@ pub struct Item {
 
 impl Item {
     #[must_use]
-    pub fn can_use(&self) -> bool {
+    pub const fn can_use(&self) -> bool {
         self.can_use
     }
     #[must_use]
-    pub fn consumable(&self) -> bool {
+    pub const fn consumable(&self) -> bool {
         self.consumable
     }
     #[must_use]
-    pub fn count(&self) -> u8 {
+    pub const fn count(&self) -> u8 {
         self.count
     }
     #[must_use]
-    pub fn display_name(&self) -> &str {
+    pub const fn display_name(&self) -> &str {
         &self.display_name
     }
     #[must_use]
-    pub fn item_id(&self) -> u32 {
+    pub const fn item_id(&self) -> u32 {
         self.item_id
     }
     #[must_use]
-    pub fn price(&self) -> u16 {
+    pub const fn price(&self) -> u16 {
         self.price
     }
     #[must_use]
-    pub fn raw_description(&self) -> &str {
+    pub const fn raw_description(&self) -> &str {
         &self.raw_description
     }
     #[must_use]
-    pub fn raw_display_name(&self) -> &str {
+    pub const fn raw_display_name(&self) -> &str {
         &self.raw_display_name
     }
     #[must_use]
-    pub fn slot(&self) -> u8 {
+    pub const fn slot(&self) -> u8 {
         self.slot
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Events {
     events: Box<[Event]>,
@@ -837,7 +837,7 @@ impl Events {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Event {
     #[serde(rename = "EventID")]
@@ -848,7 +848,7 @@ pub struct Event {
     event_details: EventDetails,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all_fields = "PascalCase")]
 #[serde(tag = "EventName")]
 pub enum EventDetails {
@@ -902,7 +902,7 @@ pub enum EventDetails {
     Unknown(serde_json::Value),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DragonType {
     Fire,
     Earth,
@@ -916,7 +916,7 @@ pub enum DragonType {
 }
 
 /// This represents all the data concerning a Turret or Inhibitor
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Structure {
     /// This is either `StructureType::Turret` or `StructureType::Barracks` aka inhibitor
     structure_type: StructureType,
@@ -976,13 +976,13 @@ impl Structure {
 
     #[must_use]
     /// Either Turret or Barracks (aka inhibitor)
-    pub fn structure_type(&self) -> &StructureType {
+    pub const fn structure_type(&self) -> &StructureType {
         &self.structure_type
     }
 
     #[must_use]
     /// This still exists in aram, but it's useless
-    pub fn lane(&self) -> &Lane {
+    pub const fn lane(&self) -> &Lane {
         &self.lane
     }
 
@@ -1001,7 +1001,7 @@ impl Structure {
     #[must_use]
     /// Blue side = Order
     /// Red side = Chaos
-    pub fn team_id(&self) -> &TeamID {
+    pub const fn team_id(&self) -> &TeamID {
         &self.team_id
     }
 
@@ -1053,7 +1053,7 @@ impl Structure {
     /// </ul>
     ///
     /// <img src="https://raw.githubusercontent.com/AlsoSylv/Irelia/master/irelia/src/in_game/StructureNames.png" width="600" height = "200"/>
-    pub fn place(&self) -> u8 {
+    pub const fn place(&self) -> u8 {
         self.place
     }
 
@@ -1185,7 +1185,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
     }
 }
 
-impl Serialize for Structure {
+impl SerializeTrait for Structure {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -1214,20 +1214,20 @@ impl Serialize for Structure {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructureType {
     Turret,
     Barracks,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lane {
     Top,
     Mid,
     Bot,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructurePlace {
     Outer,
     Middle,
@@ -1236,7 +1236,7 @@ pub enum StructurePlace {
     BotNexus,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct KillInfo {
     #[serde(with = "option_slice")]
@@ -1255,7 +1255,7 @@ impl KillInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct MonsterKill {
     #[serde(flatten)]
@@ -1266,27 +1266,27 @@ pub struct MonsterKill {
 
 impl MonsterKill {
     #[must_use]
-    pub fn kill_info(&self) -> &KillInfo {
+    pub const fn kill_info(&self) -> &KillInfo {
         &self.kill_info
     }
     #[must_use]
-    pub fn stolen(&self) -> bool {
+    pub const fn stolen(&self) -> bool {
         self.stolen
     }
 }
 
 impl Event {
     #[must_use]
-    pub fn event_id(&self) -> i64 {
+    pub const fn event_id(&self) -> i64 {
         self.event_id
     }
     #[must_use]
-    pub fn event_time(&self) -> Duration {
+    pub const fn event_time(&self) -> Duration {
         self.event_time
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameData {
     game_mode: GameMode,
@@ -1297,7 +1297,7 @@ pub struct GameData {
     map_terrain: MapTerrain,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum GameMode {
     #[serde(rename = "CLASSIC")]
@@ -1329,7 +1329,7 @@ pub enum GameMode {
     Other(Box<str>),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum MapName {
     #[serde(rename = "Map3")]
@@ -1353,7 +1353,7 @@ pub enum MapName {
     Other(Box<str>),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MapTerrain {
     Default,
     Infernal,
@@ -1366,28 +1366,28 @@ pub enum MapTerrain {
 
 impl GameData {
     #[must_use]
-    pub fn game_mode(&self) -> &GameMode {
+    pub const fn game_mode(&self) -> &GameMode {
         &self.game_mode
     }
     #[must_use]
-    pub fn game_time(&self) -> Duration {
+    pub const fn game_time(&self) -> Duration {
         self.game_time
     }
     #[must_use]
-    pub fn map_name(&self) -> &MapName {
+    pub const fn map_name(&self) -> &MapName {
         &self.map_name
     }
     #[must_use]
-    pub fn map_number(&self) -> u8 {
+    pub const fn map_number(&self) -> u8 {
         self.map_number
     }
     #[must_use]
-    pub fn map_terrain(&self) -> &MapTerrain {
+    pub const fn map_terrain(&self) -> &MapTerrain {
         &self.map_terrain
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 /// Enum representation of different team IDs
 pub enum TeamID {
@@ -1399,7 +1399,7 @@ pub enum TeamID {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 /// Ability Resource
 pub enum AbilityResource {
@@ -1538,14 +1538,14 @@ pub(crate) mod duration {
     use serde::{Deserialize, Deserializer, Serializer};
     use time::Duration;
 
-    pub(crate) fn serialize<S: Serializer>(
+    pub fn serialize<S: Serializer>(
         duration: &Duration,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
         serializer.serialize_f64(duration.as_seconds_f64())
     }
 
-    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+    pub fn deserialize<'de, D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<Duration, D::Error> {
         f64::deserialize(deserializer).map(Duration::seconds_f64)

@@ -27,13 +27,13 @@ pub struct GameClient;
 
 impl GameClient {
     #[must_use]
-    pub fn new() -> GameClient {
-        GameClient
+    pub const fn new() -> Self {
+        Self
     }
 
     #[must_use]
     /// Returns the url, which is currently static
-    pub fn url(&self) -> &str {
+    pub const fn url(&self) -> &str {
         URL
     }
 
@@ -159,7 +159,7 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_scores(
         &self,
-        summoner: impl AsRef<str>,
+        summoner: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<Scores, Error> {
         self.live_client("playerscores", Some(summoner.as_ref()), request_client)
@@ -173,7 +173,7 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_summoner_spells(
         &self,
-        riot_id: impl AsRef<str>,
+        riot_id: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<SummonerSpells, Error> {
         self.live_client(
@@ -191,7 +191,7 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_main_runes(
         &self,
-        riot_id: impl AsRef<str>,
+        riot_id: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<Runes, Error> {
         self.live_client("playermainrunes", Some(riot_id.as_ref()), request_client)
@@ -205,7 +205,7 @@ impl GameClient {
     /// This will return an error if the game API is not running
     pub async fn player_items(
         &self,
-        riot_id: impl AsRef<str>,
+        riot_id: impl AsRef<str> + Send,
         request_client: &RequestClient,
     ) -> Result<Box<[Item]>, Error> {
         self.live_client("playeritems", Some(riot_id.as_ref()), request_client)
@@ -222,11 +222,7 @@ impl GameClient {
         event_id: Option<i32>,
         request_client: &RequestClient,
     ) -> Result<Events, Error> {
-        let event_id = if let Some(id) = event_id {
-            format!("?eventID={id}")
-        } else {
-            String::new()
-        };
+        let event_id = event_id.map_or(String::new(), |id| format!("?eventID={id}"));
         let endpoint = format!("eventdata{event_id}");
         self.live_client(&endpoint, None, request_client).await
     }
@@ -250,11 +246,7 @@ impl GameClient {
     ) -> Result<R, Error> {
         use hyper::body::Buf;
 
-        let endpoint = if let Some(riot_id) = riot_id {
-            format!("/liveclientdata/{endpoint}?riotId={riot_id}")
-        } else {
-            format!("/liveclientdata/{endpoint}")
-        };
+        let endpoint = riot_id.map_or_else(|| format!("/liveclientdata/{endpoint}"), |riot_id| format!("/liveclientdata/{endpoint}?riotId={riot_id}"));
 
         let buf = request_client
             .request_template(
@@ -273,6 +265,6 @@ impl GameClient {
 
 impl Default for GameClient {
     fn default() -> Self {
-        GameClient
+        Self
     }
 }

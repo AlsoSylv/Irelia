@@ -25,7 +25,7 @@ fn connector_internal() -> rustls::ClientConfig {
         .with_no_client_auth()
 }
 
-pub(crate) fn connector() -> &'static rustls::ClientConfig {
+pub fn connector() -> &'static rustls::ClientConfig {
     &RUSTLS_CLIENT_CONFIG
 }
 
@@ -35,7 +35,7 @@ struct LazyLock<T, F = fn() -> T> {
 }
 
 impl<T, F> LazyLock<T, F> {
-    const fn new(f: F) -> LazyLock<T, F> {
+    const fn new(f: F) -> Self {
         Self {
             data: std::sync::OnceLock::new(),
             f,

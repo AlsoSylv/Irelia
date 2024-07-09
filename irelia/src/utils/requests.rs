@@ -31,7 +31,7 @@ pub struct RequestClient {
 impl RequestClient {
     #[must_use]
     /// Creates a client to be passed to the LCU and in game structs
-    pub fn new() -> RequestClient {
+    pub fn new() -> Self {
         // Get a client config using the riotgames.pem file
         let tls = connector();
         // Set up an HTTPS only client, with just the client config
@@ -43,7 +43,7 @@ impl RequestClient {
         // Make the new client
         let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https);
 
-        RequestClient { client }
+        Self { client }
     }
 
     /// returns a raw hyper response, URIs always use HTTPS,
@@ -60,7 +60,7 @@ impl RequestClient {
         format: SerializeFormat,
     ) -> Result<Response<Incoming>, Error>
     where
-        T: Serialize,
+        T: Serialize + Send,
     {
         // Build the URI, always in https format
         let built_uri = Uri::builder()
@@ -115,7 +115,7 @@ impl RequestClient {
         format: SerializeFormat,
     ) -> Result<impl Buf + Sized, Error>
     where
-        T: Serialize,
+        T: Serialize + Send,
     {
         let response = self
             .raw_request_template(url, endpoint, method, body, auth_header, format)
@@ -132,23 +132,23 @@ impl RequestClient {
 #[repr(u8)]
 /// The format to use for requests, currently only JSON or `MsgPack`
 /// YAML support is possible if requested
-pub(crate) enum SerializeFormat {
+pub enum SerializeFormat {
     Json,
     MsgPack,
 }
 
 impl SerializeFormat {
-    fn to_mime(&self) -> &str {
+    const fn to_mime(&self) -> &str {
         match &self {
-            SerializeFormat::Json => "application/json",
-            SerializeFormat::MsgPack => "application/x-msgpack",
+            Self::Json => "application/json",
+            Self::MsgPack => "application/x-msgpack",
         }
     }
 
-    fn is_json(&self) -> bool {
+    const fn is_json(&self) -> bool {
         match &self {
-            SerializeFormat::Json => true,
-            SerializeFormat::MsgPack => false,
+            Self::Json => true,
+            Self::MsgPack => false,
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Types that the Websocket will respond with
 
 use serde::de::{Error, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize as DeserializeTrait, Deserializer, Serialize as SerializeTrait, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -48,7 +48,7 @@ pub struct EventData {
     pub uri: String,
 }
 
-impl<'de> Deserialize<'de> for RequestType {
+impl<'de> DeserializeTrait<'de> for RequestType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -56,21 +56,21 @@ impl<'de> Deserialize<'de> for RequestType {
         let num = u64::deserialize(deserializer)?;
 
         Ok(match num {
-            0 => RequestType::Welcome,
-            1 => RequestType::Prefix,
-            2 => RequestType::Call,
-            3 => RequestType::CallResult,
-            4 => RequestType::CallError,
-            5 => RequestType::Subscribe,
-            6 => RequestType::Unsubscribe,
-            7 => RequestType::Publish,
-            8 => RequestType::Event,
+            0 => Self::Welcome,
+            1 => Self::Prefix,
+            2 => Self::Call,
+            3 => Self::CallResult,
+            4 => Self::CallError,
+            5 => Self::Subscribe,
+            6 => Self::Unsubscribe,
+            7 => Self::Publish,
+            8 => Self::Event,
             _ => unreachable!("Only numbers 0-8 are valid"),
         })
     }
 }
 
-impl Serialize for RequestType {
+impl SerializeTrait for RequestType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -79,7 +79,7 @@ impl Serialize for RequestType {
     }
 }
 
-impl<'de> Deserialize<'de> for EventKind {
+impl<'de> DeserializeTrait<'de> for EventKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -117,7 +117,7 @@ impl<'de> Deserialize<'de> for EventKind {
     }
 }
 
-impl Serialize for EventKind {
+impl SerializeTrait for EventKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -129,21 +129,21 @@ impl Serialize for EventKind {
 impl EventKind {
     pub(super) fn to_string(&self) -> Cow<'static, str> {
         match self {
-            EventKind::JsonApiEvent => "OnJsonApiEvent".into(),
-            EventKind::LcdsEvent => "OnLcdsEvent".into(),
-            EventKind::Log => "OnLog".into(),
-            EventKind::RegionLocaleChanged => "OnRegionLocaleChanged".into(),
-            EventKind::ServiceProxyAsyncEvent => "OnServiceProxyAsyncEvent".into(),
-            EventKind::ServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
-            EventKind::ServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
-            EventKind::JsonApiEventCallback(callback) => {
+            Self::JsonApiEvent => "OnJsonApiEvent".into(),
+            Self::LcdsEvent => "OnLcdsEvent".into(),
+            Self::Log => "OnLog".into(),
+            Self::RegionLocaleChanged => "OnRegionLocaleChanged".into(),
+            Self::ServiceProxyAsyncEvent => "OnServiceProxyAsyncEvent".into(),
+            Self::ServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
+            Self::ServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
+            Self::JsonApiEventCallback(callback) => {
                 let mut callback = callback.replace('/', "_");
                 if &callback[0..1] == "_" {
                     callback.remove(0);
                 }
                 format!("OnJsonApiEvent_{callback}").into()
             }
-            EventKind::LcdsEventCallback(callback) => {
+            Self::LcdsEventCallback(callback) => {
                 let mut callback = callback.replace('/', "_");
                 callback.remove(0);
 
@@ -152,15 +152,15 @@ impl EventKind {
         }
     }
 
-    fn from_str(event: &str) -> EventKind {
+    fn from_str(event: &str) -> Self {
         match event {
-            "OnJsonApiEvent" => EventKind::JsonApiEvent,
-            "OnLcdsEvent" => EventKind::LcdsEvent,
-            "OnLog" => EventKind::Log,
-            "OnRegionLocaleChanged" => EventKind::RegionLocaleChanged,
-            "OnServiceProxyAsyncEvent" => EventKind::ServiceProxyAsyncEvent,
-            "OnServiceProxyMethodEvent" => EventKind::ServiceProxyMethodEvent,
-            "OnServiceProxyUuidEvent" => EventKind::ServiceProxyUuidEvent,
+            "OnJsonApiEvent" => Self::JsonApiEvent,
+            "OnLcdsEvent" => Self::LcdsEvent,
+            "OnLog" => Self::Log,
+            "OnRegionLocaleChanged" => Self::RegionLocaleChanged,
+            "OnServiceProxyAsyncEvent" => Self::ServiceProxyAsyncEvent,
+            "OnServiceProxyMethodEvent" => Self::ServiceProxyMethodEvent,
+            "OnServiceProxyUuidEvent" => Self::ServiceProxyUuidEvent,
             event => unreachable!("{}", event),
         }
     }

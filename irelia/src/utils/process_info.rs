@@ -92,7 +92,7 @@ pub fn get_running_client(
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file: [u8; 60] = [0; 60];
     let port: &str;
-    let auth: &str;
+    let auth: &str = 
 
     if client && !force_lock_file {
         let cmd = process.cmd();
@@ -120,10 +120,10 @@ pub fn get_running_client(
             ErrorKind::PortNotFound,
             "port was not found in command line",
         ))?;
-        auth = scoped_auth.ok_or(Error::new(
+        scoped_auth.ok_or(Error::new(
             ErrorKind::AuthTokenNotFound,
             "auth token was not found in command line",
-        ))?;
+        ))?
     } else {
         const LOCK_FILE_NOT_FOUND_ERROR: Error = Error::new(
             ErrorKind::LockFileNotFound,
@@ -173,11 +173,11 @@ pub fn get_running_client(
         ))?;
         // We moved the cursor, so the fourth element is the very next one
         // Which should be the auth string
-        auth = split.next().ok_or(Error::new(
+        split.next().ok_or(Error::new(
             ErrorKind::AuthTokenNotFound,
             "password was not found in lock file",
-        ))?;
-    }
+        ))?
+    };
 
     // Format the header without
     let mut needs_encoding = String::with_capacity(5 + auth.len());
@@ -218,14 +218,14 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 impl Error {
-    const fn new(kind: ErrorKind, message: &'static str) -> Error {
+    const fn new(kind: ErrorKind, message: &'static str) -> Self {
         Self {
             kind,
             message: std::borrow::Cow::Borrowed(message),
         }
     }
 
-    fn new_string(kind: ErrorKind, message: String) -> Error {
+    const fn new_string(kind: ErrorKind, message: String) -> Self {
         Self {
             kind,
             message: std::borrow::Cow::Owned(message),
@@ -234,7 +234,7 @@ impl Error {
 
     #[must_use]
     /// Returns true if it's an IO error, false otherwise
-    pub fn is_io_error(&self) -> bool {
+    pub const fn is_io_error(&self) -> bool {
         matches!(self.kind, ErrorKind::Io(_))
     }
 

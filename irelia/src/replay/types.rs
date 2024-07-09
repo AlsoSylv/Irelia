@@ -237,52 +237,6 @@ pub struct RecordingState {
 #[serde(rename_all = "camelCase")]
 /// Render State
 pub struct Render {
-    /// Display banners on the map
-    pub banners: Option<bool>,
-    /// True if the camera is attached to an object in the game
-    pub camera_attached: bool,
-    /// Mouse look speed of the camera when in FPS mode (higher is faster)
-    pub camera_look_speed: f64,
-    /// Camera movement mode such as first person or third person
-    pub camera_mode: HudCameraMode,
-    /// Movement speed of the camera (higher is faster)
-    pub camera_move_speed: f64,
-    /// Position of the camera in world coordinates
-    pub camera_position: Vector3f,
-    /// Rotation of the camera in Euler degrees (yaw, pitch, roll)
-    pub camera_rotation: Vector3f,
-    /// Display champions and minions
-    pub characters: bool,
-    /// Depth fog color specified in RGBA
-    pub depth_fog_color: ColorValue,
-    /// Display depth based fog
-    pub depth_fog_enabled: bool,
-    /// Distance from the camera to the end of the fog
-    pub depth_fog_end: f64,
-    /// Depth fog intensity (opacity from 0.0 to 1.0)
-    pub depth_fog_intensity: f64,
-    /// Distance from the camera to the start of the fog
-    pub depth_fog_start: f64,
-    /// Adjusts the shape and strength of the blur effect
-    pub depth_of_field_circle: f64,
-    /// Render a debug display to visualize depth of field distances
-    pub depth_of_field_debug: bool,
-    /// Display depth of field post-processing
-    pub depth_of_field_enabled: bool,
-    /// Furthest distance from the camera in full blur
-    pub depth_of_field_far: f64,
-    /// Distance to the center of the depth of field effect, the point that will be the most in focus
-    pub depth_of_field_mid: f64,
-    /// Closest distance from the camera in full blur
-    pub depth_of_field_near: f64,
-    /// Distance around the middle point that should be in focus
-    pub depth_of_field_width: f64,
-    /// Display the level environment
-    pub environment: bool,
-    /// Far camera clipping distance
-    pub far_clip: f64,
-    /// Camera field of view in degrees (default 45)
-    pub field_of_view: f64,
     /// Display text notifications over the top of champions
     pub floating_text: bool,
     /// Display fog of war
@@ -297,18 +251,10 @@ pub struct Render {
     pub health_bar_structures: bool,
     /// Display health bars on wards
     pub health_bar_wards: bool,
-    /// Height fog color specified in RGBA
-    pub height_fog_color: ColorValue,
-    /// Display height based fog
-    pub height_fog_enabled: bool,
-    /// Vertical height at the end of the fog
-    pub height_fog_end: f64,
-    /// Height fog intensity (opacity from 0.0 to 1.0)
-    pub height_fog_intensity: f64,
-    /// Vertical height at the start of the fog
-    pub height_fog_start: f64,
     /// Display all the user interface
     pub interface_all: bool,
+    /// Display height based fog
+    pub height_fog_enabled: bool,
     /// Display game announcements (center of the window)
     pub interface_announce: bool,
     /// Display the chat window
@@ -319,10 +265,6 @@ pub struct Render {
     pub interface_kill_callouts: bool,
     /// Display the game minimap (bottom right corner)
     pub interface_minimap: bool,
-    /// Display neutral objective timers
-    pub interface_neutral_timers: Option<bool>,
-    /// Display quests
-    pub interface_quests: Option<bool>,
     /// Display the replay HUD with camera options
     pub interface_replay: bool,
     /// Display the replay score interface (top of the window)
@@ -333,30 +275,88 @@ pub struct Render {
     pub interface_target: bool,
     /// Display the replay timeline (bottom of the window)
     pub interface_timeline: bool,
-    /// Adjusts the height that champions and minions walk over the environment
-    pub nav_grid_offset: f64,
-    /// Near camera clipping distance
-    pub near_clip: f64,
     /// Display outlines on champions when the mouse is hovered over
     pub outline_hover: bool,
     /// Display outlines on champions when selected
     pub outline_select: bool,
     /// Display particles
     pub particles: bool,
-    /// Sets the selection to the given name, case-insensitive
-    pub selection_name: String,
-    /// Sets the camera location to the selection's location adding the given offset
-    pub selection_offset: Vector3f,
+    /// True if the camera is attached to an object in the game
+    pub camera_attached: bool,
+    /// Display depth based fog
+    pub depth_fog_enabled: bool,
+    /// Display champions and minions
+    pub characters: bool,
+    /// Render a debug display to visualize depth of field distances
+    pub depth_of_field_debug: bool,
+    /// Display depth of field post-processing
+    pub depth_of_field_enabled: bool,
+    /// Display the level environment
+    pub environment: bool,
+    /// Display banners on the map
+    pub banners: Option<bool>,
+    /// Display neutral objective timers
+    pub interface_neutral_timers: Option<bool>,
+    /// Display quests
+    pub interface_quests: Option<bool>,
+    /// Movement speed of the camera (higher is faster)
+    pub camera_move_speed: f64,
+    /// Mouse look speed of the camera when in FPS mode (higher is faster)
+    pub camera_look_speed: f64,
+    /// Distance from the camera to the end of the fog
+    pub depth_fog_end: f64,
+    /// Depth fog intensity (opacity from 0.0 to 1.0)
+    pub depth_fog_intensity: f64,
+    /// Distance from the camera to the start of the fog
+    pub depth_fog_start: f64,
+    /// Adjusts the shape and strength of the blur effect
+    pub depth_of_field_circle: f64,
+    /// Furthest distance from the camera in full blur
+    pub depth_of_field_far: f64,
+    /// Distance to the center of the depth of field effect, the point that will be the most in focus
+    pub depth_of_field_mid: f64,
+    /// Closest distance from the camera in full blur
+    pub depth_of_field_near: f64,
+    /// Distance around the middle point that should be in focus
+    pub depth_of_field_width: f64,
+    /// Far camera clipping distance
+    pub far_clip: f64,
+    /// Camera field of view in degrees (default 45)
+    pub field_of_view: f64,
+    /// Vertical height at the end of the fog
+    pub height_fog_end: f64,
+    /// Height fog intensity (opacity from 0.0 to 1.0)
+    pub height_fog_intensity: f64,
+    /// Vertical height at the start of the fog
+    pub height_fog_start: f64,
+    /// Adjusts the height that champions and minions walk over the environment
+    pub nav_grid_offset: f64,
+    /// Near camera clipping distance
+    pub near_clip: f64,
     /// Y-Axis offset of the skybox from the camera position
     pub skybox_offset: f64,
-    /// Filepath for a cube mapped skybox in DDS format
-    pub skybox_path: String,
     /// Radius from the camera position to the edge of the skybox
     pub skybox_radius: f64,
     /// Y-Axis rotation of the skybox in degrees
     pub skybox_rotation: f64,
     /// Vector indicating the direction of the sun for shadows
     pub sun_direction: Vector3f,
+    /// Position of the camera in world coordinates
+    pub camera_position: Vector3f,
+    /// Rotation of the camera in Euler degrees (yaw, pitch, roll)
+    pub camera_rotation: Vector3f,
+    /// Sets the camera location to the selection's location adding the given offset
+    pub selection_offset: Vector3f,
+    /// Height fog color specified in RGBA
+    pub height_fog_color: ColorValue,
+    /// Depth fog color specified in RGBA
+    pub depth_fog_color: ColorValue,
+    /// Filepath for a cube mapped skybox in DDS format
+    pub skybox_path: String,
+    /// Sets the selection to the given name, case-insensitive
+    pub selection_name: String,
+    /// Camera movement mode such as first person or third person
+    pub camera_mode: HudCameraMode,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic)]
+#![warn(clippy::perf)]
 #![forbid(unsafe_code)]
 
 //! Irelia is an async set of bindings to the LCU API
@@ -89,16 +90,16 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let error: std::borrow::Cow<'_, str> = match self {
             #[cfg(any(feature = "in_game", feature = "rest"))]
-            Error::HyperHttpError(err) => err.to_string().into(),
+            Self::HyperHttpError(err) => err.to_string().into(),
             #[cfg(any(feature = "in_game", feature = "rest"))]
-            Error::HyperError(err) => err.to_string().into(),
+            Self::HyperError(err) => err.to_string().into(),
             #[cfg(any(feature = "in_game", feature = "rest"))]
-            Error::HyperClientError(err) => err.to_string().into(),
-            Error::SerdeJsonError(err) => err.to_string().into(),
+            Self::HyperClientError(err) => err.to_string().into(),
+            Self::SerdeJsonError(err) => err.to_string().into(),
             #[cfg(feature = "rest")]
-            Error::ProcessInfoError(err) => err.reason().into(),
-            Error::RmpSerdeEncode(err) => err.to_string().into(),
-            Error::RmpSerdeDecode(err) => err.to_string().into(),
+            Self::ProcessInfoError(err) => err.reason().into(),
+            Self::RmpSerdeEncode(err) => err.to_string().into(),
+            Self::RmpSerdeDecode(err) => err.to_string().into(),
         };
         f.write_str(&error)
     }

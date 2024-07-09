@@ -52,7 +52,7 @@ impl ErrorHandler for DefaultErrorHandler {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 /// Enum representing what to do next, either continue the loop or attempt to reconnect
 pub enum Flow {
     TryReconnect,
@@ -388,10 +388,10 @@ mod error {
     impl Display for Error {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             let string = match self {
-                Error::Tungstenite(e) => e.to_string(),
-                Error::ProcessInfo(e) => e.to_string(),
-                Error::SerdeJson(e) => e.to_string(),
-                Error::Io(e) => e.to_string(),
+                Self::Tungstenite(e) => e.to_string(),
+                Self::ProcessInfo(e) => e.to_string(),
+                Self::SerdeJson(e) => e.to_string(),
+                Self::Io(e) => e.to_string(),
             };
 
             f.write_str(&string)
