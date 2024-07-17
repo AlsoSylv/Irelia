@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "nightly", feature(array_chunks))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
-#![cfg_attr(test, feature(test))]
+#![cfg_attr(all(feature = "nightly", test), feature(test))]
 #![no_std]
 
 //! This decoder is largely taking from this article. <https://dev.to/tiemen/implementing-base64-from-scratch-in-rust-kb1>

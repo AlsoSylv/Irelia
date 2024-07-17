@@ -65,7 +65,7 @@ impl RequestClient {
         // Build the URI, always in https format
         let built_uri = Uri::builder()
             .scheme("https")
-            .authority(url.as_bytes())
+            .authority(url)
             .path_and_query(endpoint)
             .build()?;
 
