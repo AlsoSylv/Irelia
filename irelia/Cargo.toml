@@ -21,8 +21,8 @@ required-features = ["replay"]
 serde_json = { version = "1.0", default-features = false, features = ["alloc", "std"] }
 rmp-serde = { version = "1.2.0" }
 rustls = { version = "0.23", default-features = false }
-rustls-pemfile = { version = "2.1", default-features = false }
-rustls-webpki = "0.102.4"
+rustls-pemfile = { version = "2.1", default-features = false, features = [] }
+rustls-webpki = { version = "0.102.4", default-features = false  }
 irelia_encoder = { path = "../encoder", version = "0.1" }
 # Optional across some features
 http-body-util = { version = "0.1", optional = true }
