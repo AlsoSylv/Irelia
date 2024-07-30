@@ -1,13 +1,13 @@
 static RUSTLS_CLIENT_CONFIG: LazyLock<rustls::ClientConfig> = LazyLock::new(connector_internal);
 
+const CERT: &[u8] = include_bytes!("../riotgames.pem");
+
 //noinspection SpellCheckingInspection
 /// Setups up the TLS connector, this is outside the hyper client as
 /// It is required inside the websocket implementation
 fn connector_internal() -> rustls::ClientConfig {
-    // Get a copy of the pem file
-    let mut cert: &[u8] = include_bytes!("../riotgames.pem");
     // Make it rustls compatible
-    let pem = rustls_pemfile::read_one(&mut cert).unwrap().unwrap();
+    let (pem, _) = rustls_pemfile::read_one_from_slice(CERT).unwrap().unwrap();
     // Get it in the proper format
     let rustls_pemfile::Item::X509Certificate(pem) = pem else {
         unreachable!()
@@ -27,6 +27,11 @@ fn connector_internal() -> rustls::ClientConfig {
 
 pub fn connector() -> &'static rustls::ClientConfig {
     &RUSTLS_CLIENT_CONFIG
+}
+
+#[test]
+fn test_connector() {
+    connector();
 }
 
 struct LazyLock<T, F = fn() -> T> {
