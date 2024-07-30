@@ -1,4 +1,4 @@
-	{
+{
 	"components": {
 		"schemas": {
 			"AbilityResource": {
@@ -196,11 +196,23 @@
 						"type": "integer",
 						"description": "Level of the current player"
 					},
-					"summonerName": {
+					"riotId": {
 						"nullable": true,
 						"type": "string",
 						"format": "{NAME}#{TAG}",
 						"description": "Name and Tag of the current summoner"
+					},
+					"riotIdGameName": {
+						"nullable": true,
+						"type": "string",
+						"format": "{NAME}",
+						"description": "Name of the current summoner"
+					},
+					"riotIdTagLine": {
+						"nullable": true,
+						"type": "string",
+						"format": "{TAG}",
+						"description": "Tag of the current summoner"
 					}
 				}
 			},
@@ -256,6 +268,24 @@
 					"rawSkinName": {
 						"type": "string",
 						"nullable": true
+					},
+					"riotId": {
+						"nullable": true,
+						"type": "string",
+						"format": "{NAME}#{TAG}",
+						"description": "Name and Tag of the current summoner"
+					},
+					"riotIdGameName": {
+						"nullable": true,
+						"type": "string",
+						"format": "{NAME}",
+						"description": "Name of the current summoner"
+					},
+					"riotIdTagLine": {
+						"nullable": true,
+						"type": "string",
+						"format": "{TAG}",
+						"description": "Tag of the current summoner"
 					}
 				}
 			},
@@ -977,12 +1007,13 @@
 				"operationId": "GetLiveclientdataPlayeritems",
 				"parameters": [
 					{
-						"description": "Summoner name of player",
+						"description": "url encoded riotID of the player",
 						"in": "query",
-						"name": "summonerName",
+						"name": "riotId",
 						"required": true,
 						"schema": {
-							"type": "string"
+							"type": "string",
+							"format": "{NAME}%{TAG}"
 						}
 					}
 				],
@@ -1050,12 +1081,13 @@
 				"operationId": "GetLiveclientdataPlayermainrunes",
 				"parameters": [
 					{
-						"description": "Summoner name of player",
+						"description": "url encoded riotID of the player",
 						"in": "query",
-						"name": "summonerName",
+						"name": "riotId",
 						"required": true,
 						"schema": {
-							"type": "string"
+							"type": "string",
+							"format": "{NAME}%{TAG}"
 						}
 					}
 				],
@@ -1083,12 +1115,13 @@
 				"operationId": "GetLiveclientdataPlayerscores",
 				"parameters": [
 					{
-						"description": "Summoner name of player",
+						"description": "url encoded riotID of the player",
 						"in": "query",
-						"name": "summonerName",
+						"name": "riotId",
 						"required": true,
 						"schema": {
-							"type": "string"
+							"type": "string",
+							"format": "{NAME}%{TAG}"
 						}
 					}
 				],
@@ -1116,12 +1149,13 @@
 				"operationId": "GetLiveclientdataPlayersummonerspells",
 				"parameters": [
 					{
-						"description": "Summoner name of player",
+						"description": "url encoded riotID of the player",
 						"in": "query",
-						"name": "summonerName",
+						"name": "riotId",
 						"required": true,
 						"schema": {
-							"type": "string"
+							"type": "string",
+							"format": "{NAME}%{TAG}"
 						}
 					}
 				],
