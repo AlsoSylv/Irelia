@@ -35,7 +35,6 @@ pub enum Error {
     HyperError(hyper::Error),
     #[cfg(feature = "rest")]
     ProcessInfoError(process_info::Error),
-    SerdeJsonError(serde_json::Error),
     RmpSerdeEncode(rmp_serde::encode::Error),
     RmpSerdeDecode(rmp_serde::decode::Error),
 }
@@ -58,12 +57,6 @@ impl From<hyper_util::client::legacy::Error> for Error {
 impl From<hyper::Error> for Error {
     fn from(value: hyper::Error) -> Self {
         Self::HyperError(value)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(value: serde_json::Error) -> Self {
-        Self::SerdeJsonError(value)
     }
 }
 
@@ -95,7 +88,6 @@ impl std::fmt::Display for Error {
             Self::HyperError(err) => err.to_string().into(),
             #[cfg(any(feature = "in_game", feature = "rest"))]
             Self::HyperClientError(err) => err.to_string().into(),
-            Self::SerdeJsonError(err) => err.to_string().into(),
             #[cfg(feature = "rest")]
             Self::ProcessInfoError(err) => err.reason().into(),
             Self::RmpSerdeEncode(err) => err.to_string().into(),

@@ -6,9 +6,12 @@
 //! Well the types and returned values do not match, the format will serialize
 //! to the same value
 
+use rmpv::Value;
 use serde::de::{Error, IgnoredAny, Unexpected, Visitor};
 use serde::ser::SerializeStruct;
-use serde::{Deserialize as DeserializeTrait, Deserializer, Serialize as SerializeTrait, Serializer};
+use serde::{
+    Deserialize as DeserializeTrait, Deserializer, Serialize as SerializeTrait, Serializer,
+};
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::fmt::Formatter;
@@ -31,10 +34,10 @@ fn deserialize_active_player<'de, D: Deserializer<'de>>(
     #[serde(untagged)]
     #[allow(clippy::large_enum_variant)]
     enum ActivePlayerOrNull {
-        ActivePlayer(ActivePlayer),
+        ActivePlayer(Option<ActivePlayer>),
         Error {
             #[serde(rename = "error")]
-            // This error will always be "This feature is not supported in spectator mode, so it can be ignored
+            // This error will always be "This feature is not supported in spectator mode", so it can be ignored
             _error: IgnoredAny,
         },
     }
@@ -42,7 +45,7 @@ fn deserialize_active_player<'de, D: Deserializer<'de>>(
     let maybe_player = ActivePlayerOrNull::deserialize(deserializer)?;
 
     Ok(match maybe_player {
-        ActivePlayerOrNull::ActivePlayer(player) => Some(player),
+        ActivePlayerOrNull::ActivePlayer(player) => player,
         ActivePlayerOrNull::Error { .. } => None,
     })
 }
@@ -651,7 +654,7 @@ impl AllPlayer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq , Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores {
     kills: u8,
@@ -801,7 +804,7 @@ impl Item {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Events {
     events: Box<[Event]>,
@@ -837,7 +840,7 @@ impl Events {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Event {
     #[serde(rename = "EventID")]
@@ -848,7 +851,7 @@ pub struct Event {
     event_details: EventDetails,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all_fields = "PascalCase")]
 #[serde(tag = "EventName")]
 pub enum EventDetails {
@@ -899,7 +902,7 @@ pub enum EventDetails {
         result: Box<str>,
     },
     #[serde(untagged)]
-    Unknown(serde_json::Value),
+    Unknown(Value),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1538,16 +1541,11 @@ pub(crate) mod duration {
     use serde::{Deserialize, Deserializer, Serializer};
     use time::Duration;
 
-    pub fn serialize<S: Serializer>(
-        duration: &Duration,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_f64(duration.as_seconds_f64())
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Duration, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
         f64::deserialize(deserializer).map(Duration::seconds_f64)
     }
 }

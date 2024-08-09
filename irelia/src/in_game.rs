@@ -8,7 +8,6 @@ use hyper::body::Incoming;
 use hyper::Response;
 use serde::de::DeserializeOwned;
 
-use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 
 use self::types::{
@@ -51,14 +50,7 @@ impl GameClient {
         request_client: &RequestClient,
     ) -> Result<Response<Incoming>, Error> {
         request_client
-            .raw_request_template(
-                URL,
-                endpoint,
-                "HEAD",
-                None::<()>,
-                None,
-                SerializeFormat::Json,
-            )
+            .raw_request_template(URL, endpoint, "HEAD", None::<()>, None)
             .await
     }
 
@@ -246,20 +238,16 @@ impl GameClient {
     ) -> Result<R, Error> {
         use hyper::body::Buf;
 
-        let endpoint = riot_id.map_or_else(|| format!("/liveclientdata/{endpoint}"), |riot_id| format!("/liveclientdata/{endpoint}?riotId={riot_id}"));
+        let endpoint = riot_id.map_or_else(
+            || format!("/liveclientdata/{endpoint}"),
+            |riot_id| format!("/liveclientdata/{endpoint}?riotId={riot_id}"),
+        );
 
         let buf = request_client
-            .request_template(
-                URL,
-                &endpoint,
-                "GET",
-                None::<()>,
-                None,
-                SerializeFormat::Json,
-            )
+            .request_template(URL, &endpoint, "GET", None::<()>, None)
             .await?;
 
-        Ok(serde_json::from_reader(buf.reader())?)
+        Ok(rmp_serde::from_read(buf.reader())?)
     }
 }
 

@@ -12,7 +12,6 @@ pub mod types;
 /// Hence why the replay API enables the `in_game` feature
 pub use super::in_game::URL;
 use crate::replay::types::{Playback, RecordingState, Render, Sequence};
-use crate::utils::requests::SerializeFormat;
 use crate::{Error, RequestClient};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -175,7 +174,7 @@ impl ReplayClient {
         let endpoint = format!("/replay/{endpoint}");
 
         let buffer = request_client
-            .request_template(URL, &endpoint, method, body, None, SerializeFormat::MsgPack)
+            .request_template(URL, &endpoint, method, body, None)
             .await?;
 
         Ok(rmp_serde::from_read(buffer.reader())?)

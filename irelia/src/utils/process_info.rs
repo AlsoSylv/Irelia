@@ -92,10 +92,9 @@ pub fn get_running_client(
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file: [u8; 60] = [0; 60];
     let port: &str;
-    let auth: &str = 
-
-    if client && !force_lock_file {
-        let cmd = process.cmd();
+    let auth: &str = if client && !force_lock_file {
+        // The port and auth should always be ASCII, as they are a number and a B64 buffer
+        let cmd = process.cmd().iter().filter_map(|os_str| os_str.to_str());
         // Use a variable in a higher scope to make sure that port and auth get initialized
         let mut scoped_auth = None;
         let mut scoped_port = None;

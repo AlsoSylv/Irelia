@@ -368,7 +368,7 @@ fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
         unreachable!();
     };
 
-    stream_inner.sock.sock.set_nonblocking(true).unwrap();
+    stream_inner.sock.sock.set_nonblocking(true)?;
 
     Ok(stream)
 }

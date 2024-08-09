@@ -4,3 +4,13 @@ members = [
     "irelia",
     "encoder",
 ]
+
+[profile.release-lto]
+inherits = "release"
+opt-level = "s"
+codegen-units = 1
+debug-assertions = false
+lto = "fat"
+panic = "abort"
+debug = false
+strip = true

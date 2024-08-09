@@ -1,45 +1,22 @@
 //! Module containing all the data for the rest LCU bindings
+//!
+//! For responses that have no body, use `IgnoreAny` instead of supplying a type, or using an `Option<T>`
 
+#[cfg(feature = "rest_schema")]
 /// This is a list of types pertaining to the LCU, currently only containing the types for the schema.
 pub mod types;
 
+use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
+use crate::{utils::process_info::get_running_client, Error, RequestClient};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::borrow::Cow;
 use std::net::SocketAddr;
-
-use crate::rest::request_builder::RequestBuilder;
-use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
-use crate::utils::requests::SerializeFormat;
-use crate::{utils::process_info::get_running_client, Error, RequestClient};
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
     url: String,
     auth_header: String,
 }
-
-/// Some LCU endpoints don't return a response at all. This is used to convert an Eof row: 0, colum: 0 into an optional
-pub trait EofIntoOptional {
-    /// Returns the result as `Option<T>`, converting `Err(serde_json::Eof)` into `Ok(None)` instead
-    /// Only when line and column equal 0
-    ///
-    /// # Errors
-    /// If the result was an error before, and it was not an Eof Error
-    fn eof_into_optional<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
-        let result = result.map(Some);
-
-        if let Err(Error::SerdeJsonError(err)) = &result {
-            if err.is_eof() && err.line() == 0 && err.column() == 0 {
-                return Ok(None);
-            }
-        }
-
-        result
-    }
-}
-
-impl<T> EofIntoOptional for Result<T, Error> {}
 
 impl LcuClient {
     /// Attempts to create a connection to the LCU, errors if it fails
@@ -63,7 +40,10 @@ impl LcuClient {
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
     pub fn new_with_credentials(url: SocketAddr, auth_header: String) -> Self {
-        Self { url: url.to_string(), auth_header }
+        Self {
+            url: url.to_string(),
+            auth_header,
+        }
     }
 
     /// Queries the client or lock file, getting a new url and auth header
@@ -144,7 +124,6 @@ impl LcuClient {
                 "HEAD",
                 None::<()>,
                 Some(&self.auth_header),
-                SerializeFormat::Json,
             )
             .await
     }
@@ -191,28 +170,6 @@ impl LcuClient {
             .await
     }
 
-    /// Makes a `Request` to the LCU client, using the details entered
-    ///
-    /// # Errors
-    /// This will return an error if:
-    /// - The body is not valid JSON
-    /// - If the provided return type is invalid
-    /// - It is unable to connect to the LCU
-    /// - The LCU does not have the endpoint specified  
-    pub async fn request<T: Serialize + Send, R: DeserializeOwned>(
-        &self,
-        request: Request<'_, T>,
-        request_client: &RequestClient,
-    ) -> Result<R, Error> {
-        self.lcu_request(
-            request.endpoint.as_ref(),
-            request.method.as_str(),
-            request.body,
-            request_client,
-        )
-        .await
-    }
-
     /// Makes a request to the LCU with an unspecified method, valid options being
     /// "PUT", "GET", "POST", "HEAD", "DELETE"
     ///
@@ -230,113 +187,14 @@ impl LcuClient {
         use hyper::body::Buf;
 
         let buf = request_client
-            .request_template(
-                &self.url,
-                endpoint,
-                method,
-                body,
-                Some(&self.auth_header),
-                SerializeFormat::Json,
-            )
+            .request_template(&self.url, endpoint, method, body, Some(&self.auth_header))
             .await?;
 
-        Ok(serde_json::from_reader(buf.reader())?)
+        Ok(rmp_serde::from_read(buf.reader())?)
     }
 }
 
-mod request_builder {
-    use crate::rest::Method;
-    use serde::Serialize;
-    use std::borrow::Cow;
-
-    pub struct RequestBuilder<'a, T> {
-        pub(super) method: Option<Method>,
-        pub(super) endpoint: Option<Cow<'a, str>>,
-        pub(super) body: Option<T>,
-    }
-
-    impl<'a, T: Serialize> RequestBuilder<'a, T> {
-        pub fn endpoint(mut self, endpoint: impl Into<Cow<'a, str>>) -> Self {
-            self.endpoint = Some(endpoint.into());
-
-            self
-        }
-
-        pub fn body(mut self, body: T) -> Self {
-            self.body = Some(body);
-
-            self
-        }
-
-        pub const fn method(mut self, method: Method) -> Self {
-            self.method = Some(method);
-
-            self
-        }
-
-        pub fn build(self) -> super::Request<'a, T> {
-            super::Request {
-                method: self.method.expect("Must enter a valid method"),
-                body: self.body,
-                endpoint: self.endpoint.expect("Must enter a valid endpoint here"),
-            }
-        }
-    }
-}
-
-#[doc(hidden)]
-pub enum Method {
-    Delete,
-    Get,
-    Head,
-    Patch,
-    Post,
-    Put,
-}
-
-impl Method {
-    #[must_use]
-    pub const fn as_str(&self) -> &str {
-        match self {
-            Self::Delete => "DELETE",
-            Self::Get => "GET",
-            Self::Head => "HEAD",
-            Self::Patch => "PATCH",
-            Self::Post => "POST",
-            Self::Put => "PUT",
-        }
-    }
-}
-
-#[doc(hidden)]
-pub struct Request<'a, T> {
-    method: Method,
-    endpoint: Cow<'a, str>,
-    body: Option<T>,
-}
-
-impl<'a> Request<'a, ()> {
-    #[must_use]
-    pub fn new(endpoint: impl Into<Cow<'a, str>>, method: Method) -> Self {
-        Self {
-            method,
-            body: None::<()>,
-            endpoint: endpoint.into(),
-        }
-    }
-}
-
-impl<'a, T: Serialize> Request<'a, T> {
-    #[must_use]
-    pub const fn builder() -> RequestBuilder<'a, T> {
-        RequestBuilder {
-            method: None,
-            endpoint: None,
-            body: None,
-        }
-    }
-}
-
+#[cfg(feature = "rest_schema")]
 /// Fetches the schema from a remote endpoint, for example:
 /// <`https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json/`>
 ///
@@ -351,6 +209,7 @@ impl<'a, T: Serialize> Request<'a, T> {
 /// This panics if no valid
 pub async fn schema(remote: &'static str) -> Result<Option<types::Schema>, Error> {
     use http_body_util::BodyExt;
+    use hyper::body::Buf;
 
     let uri = hyper::Uri::from_static(remote);
     // This creates a custom client, as the default hyper client used by Irelia needs a cert, and it has no use outside here
@@ -367,19 +226,21 @@ pub async fn schema(remote: &'static str) -> Result<Option<types::Schema>, Error
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
         .build::<_, http_body_util::Full<hyper::body::Bytes>>(https);
     let mut request = client.get(uri).await?;
-    let tmp = request.body_mut();
-    let body = tmp.collect().await?.to_bytes();
-    Ok(Some(serde_json::from_slice(&body)?))
+    let tmp = request.body_mut().collect().await?;
+    Ok(serde_json::from_reader(tmp.aggregate().reader()).ok())
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "rest_schema")]
     #[tokio::test]
     async fn test_schema_des() {
-        let _schema = super::schema(
+        let schema = super::schema(
             "https://raw.githubusercontent.com/dysolix/hasagi-types/main/swagger.json",
         )
         .await
         .unwrap();
+
+        println!("{schema:?}");
     }
 }

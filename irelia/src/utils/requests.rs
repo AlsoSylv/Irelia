@@ -57,11 +57,12 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        format: SerializeFormat,
     ) -> Result<Response<Incoming>, Error>
     where
         T: Serialize + Send,
     {
+        const MINE: &str = "application/x-msgpack";
+
         // Build the URI, always in https format
         let built_uri = Uri::builder()
             .scheme("https")
@@ -69,14 +70,12 @@ impl RequestClient {
             .path_and_query(endpoint)
             .build()?;
 
-        let mime = format.to_mime();
-
         // Build the new request
         let mut builder = Request::builder()
             .method(method)
             .uri(built_uri)
-            .header(CONTENT_TYPE, mime)
-            .header(ACCEPT, mime);
+            .header(CONTENT_TYPE, MINE)
+            .header(ACCEPT, MINE);
 
         // Add the auth header, if provided
         if let Some(header) = auth_header {
@@ -88,13 +87,7 @@ impl RequestClient {
         // Turn the body to bytes, return any errors,
         // then map to Full<Bytes>
         if let Some(body) = body {
-            let buf = if format.is_json() {
-                serde_json::to_vec(&body)?
-            } else {
-                rmp_serde::to_vec_named(&body)?
-            };
-
-            buffer = Full::from(buf);
+            buffer = Full::from(rmp_serde::to_vec_named(&body)?);
         }
 
         // Add the body to finalize
@@ -112,44 +105,17 @@ impl RequestClient {
         method: &str,
         body: Option<T>,
         auth_header: Option<&str>,
-        format: SerializeFormat,
     ) -> Result<impl Buf + Sized, Error>
     where
         T: Serialize + Send,
     {
         let response = self
-            .raw_request_template(url, endpoint, method, body, auth_header, format)
+            .raw_request_template(url, endpoint, method, body, auth_header)
             .await?;
 
         let body = response.collect().await?;
 
         Ok(body.aggregate())
-    }
-}
-
-// This isn't actually dead, just only when the replay API is not in use
-#[allow(dead_code)]
-#[repr(u8)]
-/// The format to use for requests, currently only JSON or `MsgPack`
-/// YAML support is possible if requested
-pub enum SerializeFormat {
-    Json,
-    MsgPack,
-}
-
-impl SerializeFormat {
-    const fn to_mime(&self) -> &str {
-        match &self {
-            Self::Json => "application/json",
-            Self::MsgPack => "application/x-msgpack",
-        }
-    }
-
-    const fn is_json(&self) -> bool {
-        match &self {
-            Self::Json => true,
-            Self::MsgPack => false,
-        }
     }
 }
 

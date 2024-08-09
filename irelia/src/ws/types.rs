@@ -1,7 +1,9 @@
 //! Types that the Websocket will respond with
 
 use serde::de::{Error, Visitor};
-use serde::{Deserialize as DeserializeTrait, Deserializer, Serialize as SerializeTrait, Serializer};
+use serde::{
+    Deserialize as DeserializeTrait, Deserializer, Serialize as SerializeTrait, Serializer,
+};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
