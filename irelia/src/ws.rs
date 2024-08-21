@@ -8,7 +8,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use std::{ops::ControlFlow, sync::Arc, thread};
-
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use tungstenite::stream::MaybeTlsStream;
@@ -190,8 +189,6 @@ fn event_loop(
 
                             let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
 
-                            println!("{command}");
-
                             let continues = send_command(error_handler, stream, tls, command);
                             if !continues {
                                 break 'outer;
@@ -239,13 +236,11 @@ fn event_loop(
 
             let read = stream.read();
 
-            if let Ok(maybe_message) = read.no_block() {
-                if let Some(message) = maybe_message {
+            match read.no_block() {
+                Ok(Some(message)) => {
                     let data = message.into_data();
                     if !data.is_empty() {
-                        let maybe_json = serde_json::from_slice::<Event>(&data);
-
-                        match maybe_json {
+                        match serde_json::from_slice::<Event>(&data) {
                             Ok(json) => {
                                 let subscribers = subscribers.get_mut(&json.1);
 
@@ -272,8 +267,14 @@ fn event_loop(
                             }
                         }
                     }
-                } else {
-                    thread::sleep(Duration::from_millis(10));
+                }
+                Ok(None) => thread::sleep(Duration::from_millis(10)),
+                Err(e) => {
+                    let control = error_handler.on_error(e.into());
+
+                    if control == ControlFlow::Break(()) {
+                        break 'outer;
+                    }
                 }
             }
         } else {

@@ -633,7 +633,7 @@ where
     idxs
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "nightly"))]
 /*
 These are the current benchmark results running on a Ryzen 9 7900x
 Note: This was after recent changes to core::simd
