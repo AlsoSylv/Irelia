@@ -1,15 +1,16 @@
 //! Module containing all the data on the websocket LCU bindings
 
+mod error;
 pub mod types;
 mod utils;
 
+use rustls::pki_types::ServerName;
+use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use std::net::TcpStream;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use std::{ops::ControlFlow, sync::Arc, thread};
-use rustls::pki_types::ServerName;
-use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::util::NonBlockingResult;
 use tungstenite::{client::IntoClientRequest, http::HeaderValue, Connector, Message, WebSocket};
@@ -41,16 +42,6 @@ enum ChannelMessage {
     Abort,
 }
 
-/// This is a zero sized struct which calls `eprintln!()` and then breaks on error
-pub struct DefaultErrorHandler;
-
-impl ErrorHandler for DefaultErrorHandler {
-    fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow> {
-        eprintln!("{error}");
-        ControlFlow::Break(())
-    }
-}
-
 #[derive(PartialEq, Eq)]
 /// Enum representing what to do next, either continue the loop or attempt to reconnect
 pub enum Flow {
@@ -68,6 +59,17 @@ pub trait Subscriber: Send + Sync {
 pub trait ErrorHandler: Send + Sync {
     /// Callback whenever an unexpected error occurs during the event loop
     fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow>;
+}
+
+
+/// This is a zero sized struct which calls `eprintln!()` and then breaks on error
+pub struct DefaultErrorHandler;
+
+impl ErrorHandler for DefaultErrorHandler {
+    fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow> {
+        eprintln!("{error}");
+        ControlFlow::Break(())
+    }
 }
 
 impl Default for LcuWebSocket {
@@ -88,15 +90,14 @@ impl LcuWebSocket {
     #[must_use]
     /// Creates a new connection to the LCU websocket
     pub fn new_with_error_handler(error_handler: impl ErrorHandler + 'static) -> Self {
-        let tls = connector();
-        let tls = Arc::new(tls.clone());
-
         let (ws_sender, ws_receiver) = std::sync::mpsc::channel::<ChannelMessage>();
 
         let handle = thread::spawn(move || {
+            let tls = connector();
+            let tls = Arc::new(tls.clone());
+
             let mut error_handler = error_handler;
             let ws_receiver = ws_receiver;
-            let tls = tls;
 
             event_loop(&mut error_handler, &ws_receiver, &tls);
         });
@@ -183,27 +184,27 @@ fn event_loop(
                 match message {
                     ChannelMessage::Subscribe(code, event_kind, subscriber) => {
                         let subscribers = subscribers.get_mut(&event_kind);
-
                         if subscribers.is_empty() {
                             let endpoint_str = event_kind.to_string();
 
                             let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
 
-                            let continues = send_command(error_handler, stream, tls, command);
-                            if !continues {
+                            if !send_command(error_handler, stream, tls, command) {
                                 break 'outer;
                             }
                         }
 
-                        let mut idx = subscribers.len();
+                        let mut iter = subscribers.iter().enumerate();
 
-                        for (first_none_idx, maybe_subscriber) in subscribers.iter_mut().enumerate()
-                        {
-                            if maybe_subscriber.is_none() {
-                                idx = first_none_idx;
-                                break;
-                            }
-                        }
+                        let idx = iter
+                            .find_map(|(idx, subscriber)| {
+                                if subscriber.is_none() {
+                                    Some(idx)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(subscribers.len());
 
                         if idx == subscribers.len() {
                             subscribers.push(Some(subscriber));
@@ -214,23 +215,21 @@ fn event_loop(
                     ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
                         let subscribers = subscribers.get_mut(&event_kind);
 
+                        subscribers[subscriber_id.0] = None;
+
                         if subscribers.iter().flatten().count() == 0 {
                             let unsub = format!(
                                 "[{}, \"{}\"]",
                                 RequestType::Unsubscribe as u8,
                                 event_kind.to_string()
                             );
-                            let continues = send_command(error_handler, stream, tls, unsub);
-                            if !continues {
+
+                            if !send_command(error_handler, stream, tls, unsub) {
                                 break 'outer;
                             }
                         }
-
-                        subscribers[subscriber_id.0] = None;
                     }
-                    ChannelMessage::Abort => {
-                        break 'outer;
-                    }
+                    ChannelMessage::Abort => break 'outer,
                 }
             };
 
@@ -247,10 +246,7 @@ fn event_loop(
                                 for subscriber in subscribers.iter_mut().flatten() {
                                     let mut control = subscriber.on_event(&json);
 
-                                    #[rustfmt::skip]
-                                    let continues = budget_recursive(&mut control, tls, stream, error_handler);
-
-                                    if !continues {
+                                    if !budget_recursive(&mut control, tls, stream, error_handler) {
                                         break 'outer;
                                     }
                                 }
@@ -258,10 +254,7 @@ fn event_loop(
                             Err(e) => {
                                 let mut control = error_handler.on_error(e.into());
 
-                                #[rustfmt::skip]
-                                let continues = budget_recursive(&mut control, tls, stream, error_handler);
-
-                                if !continues {
+                                if !budget_recursive(&mut control, tls, stream, error_handler) {
                                     break 'outer;
                                 }
                             }
@@ -270,9 +263,7 @@ fn event_loop(
                 }
                 Ok(None) => thread::sleep(Duration::from_millis(10)),
                 Err(e) => {
-                    let control = error_handler.on_error(e.into());
-
-                    if control == ControlFlow::Break(()) {
+                    if error_handler.on_error(e.into()) == ControlFlow::Break(()) {
                         break 'outer;
                     }
                 }
@@ -281,9 +272,7 @@ fn event_loop(
             match connect(tls) {
                 Ok(stream) => maybe_stream = Some(stream),
                 Err(e) => {
-                    let control = error_handler.on_error(e);
-
-                    if control == ControlFlow::Break(()) {
+                    if error_handler.on_error(e) == ControlFlow::Break(()) {
                         break 'outer;
                     }
                 }
@@ -372,56 +361,4 @@ fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
     stream_inner.sock.sock.set_nonblocking(true)?;
 
     Ok(stream)
-}
-
-mod error {
-    use std::fmt::{Display, Formatter};
-
-    #[derive(Debug)]
-    /// Enum of possible errors that will be passed to the `ErrorHandler`
-    pub enum Error {
-        Tungstenite(tungstenite::Error),
-        ProcessInfo(crate::process_info::Error),
-        SerdeJson(serde_json::Error),
-        Io(std::io::Error),
-    }
-
-    impl Display for Error {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            let string = match self {
-                Self::Tungstenite(e) => e.to_string(),
-                Self::ProcessInfo(e) => e.to_string(),
-                Self::SerdeJson(e) => e.to_string(),
-                Self::Io(e) => e.to_string(),
-            };
-
-            f.write_str(&string)
-        }
-    }
-
-    impl std::error::Error for Error {}
-
-    impl From<std::io::Error> for Error {
-        fn from(value: std::io::Error) -> Self {
-            Self::Io(value)
-        }
-    }
-
-    impl From<tungstenite::Error> for Error {
-        fn from(value: tungstenite::Error) -> Self {
-            Self::Tungstenite(value)
-        }
-    }
-
-    impl From<serde_json::Error> for Error {
-        fn from(value: serde_json::Error) -> Self {
-            Self::SerdeJson(value)
-        }
-    }
-
-    impl From<crate::process_info::Error> for Error {
-        fn from(value: crate::process_info::Error) -> Self {
-            Self::ProcessInfo(value)
-        }
-    }
 }
