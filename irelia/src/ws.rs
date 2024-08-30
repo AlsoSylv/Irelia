@@ -54,7 +54,7 @@ pub enum Flow {
 pub trait Subscriber: Send {
     /// Callback run when the subscriber is added
     /// Default behavior is to do nothing
-    fn on_subscriber(&mut self, _event_kind: &EventKind, _request_code: &RequestType) {}
+    fn on_subscribe(&mut self, _event_kind: &EventKind, _request_code: &RequestType) {}
 
     /// Callback for when the `EventKind` occurs
     /// Set `_continues` to false if you want to break the loop

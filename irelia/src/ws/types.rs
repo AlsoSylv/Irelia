@@ -77,7 +77,7 @@ impl SerializeTrait for RequestType {
     where
         S: Serializer,
     {
-        serializer.serialize_u8(self.clone() as u8)
+        serializer.serialize_u8(*self as u8)
     }
 }
 
