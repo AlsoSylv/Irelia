@@ -14,7 +14,7 @@ use std::fmt::Formatter;
 pub struct Event(pub RequestType, pub EventKind, pub EventData);
 
 /// Different LCU websocket request types
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub enum RequestType {
     Welcome = 0,
     Prefix = 1,

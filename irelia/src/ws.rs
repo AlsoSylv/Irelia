@@ -22,7 +22,8 @@ use crate::ws::utils::EventMap;
 
 pub use error::Error as WebSocketError;
 
-type WebSocketStream = WebSocket<MaybeTlsStream<StreamOwned<ClientConnection, TcpStream>>>;
+/// Type alias for the websocket stream type
+pub type WebSocketStream = WebSocket<MaybeTlsStream<StreamOwned<ClientConnection, TcpStream>>>;
 
 /// Struct representing a connection to the LCU websocket
 pub struct LcuWebSocket {
@@ -50,17 +51,30 @@ pub enum Flow {
 }
 
 /// trait for a subscriber to an endpoint for the websocket
-pub trait Subscriber: Send + Sync {
+pub trait Subscriber: Send {
+    /// Callback run when the subscriber is added
+    /// Default behavior is to do nothing
+    fn on_subscriber(&mut self, _event_kind: &EventKind, _request_code: &RequestType) {}
+
     /// Callback for when the `EventKind` occurs
-    fn on_event(&mut self, event: &Event) -> ControlFlow<(), Flow>;
+    /// Set `_continues` to false if you want to break the loop
+    /// Defaults to true
+    fn on_event(&mut self, event: &Event, _continues: &mut bool);
+
+    /// Callback run when the subscriber is removed
+    /// Default behavior is to do nothing
+    fn on_unsubscribe(&mut self, _event_kind: &EventKind) {}
 }
 
 /// Error handler trait, called when the websocket connection errors in an unexpected way
-pub trait ErrorHandler: Send + Sync {
+pub trait ErrorHandler: Send {
     /// Callback whenever an unexpected error occurs during the event loop
     fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow>;
-}
 
+    /// Callback run when the websocket connects or reconnects
+    /// Default behavior is to do nothing
+    fn on_connect(&mut self, _socket: &mut WebSocketStream) {}
+}
 
 /// This is a zero sized struct which calls `eprintln!()` and then breaks on error
 pub struct DefaultErrorHandler;
@@ -168,54 +182,50 @@ impl LcuWebSocket {
     }
 }
 
+type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
+
 fn event_loop(
     error_handler: &mut impl ErrorHandler,
     receiver: &Receiver<ChannelMessage>,
     tls: &Arc<ClientConfig>,
 ) {
-    type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
-
-    let mut maybe_stream = None;
+    let mut maybe_stream: Option<WebSocketStream> = None;
     let mut subscribers = SubscriberMap::new();
+    let mut control_flow: ControlFlow<(), _> = ControlFlow::Continue(Flow::Continue);
 
-    'outer: loop {
+    while !control_flow.is_break() {
         if let Some(stream) = &mut maybe_stream {
             if let Ok(message) = receiver.try_recv() {
                 match message {
-                    ChannelMessage::Subscribe(code, event_kind, subscriber) => {
+                    ChannelMessage::Subscribe(code, event_kind, mut subscriber) => {
                         let subscribers = subscribers.get_mut(&event_kind);
+                        
                         if subscribers.is_empty() {
                             let endpoint_str = event_kind.to_string();
+                            
+                            let command = format!("[{}, \"{endpoint_str}\"]", code as u8);
 
-                            let command = format!("[{}, \"{endpoint_str}\"]", code.clone() as u8);
-
-                            if !send_command(error_handler, stream, tls, command) {
-                                break 'outer;
+                            if let Err(e) = stream.send(Message::Text(command)) {
+                                control_flow = error_handler.on_error(e.into());
                             }
                         }
 
-                        let mut iter = subscribers.iter().enumerate();
+                        subscriber.on_subscriber(&event_kind, &code);
 
-                        let idx = iter
-                            .find_map(|(idx, subscriber)| {
-                                if subscriber.is_none() {
-                                    Some(idx)
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap_or(subscribers.len());
-
-                        if idx == subscribers.len() {
-                            subscribers.push(Some(subscriber));
-                        } else {
+                        if let Some(idx) = subscribers.iter().position(Option::is_none) {
                             subscribers[idx] = Some(subscriber);
+                        } else {
+                            subscribers.push(Some(subscriber));
                         }
                     }
                     ChannelMessage::Unsubscribe(subscriber_id, event_kind) => {
                         let subscribers = subscribers.get_mut(&event_kind);
+                        let subscriber = &mut subscribers[subscriber_id.0];
+                        if let Some(subscriber) = subscriber {
+                            subscriber.on_unsubscribe(&event_kind);
+                        }
 
-                        subscribers[subscriber_id.0] = None;
+                        *subscriber = None;
 
                         if subscribers.iter().flatten().count() == 0 {
                             let unsub = format!(
@@ -224,106 +234,63 @@ fn event_loop(
                                 event_kind.to_string()
                             );
 
-                            if !send_command(error_handler, stream, tls, unsub) {
-                                break 'outer;
+                            if let Err(e) = stream.send(Message::Text(unsub)) {
+                                control_flow = error_handler.on_error(e.into());
                             }
                         }
                     }
-                    ChannelMessage::Abort => break 'outer,
+                    ChannelMessage::Abort => break,
                 }
             };
 
-            let read = stream.read();
-
-            match read.no_block() {
-                Ok(Some(message)) => {
-                    let data = message.into_data();
-                    if !data.is_empty() {
-                        match serde_json::from_slice::<Event>(&data) {
-                            Ok(json) => {
-                                let subscribers = subscribers.get_mut(&json.1);
-
-                                for subscriber in subscribers.iter_mut().flatten() {
-                                    let mut control = subscriber.on_event(&json);
-
-                                    if !budget_recursive(&mut control, tls, stream, error_handler) {
-                                        break 'outer;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let mut control = error_handler.on_error(e.into());
-
-                                if !budget_recursive(&mut control, tls, stream, error_handler) {
-                                    break 'outer;
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(None) => thread::sleep(Duration::from_millis(10)),
-                Err(e) => {
-                    if error_handler.on_error(e.into()) == ControlFlow::Break(()) {
-                        break 'outer;
-                    }
+            if control_flow == ControlFlow::Continue(Flow::Continue) {
+                let read = stream.read();
+                match receive_message(read, &mut subscribers) {
+                    Ok(flow) => control_flow = flow,
+                    Err(e) => control_flow = error_handler.on_error(e),
                 }
             }
         } else {
             match connect(tls) {
-                Ok(stream) => maybe_stream = Some(stream),
-                Err(e) => {
-                    if error_handler.on_error(e) == ControlFlow::Break(()) {
-                        break 'outer;
-                    }
+                Ok(mut stream) => {
+                    error_handler.on_connect(&mut stream);
+                    maybe_stream = Some(stream);
                 }
+                Err(e) => control_flow = error_handler.on_error(e),
             }
+        }
+
+        if control_flow == ControlFlow::Continue(Flow::TryReconnect) {
+            maybe_stream = None;
         }
     }
 }
 
-fn send_command(
-    error_handler: &mut impl ErrorHandler,
-    stream: &mut WebSocketStream,
-    tls: &Arc<ClientConfig>,
-    command: String,
-) -> bool {
-    if let Err(e) = stream.send(Message::Text(command)) {
-        let mut control = error_handler.on_error(e.into());
+fn receive_message(
+    read: tungstenite::Result<Message>,
+    subscribers: &mut SubscriberMap,
+) -> Result<ControlFlow<(), Flow>, WebSocketError> {
+    let read = read
+        .no_block()?
+        .filter(|msg| !msg.is_empty())
+        .map(Message::into_data);
 
-        #[rustfmt::skip]
-        let continues = budget_recursive(&mut control, tls, stream, error_handler);
+    if let Some(data) = read {
+        let json = serde_json::from_slice::<Event>(&data)?;
+        let subscribers = subscribers.get_mut(&json.1);
 
-        if !continues {
-            return false;
-        }
-    }
+        for subscriber in subscribers.iter_mut().flatten() {
+            let mut continues = true;
 
-    true
-}
-
-fn budget_recursive(
-    c: &mut ControlFlow<(), Flow>,
-    tls: &Arc<ClientConfig>,
-    stream: &mut WebSocketStream,
-    f: &mut impl ErrorHandler,
-) -> bool {
-    while *c != ControlFlow::Continue(Flow::Continue) {
-        if *c == ControlFlow::Break(()) {
-            return false;
-        }
-
-        match connect(tls) {
-            Ok(new_stream) => {
-                *stream = new_stream;
-                break;
-            }
-            Err(e) => {
-                *c = f.on_error(e);
+            subscriber.on_event(&json, &mut continues);
+            
+            if !continues {
+                return Ok(ControlFlow::Break(()));
             }
         }
     }
 
-    true
+    Ok(ControlFlow::Continue(Flow::Continue))
 }
 
 fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
