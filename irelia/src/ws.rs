@@ -210,7 +210,7 @@ fn event_loop(
                             }
                         }
 
-                        subscriber.on_subscriber(&event_kind, &code);
+                        subscriber.on_subscribe(&event_kind, &code);
 
                         if let Some(idx) = subscribers.iter().position(Option::is_none) {
                             subscribers[idx] = Some(subscriber);
