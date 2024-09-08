@@ -75,6 +75,8 @@ pub trait ErrorHandler: Send {
     /// Default behavior is to do nothing
     fn on_connect(&mut self, _socket: &mut WebSocketStream) {}
 
+    /// Callback run when the websocket connection timesout without
+    /// receiving a message, default behavior is to sleep for half a second
     fn on_timeout(&mut self) {
         thread::sleep(Duration::from_millis(500));
     }
