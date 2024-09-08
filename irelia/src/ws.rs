@@ -74,6 +74,10 @@ pub trait ErrorHandler: Send {
     /// Callback run when the websocket connects or reconnects
     /// Default behavior is to do nothing
     fn on_connect(&mut self, _socket: &mut WebSocketStream) {}
+
+    fn on_timeout(&mut self) {
+        thread::sleep(Duration::from_millis(500));
+    }
 }
 
 /// This is a zero sized struct which calls `eprintln!()` and then breaks on error
@@ -245,7 +249,7 @@ fn event_loop(
 
             if control_flow == ControlFlow::Continue(Flow::Continue) {
                 let read = stream.read();
-                match receive_message(read, &mut subscribers) {
+                match receive_message(read, &mut subscribers, error_handler) {
                     Ok(flow) => control_flow = flow,
                     Err(e) => control_flow = error_handler.on_error(e),
                 }
@@ -269,6 +273,7 @@ fn event_loop(
 fn receive_message(
     read: tungstenite::Result<Message>,
     subscribers: &mut SubscriberMap,
+    error_handler: &mut impl ErrorHandler
 ) -> Result<ControlFlow<(), Flow>, WebSocketError> {
     let read = read
         .no_block()?
@@ -288,6 +293,8 @@ fn receive_message(
                 return Ok(ControlFlow::Break(()));
             }
         }
+    } else {
+        error_handler.on_timeout();
     }
 
     Ok(ControlFlow::Continue(Flow::Continue))
