@@ -61,7 +61,7 @@ version = "0.1"
 optional = true
 
 [dependencies.sysinfo]
-version = "0.31"
+version = "0.32"
 optional = true
 default-features = false
 features = ["system"]
@@ -72,7 +72,7 @@ default-features = false
 optional = true
 
 [dependencies.tungstenite]
-version = "0.23"
+version = "0.24"
 features = ["__rustls-tls"]
 optional = true
 

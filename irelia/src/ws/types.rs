@@ -88,7 +88,7 @@ impl<'de> DeserializeTrait<'de> for EventKind {
     {
         struct StrVisitor;
 
-        impl<'a> Visitor<'a> for StrVisitor {
+        impl Visitor<'_> for StrVisitor {
             type Value = EventKind;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {

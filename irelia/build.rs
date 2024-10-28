@@ -6,35 +6,33 @@ use std::path::Path;
 const RIOT_PEM: &[u8] = include_bytes!("src/riotgames.pem");
 
 fn main() {
-    // Make it rustls compatible
-    let (pem, _) = rustls_pemfile::read_one_from_slice(RIOT_PEM)
-        .unwrap()
-        .unwrap();
-    // Get it in the proper format
-    let rustls_pemfile::Item::X509Certificate(pem) = pem else {
-        unreachable!()
+    let Ok(Some((pem, _))) = rustls_pemfile::read_one_from_slice(RIOT_PEM) else {
+        panic!("Failed to decode pem file, this should never happen");
     };
 
-    let anchor = webpki::anchor_from_trusted_cert(&pem).unwrap();
+    // Get it in the proper format
+    let rustls_pemfile::Item::X509Certificate(pem) = pem else {
+        unreachable!("This is an X509 Cert from riot, this should never be in any other format")
+    };
+
+    let Ok(anchor) = webpki::anchor_from_trusted_cert(&pem) else {
+        panic!("The cert was from Rustls, so it should be valid")
+    };
 
     let subject = anchor.subject.deref();
     let public_info = anchor.subject_public_key_info.deref();
     let name = anchor.name_constraints.as_deref();
 
-    let name = if let Some(name) = name {
-        quote! { Some(Der::from_slice([#(#name),*])) }
-    } else {
-        quote! { None }
-    };
+    let name = name.map_or_else(
+        || quote! { None },
+        |slice| quote! { Some(Der::from_slice([#(#slice),*])) },
+    );
 
     let tokens = quote! {
         pub(super) mod cert {
             use rustls::pki_types::{Der, TrustAnchor};
-
             const SUBJECT: Der = Der::from_slice(&[#(#subject),*]);
-
             const SUBJECT_PUBLIC_KEY_INFO: Der = Der::from_slice(&[#(#public_info),*]);
-
             const NAME_CONSTRAINTS: Option<Der> = #name;
 
             pub const DECODED_CERT: TrustAnchor = TrustAnchor {

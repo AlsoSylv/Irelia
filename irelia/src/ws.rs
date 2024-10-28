@@ -113,8 +113,7 @@ impl LcuWebSocket {
         let (ws_sender, ws_receiver) = std::sync::mpsc::channel::<ChannelMessage>();
 
         let handle = thread::spawn(move || {
-            let tls = connector();
-            let tls = Arc::new(tls.clone());
+            let tls = Arc::new(connector().clone());
 
             let mut error_handler = error_handler;
             let ws_receiver = ws_receiver;
@@ -198,22 +197,23 @@ fn event_loop(
     let mut maybe_stream: Option<WebSocketStream> = None;
     let mut subscribers = SubscriberMap::new();
     let mut control_flow: ControlFlow<(), _> = ControlFlow::Continue(Flow::Continue);
+    let mut abort = false;
 
-    while !control_flow.is_break() {
+    while control_flow.is_continue() && !abort {
         if let Some(stream) = &mut maybe_stream {
             if let Ok(message) = receiver.try_recv() {
+                let mut ws_message = None;
+
                 match message {
                     ChannelMessage::Subscribe(code, event_kind, mut subscriber) => {
                         let subscribers = subscribers.get_mut(&event_kind);
-                        
+
                         if subscribers.is_empty() {
                             let endpoint_str = event_kind.to_string();
-                            
+
                             let command = format!("[{}, \"{endpoint_str}\"]", code as u8);
 
-                            if let Err(e) = stream.send(Message::Text(command)) {
-                                control_flow = error_handler.on_error(e.into());
-                            }
+                            ws_message = Some(Message::Text(command));
                         }
 
                         subscriber.on_subscribe(&event_kind, &code);
@@ -240,21 +240,23 @@ fn event_loop(
                                 event_kind.to_string()
                             );
 
-                            if let Err(e) = stream.send(Message::Text(unsub)) {
-                                control_flow = error_handler.on_error(e.into());
-                            }
+                            ws_message = Some(Message::Text(unsub));
                         }
                     }
-                    ChannelMessage::Abort => break,
+                    ChannelMessage::Abort => {
+                        abort = true;
+                        ws_message = Some(Message::Close(None));
+                    }
+                }
+
+                if let Some(Err(e)) = ws_message.map(|m| stream.send(m)) {
+                    control_flow = error_handler.on_error(e.into());
                 }
             };
 
             if control_flow == ControlFlow::Continue(Flow::Continue) {
-                let read = stream.read();
-                match receive_message(read, &mut subscribers, error_handler) {
-                    Ok(flow) => control_flow = flow,
-                    Err(e) => control_flow = error_handler.on_error(e),
-                }
+                control_flow = receive_message(stream, &mut subscribers, error_handler)
+                    .unwrap_or_else(|e| error_handler.on_error(e));
             }
         } else {
             match connect(tls) {
@@ -273,11 +275,12 @@ fn event_loop(
 }
 
 fn receive_message(
-    read: tungstenite::Result<Message>,
+    stream: &mut WebSocketStream,
     subscribers: &mut SubscriberMap,
-    error_handler: &mut impl ErrorHandler
+    error_handler: &mut impl ErrorHandler,
 ) -> Result<ControlFlow<(), Flow>, WebSocketError> {
-    let read = read
+    let read = stream
+        .read()
         .no_block()?
         .filter(|msg| !msg.is_empty())
         .map(Message::into_data);
@@ -290,7 +293,7 @@ fn receive_message(
             let mut continues = true;
 
             subscriber.on_event(&json, &mut continues);
-            
+
             if !continues {
                 return Ok(ControlFlow::Break(()));
             }

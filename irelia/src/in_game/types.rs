@@ -1136,7 +1136,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
 
         struct StructureVisitor;
 
-        impl<'a> Visitor<'a> for StructureVisitor {
+        impl Visitor<'_> for StructureVisitor {
             type Value = Structure;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -1504,6 +1504,8 @@ mod option_slice {
     use serde::ser::SerializeSeq;
     use serde::{Deserialize, Deserializer, Serializer};
 
+    // Serde requires it to be this way
+    #[allow(clippy::ref_option)]
     pub fn serialize<S: Serializer>(
         slice: &Option<Box<[String]>>,
         serializer: S,
