@@ -1,9 +1,11 @@
 //! Module containing all the data on the websocket LCU bindings
 
 mod error;
+mod impls;
 pub mod types;
 mod utils;
 
+use impls::Returns;
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use std::net::TcpStream;
@@ -187,6 +189,11 @@ impl LcuWebSocket {
     }
 }
 
+// Workaround for lifetime issues with closures
+pub fn force<R: Returns, F: FnMut(&Event) -> R + Send>(f: F) -> F {
+    f
+}
+
 type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
 
 fn event_loop(
@@ -194,20 +201,23 @@ fn event_loop(
     receiver: &Receiver<ChannelMessage>,
     tls: &Arc<ClientConfig>,
 ) {
+    // The stare of the websocket
     let mut maybe_stream: Option<WebSocketStream> = None;
     let mut subscribers = SubscriberMap::new();
-    let mut control_flow: ControlFlow<(), _> = ControlFlow::Continue(Flow::Continue);
+    let mut control_flow = ControlFlow::Continue(Flow::Continue);
     let mut abort = false;
 
-    while control_flow.is_continue() && !abort {
+    while control_flow.is_continue() {
         if let Some(stream) = &mut maybe_stream {
             if let Ok(message) = receiver.try_recv() {
+                // Variable to determine if a message should be sent to the websocket, only one can be sent at a time
                 let mut ws_message = None;
 
                 match message {
                     ChannelMessage::Subscribe(code, event_kind, mut subscriber) => {
                         let subscribers = subscribers.get_mut(&event_kind);
 
+                        // If the map is empty, we are not taking messages for this endpoint, so we have to subscribe
                         if subscribers.is_empty() {
                             let endpoint_str = event_kind.to_string();
 
@@ -216,6 +226,7 @@ fn event_loop(
                             ws_message = Some(Message::Text(command));
                         }
 
+                        // Let the subscriber update its own state
                         subscriber.on_subscribe(&event_kind, &code);
 
                         if let Some(idx) = subscribers.iter().position(Option::is_none) {
@@ -252,8 +263,14 @@ fn event_loop(
                 if let Some(Err(e)) = ws_message.map(|m| stream.send(m)) {
                     control_flow = error_handler.on_error(e.into());
                 }
+
+                // If we're supposed to abort, we should not recieve any new messages from the socket.
+                if abort {
+                    break;
+                }
             };
 
+            // Else if the `control_flow` is still to continue, we take out next message
             if control_flow == ControlFlow::Continue(Flow::Continue) {
                 control_flow = receive_message(stream, &mut subscribers, error_handler)
                     .unwrap_or_else(|e| error_handler.on_error(e));
@@ -268,6 +285,7 @@ fn event_loop(
             }
         }
 
+        // If the `control_flow` is to try and reconnect, we make the stream `None` before the start of the next run
         if control_flow == ControlFlow::Continue(Flow::TryReconnect) {
             maybe_stream = None;
         }

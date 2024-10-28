@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 static RUSTLS_CLIENT_CONFIG: LazyLock<rustls::ClientConfig> = LazyLock::new(connector_internal);
 
-include!(concat!(env!("OUT_DIR"), "\\riot_games_const_pem.rs"));
+include!(concat!(env!("OUT_DIR"), "/riot_games_const_pem.rs"));
 
 //noinspection SpellCheckingInspection
 /// Setups up the TLS connector, this is outside the hyper client as

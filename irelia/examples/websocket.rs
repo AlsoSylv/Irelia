@@ -1,5 +1,6 @@
 use irelia::ws::types::{Event, EventKind};
-use irelia::ws::{LcuWebSocket, Subscriber};
+use irelia::ws::{force, LcuWebSocket, Subscriber};
+use std::sync::atomic::AtomicU32;
 use std::thread;
 use std::time::Duration;
 
@@ -20,9 +21,25 @@ fn main() {
         .subscribe(EventKind::JsonApiEvent, EventCounter(0))
         .unwrap();
 
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    let id_2 = ws_client
+        .subscribe(
+            EventKind::JsonApiEvent,
+            force(|event| {
+                let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                println!("{event:?}");
+                println!("{}", count);
+            }),
+        )
+        .unwrap();
+
     thread::sleep(Duration::from_secs(15));
 
     ws_client.unsubscribe(EventKind::JsonApiEvent, id).unwrap();
+    ws_client
+        .unsubscribe(EventKind::JsonApiEvent, id_2)
+        .unwrap();
 
     ws_client.abort().unwrap();
 
