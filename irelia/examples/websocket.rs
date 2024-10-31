@@ -1,5 +1,5 @@
 use irelia::ws::types::{Event, EventKind};
-use irelia::ws::{force, LcuWebSocket, Subscriber};
+use irelia::ws::{LcuWebSocket, Subscriber};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;

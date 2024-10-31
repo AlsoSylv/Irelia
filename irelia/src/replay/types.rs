@@ -1,5 +1,5 @@
 use crate::in_game::types::duration;
-use crate::replay::types::hidden::KeyFrameValue;
+use crate::replay::types::sealed::KeyFrameValue;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::default::Default;
