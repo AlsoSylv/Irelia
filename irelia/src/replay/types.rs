@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use sysinfo::Pid;
 use time::Duration;
 
-mod hidden {
+mod sealed {
     use crate::replay::types::{ColorValue, Vector3f};
 
     /// This is a specific bound, only applied to valid schema types

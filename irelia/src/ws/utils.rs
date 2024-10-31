@@ -34,28 +34,22 @@ impl<V: Default> EventMap<V> {
     #[must_use]
     pub fn get_mut(&mut self, event_kind: &EventKind) -> &mut V {
         let events = match event_kind {
-            EventKind::JsonApiEvent => &mut self.json_api_event,
-            EventKind::LcdsEvent => &mut self.lcds_event,
-            EventKind::Log => &mut self.log,
-            EventKind::RegionLocaleChanged => &mut self.region_locale_changed,
-            EventKind::ServiceProxyAsyncEvent => &mut self.service_proxy_async_event,
-            EventKind::ServiceProxyMethodEvent => &mut self.service_proxy_method_event,
-            EventKind::ServiceProxyUuidEvent => &mut self.service_proxy_uuid_event,
-            EventKind::JsonApiEventCallback(key) => {
-                let mut key = key.replace('/', "_");
+            EventKind::JsonApiEvent { callback: None } => &mut self.json_api_event,
+            EventKind::JsonApiEvent {
+                callback: Some(callback),
+            } => {
+                let mut key = callback.replace('/', "_");
                 if &key[0..1] == "_" {
                     key.remove(0);
                 }
 
-                if !self.json_api_event_callback.contains_key(&key) {
-                    self.json_api_event_callback
-                        .insert(key.clone(), V::default());
-                }
-
                 self.json_api_event_callback.get_mut(&key).unwrap()
             }
-            EventKind::LcdsEventCallback(key) => {
-                let mut key = key.replace('/', "_");
+            EventKind::LcdsEvent { callback: None } => &mut self.lcds_event,
+            EventKind::LcdsEvent {
+                callback: Some(callback),
+            } => {
+                let mut key = callback.replace('/', "_");
                 if &key[0..1] == "_" {
                     key.remove(0);
                 }
@@ -66,6 +60,11 @@ impl<V: Default> EventMap<V> {
 
                 self.lcds_event_callback.get_mut(&key).unwrap()
             }
+            EventKind::Log => &mut self.log,
+            EventKind::RegionLocaleChanged => &mut self.region_locale_changed,
+            EventKind::ServiceProxyAsyncEvent => &mut self.service_proxy_async_event,
+            EventKind::ServiceProxyMethodEvent => &mut self.service_proxy_method_event,
+            EventKind::ServiceProxyUuidEvent => &mut self.service_proxy_uuid_event,
         };
 
         events
@@ -77,29 +76,33 @@ impl<V> Index<&EventKind> for EventMap<V> {
 
     fn index(&self, index: &EventKind) -> &Self::Output {
         match index {
-            EventKind::JsonApiEvent => &self.json_api_event,
-            EventKind::LcdsEvent => &self.lcds_event,
-            EventKind::Log => &self.log,
-            EventKind::RegionLocaleChanged => &self.region_locale_changed,
-            EventKind::ServiceProxyAsyncEvent => &self.service_proxy_async_event,
-            EventKind::ServiceProxyMethodEvent => &self.service_proxy_method_event,
-            EventKind::ServiceProxyUuidEvent => &self.service_proxy_uuid_event,
-            EventKind::JsonApiEventCallback(key) => {
-                let mut key = key.replace('/', "_");
+            EventKind::JsonApiEvent { callback: None } => &self.json_api_event,
+            EventKind::JsonApiEvent {
+                callback: Some(callback),
+            } => {
+                let mut key = callback.replace('/', "_");
                 if &key[0..1] == "_" {
                     key.remove(0);
                 }
 
                 &self.json_api_event_callback[&key]
             }
-            EventKind::LcdsEventCallback(key) => {
-                let mut key = key.replace('/', "_");
+            EventKind::LcdsEvent { callback: None } => &self.lcds_event,
+            EventKind::LcdsEvent {
+                callback: Some(callback),
+            } => {
+                let mut key = callback.replace('/', "_");
                 if &key[0..1] == "_" {
                     key.remove(0);
                 }
 
                 &self.lcds_event_callback[&key]
             }
+            EventKind::Log => &self.log,
+            EventKind::RegionLocaleChanged => &self.region_locale_changed,
+            EventKind::ServiceProxyAsyncEvent => &self.service_proxy_async_event,
+            EventKind::ServiceProxyMethodEvent => &self.service_proxy_method_event,
+            EventKind::ServiceProxyUuidEvent => &self.service_proxy_uuid_event,
         }
     }
 }

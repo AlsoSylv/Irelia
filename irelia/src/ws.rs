@@ -74,8 +74,23 @@ pub trait ErrorHandler: Send {
     fn on_error(&mut self, error: WebSocketError) -> ControlFlow<(), Flow>;
 
     /// Callback run when the websocket connects or reconnects
-    /// Default behavior is to do nothing
-    fn on_connect(&mut self, _socket: &mut WebSocketStream) {}
+    /// Default behavior is to set the TCP socket to nonblocking
+    ///
+    /// If this function errors, the result will be piped directly to the error handler
+    ///
+    /// # Errors
+    /// By default, this returns an error if the socket cannot be set to nonblocking
+    fn on_connect(&mut self, socket: &mut WebSocketStream) -> Result<(), WebSocketError> {
+        match socket.get_ref() {
+            MaybeTlsStream::Plain(_) => unimplemented!("The stream is always encrypted"),
+            MaybeTlsStream::Rustls(stream_owned) => {
+                stream_owned.sock.sock.set_nonblocking(true)?;
+            }
+            _ => unimplemented!("NativeTls is not supported"),
+        }
+
+        Ok(())
+    }
 
     /// Callback run when the websocket connection timesout without
     /// receiving a message, default behavior is to sleep for half a second
@@ -145,6 +160,32 @@ impl LcuWebSocket {
                 RequestType::Subscribe,
                 event_kind,
                 Box::new(subscriber),
+            ))
+            .ok()?;
+
+        let id = if returned.is_empty() {
+            let tmp = *next_id;
+            *next_id += 1;
+            tmp
+        } else {
+            returned.remove(0)
+        };
+
+        Some(SubscriberID(id))
+    }
+
+    pub fn subscribe_closure<R: Returns>(
+        &mut self,
+        event_kind: EventKind,
+        subscribe_closure: impl Fn(&Event) -> R + Send + 'static,
+    ) -> Option<SubscriberID> {
+        let (next_id, returned) = self.id_free_list.get_mut(&event_kind);
+
+        self.ws_sender
+            .send(ChannelMessage::Subscribe(
+                RequestType::Subscribe,
+                event_kind,
+                Box::new(subscribe_closure),
             ))
             .ok()?;
 
@@ -276,18 +317,21 @@ fn event_loop(
                     .unwrap_or_else(|e| error_handler.on_error(e));
             }
         } else {
-            match connect(tls) {
-                Ok(mut stream) => {
-                    error_handler.on_connect(&mut stream);
-                    maybe_stream = Some(stream);
-                }
-                Err(e) => control_flow = error_handler.on_error(e),
-            }
+            connect(tls, error_handler).map_or_else(
+                |e| control_flow = error_handler.on_error(e),
+                |stream| maybe_stream = Some(stream),
+            );
         }
 
         // If the `control_flow` is to try and reconnect, we make the stream `None` before the start of the next run
         if control_flow == ControlFlow::Continue(Flow::TryReconnect) {
             maybe_stream = None;
+        }
+    }
+
+    if control_flow.is_break() {
+        if let Some(Err(e)) = maybe_stream.map(|mut stream| stream.send(Message::Close(None))) {
+            let _ = error_handler.on_error(e.into());
         }
     }
 }
@@ -323,7 +367,10 @@ fn receive_message(
     Ok(ControlFlow::Continue(Flow::Continue))
 }
 
-fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
+fn connect(
+    tls: &Arc<ClientConfig>,
+    error_handler: &mut impl ErrorHandler,
+) -> Result<WebSocketStream, WebSocketError> {
     const TIMEOUT: Duration = Duration::from_millis(100);
 
     let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
@@ -343,7 +390,7 @@ fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
     let client_connection = ClientConnection::new(tls.clone(), addr).unwrap();
     let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
 
-    let (stream, _) = tungstenite::client_tls_with_config(
+    let (mut stream, _) = tungstenite::client_tls_with_config(
         request.clone(),
         rustls_stream,
         None,
@@ -351,11 +398,7 @@ fn connect(tls: &Arc<ClientConfig>) -> Result<WebSocketStream, WebSocketError> {
     )
     .expect("The TLS handshake should never fail");
 
-    let MaybeTlsStream::Rustls(stream_inner) = stream.get_ref() else {
-        unreachable!();
-    };
-
-    stream_inner.sock.sock.set_nonblocking(true)?;
+    error_handler.on_connect(&mut stream)?;
 
     Ok(stream)
 }

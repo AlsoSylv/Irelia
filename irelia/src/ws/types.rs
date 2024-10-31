@@ -30,15 +30,53 @@ pub enum RequestType {
 /// Different event types that can be passed to the
 /// subscribe and unsubscribe methods.
 pub enum EventKind {
-    JsonApiEvent,
-    LcdsEvent,
+    JsonApiEvent { callback: Option<Cow<'static, str>> },
+    LcdsEvent { callback: Option<Cow<'static, str>> },
     Log,
     RegionLocaleChanged,
     ServiceProxyAsyncEvent,
     ServiceProxyMethodEvent,
     ServiceProxyUuidEvent,
-    JsonApiEventCallback(String),
-    LcdsEventCallback(String),
+}
+
+impl EventKind {
+    #[must_use]
+    pub const fn json_api_event() -> Self {
+        Self::JsonApiEvent { callback: None }
+    }
+
+    #[must_use]
+    pub const fn json_api_event_callback_str(callback: &'static str) -> Self {
+        Self::JsonApiEvent {
+            callback: Some(Cow::Borrowed(callback)),
+        }
+    }
+
+    #[must_use]
+    pub fn json_api_event_callback(callback: impl Into<Cow<'static, str>>) -> Self {
+        Self::JsonApiEvent {
+            callback: Some(callback.into()),
+        }
+    }
+
+    #[must_use]
+    pub const fn lcds_event() -> Self {
+        Self::LcdsEvent { callback: None }
+    }
+
+    #[must_use]
+    pub const fn lcds_event_callback_str(callback: &'static str) -> Self {
+        Self::LcdsEvent {
+            callback: Some(Cow::Borrowed(callback)),
+        }
+    }
+
+    #[must_use]
+    pub fn lcds_event_callback(callback: impl Into<Cow<'static, str>>) -> Self {
+        Self::LcdsEvent {
+            callback: Some(callback.into()),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
@@ -99,19 +137,26 @@ impl<'de> DeserializeTrait<'de> for EventKind {
             where
                 E: Error,
             {
-                if let Some((event, callback)) = v.split_once('_') {
-                    match EventKind::from_str(event) {
-                        EventKind::JsonApiEvent => {
-                            Ok(EventKind::JsonApiEventCallback(callback.to_string()))
-                        }
-                        EventKind::LcdsEvent => {
-                            Ok(EventKind::LcdsEventCallback(callback.to_string()))
-                        }
-                        _ => unreachable!(),
-                    }
+                let (event_kind, callback) = if let Some((idx, _)) = v.match_indices('_').next() {
+                    (&v[0..idx], Some(&v[(idx + 1)..]))
                 } else {
-                    Ok(EventKind::from_str(v))
+                    (v, None)
+                };
+                let mut event_kind = EventKind::from_str(event_kind);
+
+                if let Some(endpoint) = callback {
+                    let callback = if let EventKind::JsonApiEvent { callback } = &mut event_kind {
+                        callback
+                    } else if let EventKind::LcdsEvent { callback } = &mut event_kind {
+                        callback
+                    } else {
+                        unreachable!()
+                    };
+
+                    *callback = Some(endpoint.to_string().into());
                 }
+
+                Ok(event_kind)
             }
         }
 
@@ -131,33 +176,42 @@ impl SerializeTrait for EventKind {
 impl EventKind {
     pub(super) fn to_string(&self) -> Cow<'static, str> {
         match self {
-            Self::JsonApiEvent => "OnJsonApiEvent".into(),
-            Self::LcdsEvent => "OnLcdsEvent".into(),
+            Self::JsonApiEvent { callback: None } => "OnJsonApiEvent".into(),
+            Self::JsonApiEvent {
+                callback: Some(callback),
+            } => {
+                let callback = callback.replace('/', "_");
+                let callback = if let Some(callback) = callback.strip_prefix('_') {
+                    callback
+                } else {
+                    &callback
+                };
+                format!("OnJsonApiEvent_{callback}").into()
+            }
+            Self::LcdsEvent { callback: None } => "OnLcdsEvent".into(),
+            Self::LcdsEvent {
+                callback: Some(callback),
+            } => {
+                let callback = callback.replace('/', "_");
+                let callback = if let Some(callback) = callback.strip_prefix('_') {
+                    callback
+                } else {
+                    &callback
+                };
+                format!("OnLcdsEvent_{callback}").into()
+            }
             Self::Log => "OnLog".into(),
             Self::RegionLocaleChanged => "OnRegionLocaleChanged".into(),
             Self::ServiceProxyAsyncEvent => "OnServiceProxyAsyncEvent".into(),
             Self::ServiceProxyMethodEvent => "OnServiceProxyMethodEvent".into(),
             Self::ServiceProxyUuidEvent => "OnServiceProxyUuidEvent".into(),
-            Self::JsonApiEventCallback(callback) => {
-                let mut callback = callback.replace('/', "_");
-                if &callback[0..1] == "_" {
-                    callback.remove(0);
-                }
-                format!("OnJsonApiEvent_{callback}").into()
-            }
-            Self::LcdsEventCallback(callback) => {
-                let mut callback = callback.replace('/', "_");
-                callback.remove(0);
-
-                format!("OnLcdsEvent_{callback}").into()
-            }
         }
     }
 
     fn from_str(event: &str) -> Self {
         match event {
-            "OnJsonApiEvent" => Self::JsonApiEvent,
-            "OnLcdsEvent" => Self::LcdsEvent,
+            "OnJsonApiEvent" => Self::JsonApiEvent { callback: None },
+            "OnLcdsEvent" => Self::LcdsEvent { callback: None },
             "OnLog" => Self::Log,
             "OnRegionLocaleChanged" => Self::RegionLocaleChanged,
             "OnServiceProxyAsyncEvent" => Self::ServiceProxyAsyncEvent,
@@ -185,7 +239,29 @@ mod test {
 
         let baseline_event = Event(
             RequestType::Subscribe,
-            EventKind::JsonApiEvent,
+            EventKind::JsonApiEvent { callback: None },
+            EventData {
+                data: Value::Object(Map::new()),
+                event_type: "Create".into(),
+                uri: "/Example/Uri".into(),
+            },
+        );
+
+        assert_eq!(event, baseline_event);
+
+        let json = json!([5, "OnJsonApiEvent_example", {
+            "data": {},
+            "eventType": "Create",
+            "uri": "/Example/Uri"
+        }]);
+
+        let event: Event = serde_json::from_value(json).unwrap();
+
+        let baseline_event = Event(
+            RequestType::Subscribe,
+            EventKind::JsonApiEvent {
+                callback: Some("example".into()),
+            },
             EventData {
                 data: Value::Object(Map::new()),
                 event_type: "Create".into(),

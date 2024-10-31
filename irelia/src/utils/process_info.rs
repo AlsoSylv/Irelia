@@ -30,6 +30,21 @@ pub const GAME_PROCESS_NAME: &str = "";
 #[cfg(all(docsrs, target_os = "linux"))]
 pub const CLIENT_PROCESS_NAME: &str = "";
 
+const NOT_RUNNING: Error = Error::new(
+    ErrorKind::NotRunning,
+    "neither the game or client process were running",
+);
+
+const PORT_NOT_FOUND: Error = Error::new(ErrorKind::PortNotFound, "port was not found");
+
+const AUTH_NOT_FOUND: Error = Error::new(ErrorKind::AuthTokenNotFound, "auth token was not found");
+
+const LOCK_FILE_NOT_FOUND: Error = Error::new(
+    ErrorKind::LockFileNotFound,
+    "Did not follow the typical install structure",
+)
+.set_lockfile_error(true);
+
 /// Gets the port and auth for the client via the process id
 /// This is done to avoid needing to find the lock file, but
 /// a fallback could be implemented in theory using the fact
@@ -40,6 +55,9 @@ pub const CLIENT_PROCESS_NAME: &str = "";
 /// or the lock file is inaccessibly for some reason.
 /// If it returns an error for any other reason, this code
 /// likely needs the client and game process names updated.
+///
+/// # Panics
+/// Panics if the lockfile length is greater than `usize::MAX`, but this should be impossible
 pub fn get_running_client(
     client_process_name: &str,
     game_process_name: &str,
@@ -84,15 +102,11 @@ pub fn get_running_client(
                 name == game_process_name
             }
         })
-        .ok_or(Error::new(
-            ErrorKind::NotRunning,
-            "neither the game or client process were running",
-        ))?;
+        .ok_or(NOT_RUNNING)?;
 
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file: [u8; 60] = [0; 60];
-    let port: &str;
-    let auth: &str = if client && !force_lock_file {
+    let [port, auth] = if client && !force_lock_file {
         // The port and auth should always be ASCII, as they are a number and a B64 buffer
         let cmd = process.cmd().iter().filter_map(|os_str| os_str.to_str());
         // Use a variable in a higher scope to make sure that port and auth get initialized
@@ -115,39 +129,30 @@ pub fn get_running_client(
         }
 
         // Check that we found a port and auth key, otherwise error
-        port = scoped_port.ok_or(Error::new(
-            ErrorKind::PortNotFound,
-            "port was not found in command line",
-        ))?;
-        scoped_auth.ok_or(Error::new(
-            ErrorKind::AuthTokenNotFound,
-            "auth token was not found in command line",
-        ))?
+        [
+            scoped_port.ok_or(PORT_NOT_FOUND)?,
+            scoped_auth.ok_or(AUTH_NOT_FOUND)?,
+        ]
     } else {
-        const LOCK_FILE_NOT_FOUND_ERROR: Error = Error::new(
-            ErrorKind::LockFileNotFound,
-            "Did not follow the typical install structure",
-        );
-
         // We have to walk back twice to get the path of the lock file relative to the path of the game
         // This can only be None on Linux according to the docs, so we should be fine everywhere else
-        let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND_ERROR)?;
+        let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND)?;
 
-        let dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND_ERROR)?;
+        let mut dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
         // Sadly, we're relying on how the client structures things here
         // Walking back a whole folder in order to get the lock file
-        let base_dir = if client {
-            // If it IS the client, we're in the right dir
-            dir
-        } else {
-            // Otherwise it is the game, and we need to go back once
-            dir.parent().ok_or(LOCK_FILE_NOT_FOUND_ERROR)?
+        if !client {
+            // If we're looking at the game and not the client, we need to walk back once more
+            dir = dir.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
         };
 
-        let mut file = std::fs::File::open(base_dir.join("lockfile"))?;
+        let mut file = std::fs::File::open(dir.join("lockfile"))?;
         // This len shouldn't be more than a few bytes
-        #[allow(clippy::cast_possible_truncation)]
-        let len = file.metadata()?.len() as usize;
+        let len = file
+            .metadata()?
+            .len()
+            .try_into()
+            .expect("This file is always ~60 bytes");
 
         // Read the file initially
         let mut read = file.read(&mut lock_file)?;
@@ -165,17 +170,17 @@ pub fn get_running_client(
         // and return two string references later on
         let mut split = lock_file.split(':');
 
-        // Get the 3rd field, which should be the port
-        port = split.nth(2).ok_or(Error::new(
-            ErrorKind::PortNotFound,
-            "port was not found in lock file",
-        ))?;
-        // We moved the cursor, so the fourth element is the very next one
-        // Which should be the auth string
-        split.next().ok_or(Error::new(
-            ErrorKind::AuthTokenNotFound,
-            "password was not found in lock file",
-        ))?
+        [
+            // Get the 3rd field, which should be the port
+            split
+                .nth(2)
+                .ok_or(PORT_NOT_FOUND.set_lockfile_error(true))?,
+            // We moved the cursor, so the fourth element is the very next one
+            // Which should be the auth string
+            split
+                .next()
+                .ok_or(AUTH_NOT_FOUND.set_lockfile_error(true))?,
+        ]
     };
 
     // Format the header without
@@ -206,6 +211,7 @@ pub fn get_running_client(
 pub struct Error {
     kind: ErrorKind,
     message: std::borrow::Cow<'static, str>,
+    lock_file_error: bool,
 }
 
 impl Display for Error {
@@ -221,6 +227,7 @@ impl Error {
         Self {
             kind,
             message: std::borrow::Cow::Borrowed(message),
+            lock_file_error: false,
         }
     }
 
@@ -228,7 +235,18 @@ impl Error {
         Self {
             kind,
             message: std::borrow::Cow::Owned(message),
+            lock_file_error: false,
         }
+    }
+
+    const fn set_lockfile_error(mut self, lock_fie_error: bool) -> Self {
+        self.lock_file_error = lock_fie_error;
+        self
+    }
+
+    #[must_use]
+    pub const fn is_lockfile_error(&self) -> bool {
+        self.lock_file_error
     }
 
     #[must_use]
@@ -263,6 +281,7 @@ impl From<std::io::Error> for Error {
         Self {
             kind: ErrorKind::Io(value.kind()),
             message: value.to_string().into(),
+            lock_file_error: true,
         }
     }
 }
@@ -274,6 +293,7 @@ impl From<std::str::Utf8Error> for Error {
                 ErrorKind::Io(std::io::ErrorKind::InvalidData),
                 "stream did not contain valid UTF-8",
             )
+            .set_lockfile_error(true)
         }
     }
 }

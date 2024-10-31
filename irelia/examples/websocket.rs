@@ -1,6 +1,6 @@
 use irelia::ws::types::{Event, EventKind};
 use irelia::ws::{force, LcuWebSocket, Subscriber};
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -18,27 +18,26 @@ fn main() {
     let mut ws_client = LcuWebSocket::new();
 
     let id = ws_client
-        .subscribe(EventKind::JsonApiEvent, EventCounter(0))
+        .subscribe(EventKind::json_api_event(), EventCounter(0))
         .unwrap();
 
     static COUNTER: AtomicU32 = AtomicU32::new(0);
 
     let id_2 = ws_client
-        .subscribe(
-            EventKind::JsonApiEvent,
-            force(|event| {
-                let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                println!("{event:?}");
-                println!("{}", count);
-            }),
-        )
+        .subscribe_closure(EventKind::json_api_event(), |event| {
+            let count = COUNTER.fetch_add(1, Ordering::SeqCst);
+            println!("{event:?}");
+            println!("{}", count);
+        })
         .unwrap();
 
     thread::sleep(Duration::from_secs(15));
 
-    ws_client.unsubscribe(EventKind::JsonApiEvent, id).unwrap();
     ws_client
-        .unsubscribe(EventKind::JsonApiEvent, id_2)
+        .unsubscribe(EventKind::json_api_event(), id)
+        .unwrap();
+    ws_client
+        .unsubscribe(EventKind::json_api_event(), id_2)
         .unwrap();
 
     ws_client.abort().unwrap();
