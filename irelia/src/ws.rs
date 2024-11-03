@@ -330,6 +330,8 @@ fn event_loop(
     }
 
     if control_flow.is_break() {
+        // Ignore if it's already closed
+        let maybe_stream = maybe_stream.filter(WebSocket::can_write);
         if let Some(Err(e)) = maybe_stream.map(|mut stream| stream.send(Message::Close(None))) {
             let _ = error_handler.on_error(e.into());
         }
