@@ -7,6 +7,7 @@ pub mod types;
 use hyper::body::Incoming;
 use hyper::Response;
 use serde::de::DeserializeOwned;
+use std::net::{Ipv4Addr, SocketAddrV4};
 
 use crate::{Error, RequestClient};
 
@@ -16,7 +17,7 @@ use self::types::{
 };
 
 /// The only url the in game API can be used on
-pub const URL: &str = "127.0.0.1:2999";
+pub const URL: SocketAddrV4 = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 2999);
 
 /// Struct that represents a connection to the in game api client
 /// Because the URL is constant, this is a zero sized struct to help organize code
@@ -32,7 +33,7 @@ impl GameClient {
 
     #[must_use]
     /// Returns the url, which is currently static
-    pub const fn url(&self) -> &str {
+    pub const fn url(&self) -> SocketAddrV4 {
         URL
     }
 

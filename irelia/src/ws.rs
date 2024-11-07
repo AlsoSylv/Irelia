@@ -8,7 +8,7 @@ mod utils;
 use impls::Returns;
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -374,6 +374,7 @@ fn connect(
     const TIMEOUT: Duration = Duration::from_millis(100);
 
     let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+    let addr = SocketAddr::V4(addr);
 
     let str_req = format!("wss://{addr}");
 

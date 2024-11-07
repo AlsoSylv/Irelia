@@ -1,8 +1,12 @@
 use crate::Error;
+use std::io::BufWriter;
+use std::io::Write;
+use std::net::SocketAddrV4;
 
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Buf, Bytes, Incoming};
 use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use hyper::http::uri::Scheme;
 use hyper::{Request, Response, Uri};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -52,7 +56,7 @@ impl RequestClient {
     /// if the body is invalid JSON, otherwise in any way hyper would normally
     pub(crate) async fn raw_request_template<T>(
         &self,
-        url: &str,
+        url: SocketAddrV4,
         endpoint: &str,
         method: &str,
         body: Option<T>,
@@ -62,10 +66,23 @@ impl RequestClient {
         T: Serialize + Send,
     {
         const MINE: &str = "application/x-msgpack";
+        const LONGEST_SOCKET_ADDR: usize = "255.255.255.255:65535".len();
+
+        const { assert!(65535 == u16::MAX) };
+
+        let mut buffer = [0; LONGEST_SOCKET_ADDR];
+        let mut buf_writer = BufWriter::new(buffer.as_mut_slice());
+
+        let url = {
+            write!(&mut buf_writer, "{url}")
+                .expect("We can always store the 127.0.0.1 into the buffer");
+
+            std::str::from_utf8(buf_writer.buffer()).expect("The buffer is always valid utf-8")
+        };
 
         // Build the URI, always in https format
         let built_uri = Uri::builder()
-            .scheme("https")
+            .scheme(Scheme::HTTPS)
             .authority(url)
             .path_and_query(endpoint)
             .build()?;
@@ -100,7 +117,7 @@ impl RequestClient {
     /// Makes a request, collects the bytes, and returns the buf
     pub(crate) async fn request_template<T>(
         &self,
-        url: &str,
+        url: SocketAddrV4,
         endpoint: &str,
         method: &str,
         body: Option<T>,

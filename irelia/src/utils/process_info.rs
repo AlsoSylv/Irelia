@@ -7,11 +7,11 @@
 use irelia_encoder::Encoder;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::ParseIntError;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
-// Linux will be unplayable soon, so support has been removed
+// Linux is unplayable, the constants here are only defined so the docs build
 #[cfg(target_os = "windows")]
 pub const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
 #[cfg(target_os = "macos")]
@@ -62,7 +62,7 @@ pub fn get_running_client(
     client_process_name: &str,
     game_process_name: &str,
     force_lock_file: bool,
-) -> Result<(SocketAddr, String), Error> {
+) -> Result<(SocketAddrV4, String), Error> {
     // If we always read the lock file, we never need to get the command line of the process
     let cmd = if force_lock_file {
         sysinfo::UpdateKind::Never
@@ -91,21 +91,15 @@ pub fn get_running_client(
         .processes()
         .values()
         .find(|process| {
-            // Get the name of the process
-            let name = process.name();
             // If it matches the name of the client,
             // set the flag, and return it
-            if name == client_process_name {
-                client = true;
-                client
-            } else {
-                name == game_process_name
-            }
+            client = process.name() == client_process_name;
+            client | (process.name() == game_process_name)
         })
         .ok_or(NOT_RUNNING)?;
 
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
-    let mut lock_file: [u8; 60] = [0; 60];
+    let mut lock_file = [0; 60];
     let [port, auth] = if client && !force_lock_file {
         // The port and auth should always be ASCII, as they are a number and a B64 buffer
         let cmd = process.cmd().iter().filter_map(|os_str| os_str.to_str());
@@ -188,18 +182,24 @@ pub fn get_running_client(
     needs_encoding.push_str("riot:");
     needs_encoding.push_str(auth);
 
+    let auth_header_len = needs_encoding.len().div_ceil(3) * 4;
+    let mut auth_header_buffer = [b'='; 32];
+
     // The auth header has to be base64 encoded, so that's happens here
-    let auth_header = ENCODER.encode(needs_encoding);
+    ENCODER.internal_encode(needs_encoding.as_bytes(), &mut auth_header_buffer);
+
+    let auth_header = std::str::from_utf8(&auth_header_buffer[..auth_header_len])
+        .expect("The buffer is always valid utf-8");
 
     let port: u16 = port.parse().map_err(|err: ParseIntError| {
         Error::new_string(ErrorKind::PortNotFound, err.to_string())
     })?;
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
 
-    let mut formatted_auth = String::with_capacity(6 + auth_header.len());
+    let mut formatted_auth = String::with_capacity(6 + auth_header_len);
     formatted_auth.push_str("Basic ");
-    formatted_auth.push_str(&auth_header);
+    formatted_auth.push_str(&auth_header[..auth_header_len]);
 
     // Format the port and header so that they can be used as headers
     // For the LCU API

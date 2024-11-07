@@ -10,11 +10,11 @@ use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::{utils::process_info::get_running_client, Error, RequestClient};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::net::SocketAddr;
+use std::net::SocketAddrV4;
 
 /// Struct representing a connection to the LCU
 pub struct LcuClient {
-    url: String,
+    url: SocketAddrV4,
     auth_header: String,
 }
 
@@ -39,11 +39,8 @@ impl LcuClient {
     #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
-    pub fn new_with_credentials(url: SocketAddr, auth_header: String) -> Self {
-        Self {
-            url: url.to_string(),
-            auth_header,
-        }
+    pub fn new_with_credentials(url: SocketAddrV4, auth_header: String) -> Self {
+        Self { url, auth_header }
     }
 
     /// Queries the client or lock file, getting a new url and auth header
@@ -59,15 +56,15 @@ impl LcuClient {
     }
 
     /// Sets the url and auth header according to the auth and port provided
-    pub fn reconnect_with_credentials(&mut self, url: SocketAddr, auth: String) {
-        self.url = url.to_string();
+    pub fn reconnect_with_credentials(&mut self, url: SocketAddrV4, auth: String) {
+        self.url = url;
         self.auth_header = auth;
     }
 
     #[must_use]
     /// Returns a reference to the URL in use
-    pub fn url(&self) -> &str {
-        &self.url
+    pub fn url(&self) -> SocketAddrV4 {
+        self.url
     }
 
     #[must_use]
@@ -119,7 +116,7 @@ impl LcuClient {
     ) -> Result<hyper::Response<hyper::body::Incoming>, Error> {
         request_client
             .raw_request_template(
-                &self.url,
+                self.url,
                 endpoint.as_ref(),
                 "HEAD",
                 None::<()>,
@@ -187,7 +184,7 @@ impl LcuClient {
         use hyper::body::Buf;
 
         let buf = request_client
-            .request_template(&self.url, endpoint, method, body, Some(&self.auth_header))
+            .request_template(self.url, endpoint, method, body, Some(&self.auth_header))
             .await?;
 
         Ok(rmp_serde::from_read(buf.reader())?)

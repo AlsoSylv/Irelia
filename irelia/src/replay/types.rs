@@ -498,7 +498,7 @@ mod pid {
     pub(crate) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Pid, D::Error> {
         struct PidVisitor;
 
-        impl<'a> Visitor<'a> for PidVisitor {
+        impl Visitor<'_> for PidVisitor {
             type Value = Pid;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {

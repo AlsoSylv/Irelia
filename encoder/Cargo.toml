@@ -13,7 +13,7 @@ documentation = "https://docs.rs/irelia_encoder"
 
 [dev-dependencies]
 rand = "0.8.5"
-base64 = "0.22.0"
+base64 = "0.22.1"
 
 [features]
 simd = ["nightly"]
