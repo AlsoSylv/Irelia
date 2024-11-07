@@ -183,7 +183,7 @@ pub fn get_running_client(
     needs_encoding.push_str(auth);
 
     let auth_header_len = needs_encoding.len().div_ceil(3) * 4;
-    let mut auth_header_buffer = [b'='; 32];
+    let mut auth_header_buffer: &mut [u8] = if auth_header_len > 36 { &mut vec![b'='; auth_header_len].into_boxed_slice() } else { &mut [b'='; 36] };
 
     // The auth header has to be base64 encoded, so that's happens here
     ENCODER.internal_encode(needs_encoding.as_bytes(), &mut auth_header_buffer);

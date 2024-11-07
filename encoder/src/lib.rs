@@ -24,7 +24,6 @@ use alloc::{string::String, vec};
 
 /// BASE64 encoder struct
 pub struct Encoder {
-    #[cfg(not(feature = "simd"))]
     encode_table: [u8; 64],
 }
 
@@ -46,7 +45,6 @@ impl Encoder {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            #[cfg(not(feature = "simd"))]
             encode_table: [
                 b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
                 b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',
@@ -128,8 +126,8 @@ impl Encoder {
                     self.encode_table[(byte_array_1 >> 36 & 0b0011_1111) as usize],
                     self.encode_table[(byte_array_1 >> 30 & 0b0011_1111) as usize],
                     self.encode_table[(byte_array_1 >> 24 & 0b0011_1111) as usize],
-                    self.encode_table[(byte_array_1 >> 12 & 0b0011_1111) as usize],
                     self.encode_table[(byte_array_1 >> 18 & 0b0011_1111) as usize],
+                    self.encode_table[(byte_array_1 >> 12 & 0b0011_1111) as usize],
                     self.encode_table[(byte_array_1 >> 6 & 0b0011_1111) as usize],
                     self.encode_table[(byte_array_1 & 0b0011_1111) as usize],
                     self.encode_table[(byte_array_2 >> 42 & 0b0011_1111) as usize],
@@ -653,6 +651,26 @@ where
     };
     // Simply do nothing on most architectures.
     idxs
+}
+
+#[cfg(all(test, not(feature = "nightly")))]
+#[test]
+fn b64_validity_check() {
+    use base64::{engine::general_purpose, Engine};
+    use rand::distributions::{Alphanumeric, DistString};
+    use rand::thread_rng;
+
+    for _ in 0..100000 {
+        let mut rng = thread_rng();
+        let string = Alphanumeric.sample_string(&mut rng, 34);
+        let b64_encoded = general_purpose::STANDARD.encode(string.clone());
+        let encoder = Encoder::new();
+        let my_encoded = encoder.encode(string);
+
+        if !my_encoded.eq(&b64_encoded) {
+            panic!("{my_encoded:?} != {b64_encoded:?}")
+        }
+    }
 }
 
 #[cfg(all(test, feature = "nightly"))]
