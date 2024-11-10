@@ -63,6 +63,8 @@ pub fn get_running_client(
     game_process_name: &str,
     force_lock_file: bool,
 ) -> Result<(SocketAddrV4, String), Error> {
+    const RIOT_PREFIX: &[u8] = b"riot:";
+
     // If we always read the lock file, we never need to get the command line of the process
     let cmd = if force_lock_file {
         sysinfo::UpdateKind::Never
@@ -91,8 +93,6 @@ pub fn get_running_client(
         .processes()
         .values()
         .find(|process| {
-            // If it matches the name of the client,
-            // set the flag, and return it
             client = process.name() == client_process_name;
             client | (process.name() == game_process_name)
         })
@@ -177,16 +177,28 @@ pub fn get_running_client(
         ]
     };
 
-    // Format the header without
-    let mut needs_encoding = String::with_capacity(5 + auth.len());
-    needs_encoding.push_str("riot:");
-    needs_encoding.push_str(auth);
+    // Prevent the pre-encoded base64 string from allocating
+    let pre_encoded_buffer_len = auth.len() + RIOT_PREFIX.len();
+    // `22 + RIOT_PREFIX.len()` is 27, which is what I've observed to almost always be the length
+    let buffer: &mut [u8] = if pre_encoded_buffer_len > 22 + RIOT_PREFIX.len() {
+        &mut vec![0; pre_encoded_buffer_len].into_boxed_slice()
+    } else {
+        &mut [0; 22 + RIOT_PREFIX.len()]
+    };
 
-    let auth_header_len = needs_encoding.len().div_ceil(3) * 4;
-    let mut auth_header_buffer: &mut [u8] = if auth_header_len > 36 { &mut vec![b'='; auth_header_len].into_boxed_slice() } else { &mut [b'='; 36] };
+    buffer[..RIOT_PREFIX.len()].copy_from_slice(RIOT_PREFIX);
+    buffer[RIOT_PREFIX.len()..(auth.len() + RIOT_PREFIX.len())].copy_from_slice(auth.as_bytes());
+
+    let auth_header_len = pre_encoded_buffer_len.div_ceil(3) * 4;
+    // 27 / 3 * 4 = 36
+    let auth_header_buffer: &mut [u8] = if auth_header_len > 36 {
+        &mut vec![b'='; auth_header_len].into_boxed_slice()
+    } else {
+        &mut [b'='; 36]
+    };
 
     // The auth header has to be base64 encoded, so that's happens here
-    ENCODER.internal_encode(needs_encoding.as_bytes(), &mut auth_header_buffer);
+    ENCODER.internal_encode(buffer, auth_header_buffer);
 
     let auth_header = std::str::from_utf8(&auth_header_buffer[..auth_header_len])
         .expect("The buffer is always valid utf-8");

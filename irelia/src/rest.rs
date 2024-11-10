@@ -119,7 +119,7 @@ impl LcuClient {
                 self.url,
                 endpoint.as_ref(),
                 "HEAD",
-                None::<()>,
+                None,
                 Some(&self.auth_header),
             )
             .await

@@ -51,7 +51,7 @@ impl GameClient {
         request_client: &RequestClient,
     ) -> Result<Response<Incoming>, Error> {
         request_client
-            .raw_request_template(URL, endpoint, "HEAD", None::<()>, None)
+            .raw_request_template(URL, endpoint, "HEAD", None, None)
             .await
     }
 

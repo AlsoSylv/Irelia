@@ -660,16 +660,14 @@ fn b64_validity_check() {
     use rand::distributions::{Alphanumeric, DistString};
     use rand::thread_rng;
 
-    for _ in 0..100000 {
+    for _ in 0..100_000 {
         let mut rng = thread_rng();
         let string = Alphanumeric.sample_string(&mut rng, 34);
         let b64_encoded = general_purpose::STANDARD.encode(string.clone());
         let encoder = Encoder::new();
         let my_encoded = encoder.encode(string);
 
-        if !my_encoded.eq(&b64_encoded) {
-            panic!("{my_encoded:?} != {b64_encoded:?}")
-        }
+        assert_eq!(my_encoded, b64_encoded);
     }
 }
 

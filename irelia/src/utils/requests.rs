@@ -54,17 +54,14 @@ impl RequestClient {
     ///
     /// # Errors
     /// if the body is invalid JSON, otherwise in any way hyper would normally
-    pub(crate) async fn raw_request_template<T>(
+    pub(crate) async fn raw_request_template(
         &self,
         url: SocketAddrV4,
         endpoint: &str,
         method: &str,
-        body: Option<T>,
+        body: Option<Full<Bytes>>,
         auth_header: Option<&str>,
-    ) -> Result<Response<Incoming>, Error>
-    where
-        T: Serialize + Send,
-    {
+    ) -> Result<Response<Incoming>, Error> {
         const MINE: &str = "application/x-msgpack";
         const LONGEST_SOCKET_ADDR: usize = "255.255.255.255:65535".len();
 
@@ -99,16 +96,10 @@ impl RequestClient {
             builder = builder.header(AUTHORIZATION, header);
         };
 
-        let mut buffer = Full::default();
-
-        // Turn the body to bytes, return any errors,
-        // then map to Full<Bytes>
-        if let Some(body) = body {
-            buffer = Full::from(rmp_serde::to_vec_named(&body)?);
-        }
+        let body = body.unwrap_or_default();
 
         // Add the body to finalize
-        let request = builder.body(buffer)?;
+        let request = builder.body(body)?;
 
         // Return the incoming request
         Ok(self.client.request(request).await?)
@@ -126,6 +117,10 @@ impl RequestClient {
     where
         T: Serialize + Send,
     {
+        let body = body
+            .map(|body| rmp_serde::to_vec_named(&body).map(Full::from))
+            .transpose()?;
+
         let response = self
             .raw_request_template(url, endpoint, method, body, auth_header)
             .await?;
