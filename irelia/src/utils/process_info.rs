@@ -190,18 +190,17 @@ pub fn get_running_client(
     buffer[RIOT_PREFIX.len()..(auth.len() + RIOT_PREFIX.len())].copy_from_slice(auth.as_bytes());
 
     let auth_header_len = pre_encoded_buffer_len.div_ceil(3) * 4;
-    // 27 / 3 * 4 = 36
+    // 27 / 3 * 4 = 36 + 6 for the "Basic " prefix
     let auth_header_buffer: &mut [u8] = if auth_header_len > 36 {
-        &mut vec![b'='; auth_header_len].into_boxed_slice()
+        &mut vec![b'='; auth_header_len + 6].into_boxed_slice()
     } else {
-        &mut [b'='; 36]
+        &mut [b'='; 36 + 6]
     };
 
-    // The auth header has to be base64 encoded, so that's happens here
-    ENCODER.internal_encode(buffer, auth_header_buffer);
+    auth_header_buffer[..6].copy_from_slice(b"Basic ");
 
-    let auth_header = std::str::from_utf8(&auth_header_buffer[..auth_header_len])
-        .expect("The buffer is always valid utf-8");
+    // The auth header has to be base64 encoded, so that's happens here
+    ENCODER.internal_encode(buffer, &mut auth_header_buffer[6..]);
 
     let port: u16 = port.parse().map_err(|err: ParseIntError| {
         Error::new_string(ErrorKind::PortNotFound, err.to_string())
@@ -209,13 +208,9 @@ pub fn get_running_client(
 
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
 
-    let mut formatted_auth = String::with_capacity(6 + auth_header_len);
-    formatted_auth.push_str("Basic ");
-    formatted_auth.push_str(&auth_header[..auth_header_len]);
-
     // Format the port and header so that they can be used as headers
     // For the LCU API
-    Ok((addr, formatted_auth))
+    Ok((addr, String::from_utf8_lossy(auth_header_buffer).to_string()))
 }
 
 #[derive(Debug, Clone)]

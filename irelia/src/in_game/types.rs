@@ -1066,9 +1066,11 @@ impl Structure {
     /// Inhibitors always return `StructurePlace::Inner`
     ///
     /// In Nexus Blitz, Turrets are either inner or outer
-    pub fn place_determined(&self, map: &MapName) -> StructurePlace {
+    ///
+    /// Returns `None` if the map has no structures
+    pub fn place_determined(&self, map: &MapName) -> Option<StructurePlace> {
         if self.is_inhibitor() {
-            return StructurePlace::Inner;
+            return Some(StructurePlace::Inner);
         }
 
         match map {
@@ -1080,7 +1082,7 @@ impl Structure {
                     (2, true) => StructurePlace::TopNexus,
                     (1, true) => StructurePlace::BotNexus,
                     _ => unreachable!("Side lanes have three turrets, while mid has five"),
-                }
+                }.into()
             }
             MapName::HowlingAbyss => match self.place {
                 1 | 8 => StructurePlace::Outer,
@@ -1088,15 +1090,14 @@ impl Structure {
                 3 | 10 => StructurePlace::TopNexus,
                 4 | 9 => StructurePlace::BotNexus,
                 _ => unreachable!("At the time of writing, aram has 4 towers on each side"),
-            },
+            }.into(),
             MapName::NexusBlitz => match self.place {
                 1 | 2 => StructurePlace::Inner,
                 3 | 4 => StructurePlace::Outer,
                 _ => unreachable!("Nexus Blitz only has four turrets"),
-            },
-            MapName::Arena | MapName::TwistedTreeline | MapName::TFT => {
-                unreachable!("These game modes either do not have structures, or no longer exist")
-            }
+            }.into(),
+            MapName::Arena | MapName::TFT | MapName::Swarm => None,
+            MapName::TwistedTreeline => unimplemented!("This game mode does not exist but let me hope"),
             MapName::Other(other) => unimplemented!(
                 "Map {other} is new and unsupported, report this on github and it will be fixed"
             ),
@@ -1305,7 +1306,7 @@ pub struct GameData {
 pub enum GameMode {
     #[serde(rename = "CLASSIC")]
     SummonersRift,
-    #[serde(rename = "ODIN")]
+    #[serde(rename = "ODIN", alias = "CREPE")]
     Aram,
     Tutorial,
     #[serde(rename = "TUTORIAL_MODULE_1")]
@@ -1326,6 +1327,8 @@ pub enum GameMode {
     UltimateSpellbook,
     #[serde(rename = "CHERRY")]
     Arena,
+    #[serde(rename = "STRAWBERRY")]
+    Swarn,
     /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/gameModes.json>
     /// However, this may not be up-to-date
     #[serde(untagged)]
@@ -1349,6 +1352,8 @@ pub enum MapName {
     TFT,
     #[serde(rename = "Map30")]
     Arena,
+    #[serde(rename = "Map33")]
+    Swarm,
     /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/maps.json>
     /// However, this may be out of date, if that's the case, look at <https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/maps.json>
     /// for the latest maps that patch

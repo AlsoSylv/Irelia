@@ -77,6 +77,8 @@
 					"GAMEMODEX",
 					"ULTBOOK",
 					"CHERRY",
+					"STRAWBERRY",
+					"CREPE",
 					"Other"
 				]
 			},
@@ -90,6 +92,7 @@
 					"Map21",
 					"Map22",
 					"Map30",
+					"map33",
 					"Other"
 				]
 			},
@@ -98,7 +101,7 @@
 				"default": "Default",
 				"enum": [
 					"Default",
-					"Internal",
+					"Infernal",
 					"Ocean",
 					"Mountain",
 					"Cloud",
