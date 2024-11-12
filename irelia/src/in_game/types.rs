@@ -1082,7 +1082,8 @@ impl Structure {
                     (2, true) => StructurePlace::TopNexus,
                     (1, true) => StructurePlace::BotNexus,
                     _ => unreachable!("Side lanes have three turrets, while mid has five"),
-                }.into()
+                }
+                .into()
             }
             MapName::HowlingAbyss => match self.place {
                 1 | 8 => StructurePlace::Outer,
@@ -1090,14 +1091,18 @@ impl Structure {
                 3 | 10 => StructurePlace::TopNexus,
                 4 | 9 => StructurePlace::BotNexus,
                 _ => unreachable!("At the time of writing, aram has 4 towers on each side"),
-            }.into(),
+            }
+            .into(),
             MapName::NexusBlitz => match self.place {
                 1 | 2 => StructurePlace::Inner,
                 3 | 4 => StructurePlace::Outer,
                 _ => unreachable!("Nexus Blitz only has four turrets"),
-            }.into(),
+            }
+            .into(),
             MapName::Arena | MapName::TFT | MapName::Swarm => None,
-            MapName::TwistedTreeline => unimplemented!("This game mode does not exist but let me hope"),
+            MapName::TwistedTreeline => {
+                unimplemented!("This game mode does not exist but let me hope")
+            }
             MapName::Other(other) => unimplemented!(
                 "Map {other} is new and unsupported, report this on github and it will be fixed"
             ),

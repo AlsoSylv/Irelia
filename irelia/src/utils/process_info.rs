@@ -9,6 +9,7 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::ParseIntError;
+use std::str::FromStr;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 // Linux is unplayable, the constants here are only defined so the docs build
@@ -58,11 +59,14 @@ const LOCK_FILE_NOT_FOUND: Error = Error::new(
 ///
 /// # Panics
 /// Panics if the lockfile length is greater than `usize::MAX`, but this should be impossible
-pub fn get_running_client(
+pub fn get_running_client<T>(
     client_process_name: &str,
     game_process_name: &str,
     force_lock_file: bool,
-) -> Result<(SocketAddrV4, String), Error> {
+) -> Result<(SocketAddrV4, Result<T, T::Err>), Error>
+where
+    T: FromStr,
+{
     const RIOT_PREFIX: &[u8] = b"riot:";
 
     // If we always read the lock file, we never need to get the command line of the process
@@ -109,16 +113,16 @@ pub fn get_running_client(
 
         // Iterate through the command args, updating the scoped values as we go
         for s in cmd {
+            if scoped_auth.is_some() && scoped_port.is_some() {
+                break;
+            }
+
             if scoped_auth.is_none() {
                 scoped_auth = s.strip_prefix("--remoting-auth-token=");
             }
 
             if scoped_port.is_none() {
                 scoped_port = s.strip_prefix("--app-port=");
-            }
-
-            if scoped_auth.is_some() && scoped_port.is_some() {
-                break;
             }
         }
 
@@ -187,7 +191,7 @@ pub fn get_running_client(
     };
 
     buffer[..RIOT_PREFIX.len()].copy_from_slice(RIOT_PREFIX);
-    buffer[RIOT_PREFIX.len()..(auth.len() + RIOT_PREFIX.len())].copy_from_slice(auth.as_bytes());
+    buffer[RIOT_PREFIX.len()..auth.len() + RIOT_PREFIX.len()].copy_from_slice(auth.as_bytes());
 
     let auth_header_len = pre_encoded_buffer_len.div_ceil(3) * 4;
     // 27 / 3 * 4 = 36 + 6 for the "Basic " prefix
@@ -208,9 +212,12 @@ pub fn get_running_client(
 
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
 
+    let auth_header_buffer = std::str::from_utf8(auth_header_buffer)?;
+
     // Format the port and header so that they can be used as headers
     // For the LCU API
-    Ok((addr, String::from_utf8_lossy(auth_header_buffer).to_string()))
+    let res = T::from_str(auth_header_buffer);
+    Ok((addr, res))
 }
 
 #[derive(Debug, Clone)]
@@ -308,14 +315,15 @@ impl From<std::str::Utf8Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::{get_running_client, CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
+    use hyper::http::HeaderValue;
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]
     #[test]
     fn test_process_info() {
-        let (port, pass) =
+        let (port, pass): (_, Result<HeaderValue, _>) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, true).unwrap();
-        println!("{port} {pass}");
+        println!("{port} {pass:?}");
     }
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]

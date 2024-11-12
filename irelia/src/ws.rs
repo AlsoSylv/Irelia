@@ -15,7 +15,7 @@ use std::time::Duration;
 use std::{ops::ControlFlow, sync::Arc, thread};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::util::NonBlockingResult;
-use tungstenite::{client::IntoClientRequest, http::HeaderValue, Connector, Message, WebSocket};
+use tungstenite::{client::IntoClientRequest, Connector, Message, WebSocket};
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::utils::{process_info::get_running_client, setup_tls::connector};
@@ -375,16 +375,15 @@ fn connect(
 ) -> Result<WebSocketStream, WebSocketError> {
     const TIMEOUT: Duration = Duration::from_millis(100);
 
-    let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+    let (addr, auth) =
+        get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
     let addr = SocketAddr::V4(addr);
 
     let str_req = format!("wss://{addr}");
 
-    let auth_header = HeaderValue::from_str(&auth).unwrap();
-
     let mut request = str_req.into_client_request()?;
 
-    request.headers_mut().insert("Authorization", auth_header);
+    request.headers_mut().insert("Authorization", auth?);
 
     let tcp_stream = TcpStream::connect_timeout(&addr, TIMEOUT)?;
 

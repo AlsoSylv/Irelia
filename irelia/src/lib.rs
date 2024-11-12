@@ -39,6 +39,13 @@ pub enum Error {
     RmpSerdeDecode(rmp_serde::decode::Error),
 }
 
+#[cfg(feature = "rest")]
+impl From<hyper::header::InvalidHeaderValue> for Error {
+    fn from(value: hyper::header::InvalidHeaderValue) -> Self {
+        Self::HyperHttpError(hyper::http::Error::from(value))
+    }
+}
+
 #[cfg(any(feature = "in_game", feature = "rest"))]
 impl From<hyper::http::Error> for Error {
     fn from(value: hyper::http::Error) -> Self {

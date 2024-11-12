@@ -8,6 +8,7 @@ pub mod types;
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::{utils::process_info::get_running_client, Error, RequestClient};
+use hyper::http::HeaderValue;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::net::SocketAddrV4;
@@ -16,7 +17,7 @@ use std::net::SocketAddrV4;
 pub struct LcuClient {
     request_client: RequestClient,
     url: SocketAddrV4,
-    auth_header: String,
+    auth_header: HeaderValue,
 }
 
 impl LcuClient {
@@ -45,7 +46,11 @@ impl LcuClient {
         let (addr, pass) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
 
-        Ok(Self::new_with_credentials_with_request_client(addr, pass, &RequestClient::new()))
+        Ok(Self::new_with_credentials_with_request_client(
+            addr,
+            pass?,
+            &RequestClient::new(),
+        ))
     }
 
     /// Attempts to create a connection to the LCU, errors if it fails
@@ -72,18 +77,33 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running, this can include
     /// the client being down, the lock file being unable to be opened, or the LCU
     /// not running at all
-    pub fn connect_with_request_client_force_lockfile(force_lock_file: bool, request_client: &RequestClient) -> Result<Self, Error> {
+    pub fn connect_with_request_client_force_lockfile(
+        force_lock_file: bool,
+        request_client: &RequestClient,
+    ) -> Result<Self, Error> {
         let (addr, pass) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
 
-        Ok(Self::new_with_credentials_with_request_client(addr, pass, request_client))
+        Ok(Self::new_with_credentials_with_request_client(
+            addr,
+            pass?,
+            request_client,
+        ))
     }
 
     #[must_use]
     /// Creates a new LCU Client that implicitly trusts the port and auth string given,
     /// Encoding them in a URL and header respectively
-    pub fn new_with_credentials_with_request_client(url: SocketAddrV4, auth_header: String, request_client: &RequestClient) -> Self {
-        Self { url, auth_header, request_client: request_client.clone() }
+    pub fn new_with_credentials_with_request_client(
+        url: SocketAddrV4,
+        auth_header: HeaderValue,
+        request_client: &RequestClient,
+    ) -> Self {
+        Self {
+            url,
+            auth_header,
+            request_client: request_client.clone(),
+        }
     }
 
     /// Queries the client or lock file, getting a new url and auth header
@@ -92,14 +112,17 @@ impl LcuClient {
     /// This will return an error if the lock file is inaccessible, or if
     /// the LCU is not running
     pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
-        let (addr, pass) =
+        let (addr, pass): (_, Result<HeaderValue, _>) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
-        self.reconnect_with_credentials(addr, pass);
+        self.reconnect_with_credentials(
+            addr,
+            pass.map_err(|e| Error::HyperHttpError(hyper::http::Error::from(e)))?,
+        );
         Ok(())
     }
 
     /// Sets the url and auth header according to the auth and port provided
-    pub fn reconnect_with_credentials(&mut self, url: SocketAddrV4, auth: String) {
+    pub fn reconnect_with_credentials(&mut self, url: SocketAddrV4, auth: HeaderValue) {
         self.url = url;
         self.auth_header = auth;
     }
@@ -112,7 +135,7 @@ impl LcuClient {
 
     #[must_use]
     /// Returns a reference to the auth header in use
-    pub fn auth_header(&self) -> &str {
+    pub fn auth_header(&self) -> &HeaderValue {
         &self.auth_header
     }
 
@@ -141,8 +164,7 @@ impl LcuClient {
         &self,
         endpoint: impl AsRef<str> + Send,
     ) -> Result<R, Error> {
-        self.lcu_request(endpoint.as_ref(), "GET", None::<()>)
-            .await
+        self.lcu_request(endpoint.as_ref(), "GET", None::<()>).await
     }
 
     /// Sends a head request to the LCU
@@ -199,8 +221,7 @@ impl LcuClient {
         endpoint: impl AsRef<str> + Send,
         body: T,
     ) -> Result<R, Error> {
-        self.lcu_request(endpoint.as_ref(), "PUT", Some(body))
-            .await
+        self.lcu_request(endpoint.as_ref(), "PUT", Some(body)).await
     }
 
     /// Makes a request to the LCU with an unspecified method, valid options being
@@ -218,7 +239,8 @@ impl LcuClient {
     ) -> Result<R, Error> {
         use hyper::body::Buf;
 
-        let buf = self.request_client
+        let buf = self
+            .request_client
             .request_template(self.url, endpoint, method, body, Some(&self.auth_header))
             .await?;
 

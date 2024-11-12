@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use hyper::header::InvalidHeaderValue;
 
 #[derive(Debug)]
 /// Enum of possible errors that will be passed to the `ErrorHandler`
@@ -45,5 +46,11 @@ impl From<serde_json::Error> for Error {
 impl From<crate::process_info::Error> for Error {
     fn from(value: crate::process_info::Error) -> Self {
         Self::ProcessInfo(value)
+    }
+}
+
+impl From<InvalidHeaderValue> for Error {
+    fn from(value: InvalidHeaderValue) -> Self {
+        Self::Tungstenite(tungstenite::Error::HttpFormat(tungstenite::http::Error::from(value)))
     }
 }
