@@ -305,7 +305,7 @@ fn event_loop(
                     control_flow = error_handler.on_error(e.into());
                 }
 
-                // If we're supposed to abort, we should not recieve any new messages from the socket.
+                // If we're supposed to abort, we should not receive any new messages from the socket.
                 if abort {
                     break;
                 }
@@ -375,8 +375,7 @@ fn connect(
 ) -> Result<WebSocketStream, WebSocketError> {
     const TIMEOUT: Duration = Duration::from_millis(100);
 
-    let (addr, auth) =
-        get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+    let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
     let addr = SocketAddr::V4(addr);
 
     let str_req = format!("wss://{addr}");

@@ -17,103 +17,104 @@ pub mod replay;
 #[cfg(feature = "rest")]
 pub mod rest;
 pub(crate) mod utils;
-#[cfg(any(feature = "ws", feature = "rest"))]
-pub use utils::process_info;
 #[cfg(feature = "ws")]
 pub mod ws;
+#[cfg(any(feature = "ws", feature = "rest"))]
+pub use utils::process_info;
 
-/// Errors that can be produced by the LCU API
-///
-/// This contains errors from `serde_json`, `hyper` and `tungstenite`
-#[derive(Debug)]
-pub enum Error {
-    #[cfg(any(feature = "in_game", feature = "rest"))]
-    HyperHttpError(hyper::http::Error),
-    #[cfg(any(feature = "in_game", feature = "rest"))]
-    HyperClientError(hyper_util::client::legacy::Error),
-    #[cfg(any(feature = "in_game", feature = "rest"))]
-    HyperError(hyper::Error),
-    #[cfg(feature = "rest")]
-    ProcessInfoError(process_info::Error),
-    RmpSerdeEncode(rmp_serde::encode::Error),
-    RmpSerdeDecode(rmp_serde::decode::Error),
-}
-
-#[cfg(feature = "rest")]
-impl From<hyper::header::InvalidHeaderValue> for Error {
-    fn from(value: hyper::header::InvalidHeaderValue) -> Self {
-        Self::HyperHttpError(hyper::http::Error::from(value))
-    }
-}
-
-#[cfg(any(feature = "in_game", feature = "rest"))]
-impl From<hyper::http::Error> for Error {
-    fn from(value: hyper::http::Error) -> Self {
-        Self::HyperHttpError(value)
-    }
-}
-
-#[cfg(any(feature = "in_game", feature = "rest"))]
-impl From<hyper_util::client::legacy::Error> for Error {
-    fn from(value: hyper_util::client::legacy::Error) -> Self {
-        Self::HyperClientError(value)
-    }
-}
-
-#[cfg(any(feature = "in_game", feature = "rest"))]
-impl From<hyper::Error> for Error {
-    fn from(value: hyper::Error) -> Self {
-        Self::HyperError(value)
-    }
-}
-
-impl From<rmp_serde::encode::Error> for Error {
-    fn from(value: rmp_serde::encode::Error) -> Self {
-        Self::RmpSerdeEncode(value)
-    }
-}
-
-impl From<rmp_serde::decode::Error> for Error {
-    fn from(value: rmp_serde::decode::Error) -> Self {
-        Self::RmpSerdeDecode(value)
-    }
-}
-
-#[cfg(feature = "rest")]
-impl From<process_info::Error> for Error {
-    fn from(value: process_info::Error) -> Self {
-        Self::ProcessInfoError(value)
-    }
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let error: std::borrow::Cow<'_, str> = match self {
-            #[cfg(any(feature = "in_game", feature = "rest"))]
-            Self::HyperHttpError(err) => err.to_string().into(),
-            #[cfg(any(feature = "in_game", feature = "rest"))]
-            Self::HyperError(err) => err.to_string().into(),
-            #[cfg(any(feature = "in_game", feature = "rest"))]
-            Self::HyperClientError(err) => err.to_string().into(),
-            #[cfg(feature = "rest")]
-            Self::ProcessInfoError(err) => err.reason().into(),
-            Self::RmpSerdeEncode(err) => err.to_string().into(),
-            Self::RmpSerdeDecode(err) => err.to_string().into(),
-        };
-        f.write_str(&error)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl serde::Serialize for Error {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
+#[cfg(any(feature = "rest", feature = "in_game"))]
+pub use error::Error;
 
 #[cfg(any(feature = "rest", feature = "in_game"))]
 pub use utils::requests::RequestClient;
+
+#[cfg(any(feature = "rest", feature = "in_game"))]
+mod error {
+    use crate::process_info;
+
+    /// Errors that can be produced by the LCU API
+    ///
+    /// This contains errors from `serde_json`, `hyper` and `tungstenite`
+    #[derive(Debug)]
+    pub enum Error {
+        HyperHttpError(hyper::http::Error),
+        HyperClientError(hyper_util::client::legacy::Error),
+        HyperError(hyper::Error),
+        RequestError(hyper::StatusCode),
+        RmpSerdeEncode(rmp_serde::encode::Error),
+        RmpSerdeDecode(rmp_serde::decode::Error),
+        #[cfg(feature = "rest")]
+        ProcessInfoError(process_info::Error),
+    }
+
+    impl From<hyper::http::Error> for Error {
+        fn from(value: hyper::http::Error) -> Self {
+            Self::HyperHttpError(value)
+        }
+    }
+
+    impl From<hyper_util::client::legacy::Error> for Error {
+        fn from(value: hyper_util::client::legacy::Error) -> Self {
+            Self::HyperClientError(value)
+        }
+    }
+
+    impl From<hyper::Error> for Error {
+        fn from(value: hyper::Error) -> Self {
+            Self::HyperError(value)
+        }
+    }
+
+    impl From<rmp_serde::encode::Error> for Error {
+        fn from(value: rmp_serde::encode::Error) -> Self {
+            Self::RmpSerdeEncode(value)
+        }
+    }
+
+    impl From<rmp_serde::decode::Error> for Error {
+        fn from(value: rmp_serde::decode::Error) -> Self {
+            Self::RmpSerdeDecode(value)
+        }
+    }
+
+    #[cfg(feature = "rest")]
+    impl From<process_info::Error> for Error {
+        fn from(value: process_info::Error) -> Self {
+            Self::ProcessInfoError(value)
+        }
+    }
+
+    impl std::fmt::Display for Error {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let error: std::borrow::Cow<'_, str> = match self {
+                Self::HyperHttpError(err) => err.to_string().into(),
+                Self::HyperError(err) => err.to_string().into(),
+                Self::HyperClientError(err) => err.to_string().into(),
+                Self::RequestError(code) => code.as_str().into(),
+                #[cfg(feature = "rest")]
+                Self::ProcessInfoError(err) => err.reason().into(),
+                Self::RmpSerdeEncode(err) => err.to_string().into(),
+                Self::RmpSerdeDecode(err) => err.to_string().into(),
+            };
+            f.write_str(&error)
+        }
+    }
+
+    impl std::error::Error for Error {}
+
+    impl serde::Serialize for Error {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            serializer.serialize_str(&self.to_string())
+        }
+    }
+
+    #[cfg(feature = "rest")]
+    impl From<hyper::header::InvalidHeaderValue> for Error {
+        fn from(value: hyper::header::InvalidHeaderValue) -> Self {
+            Self::HyperHttpError(hyper::http::Error::from(value))
+        }
+    }
+}

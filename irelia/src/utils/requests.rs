@@ -3,8 +3,8 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::net::SocketAddrV4;
 
-use http_body_util::{BodyExt, Full};
-use hyper::body::{Buf, Bytes, Incoming};
+use http_body_util::{BodyExt, Collected, Full};
+use hyper::body::{Bytes, Incoming};
 use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use hyper::http::uri::Scheme;
 use hyper::http::HeaderValue;
@@ -65,7 +65,7 @@ impl RequestClient {
     ) -> Result<Response<Incoming>, Error> {
         const MINE: &str = "application/x-msgpack";
         const LONGEST_SOCKET_ADDR: usize = "255.255.255.255:65535".len();
-        
+
         let mut buffer = [0; LONGEST_SOCKET_ADDR];
         let mut buf_writer = BufWriter::new(buffer.as_mut_slice());
 
@@ -101,17 +101,14 @@ impl RequestClient {
     }
 
     /// Makes a request, collects the bytes, and returns the buf
-    pub(crate) async fn request_template<T>(
+    pub(crate) async fn request_template<T: Serialize + Send>(
         &self,
         url: SocketAddrV4,
         endpoint: &str,
         method: &str,
         body: Option<T>,
         auth_header: Option<&HeaderValue>,
-    ) -> Result<impl Buf + Sized, Error>
-    where
-        T: Serialize + Send,
-    {
+    ) -> Result<Collected<Bytes>, Error> {
         let body = body
             .map(|body| rmp_serde::to_vec_named(&body).map(Full::from))
             .transpose()?;
@@ -120,9 +117,13 @@ impl RequestClient {
             .raw_request_template(url, endpoint, method, body, auth_header)
             .await?;
 
+        if !response.status().is_success() {
+            return Err(Error::RequestError(response.status()));
+        }
+
         let body = response.collect().await?;
 
-        Ok(body.aggregate())
+        Ok(body)
     }
 }
 

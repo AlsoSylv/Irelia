@@ -244,7 +244,7 @@ impl LcuClient {
             .request_template(self.url, endpoint, method, body, Some(&self.auth_header))
             .await?;
 
-        Ok(rmp_serde::from_read(buf.reader())?)
+        Ok(rmp_serde::from_read(buf.aggregate().reader())?)
     }
 }
 

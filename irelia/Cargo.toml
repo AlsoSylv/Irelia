@@ -82,8 +82,6 @@ optional = true
 features = ["serde_impl"]
 
 [dev-dependencies]
-rand = "0.8.5"
-base64 = "0.22.0"
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
 
 [build-dependencies]
