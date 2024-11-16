@@ -24,7 +24,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// # Errors
     /// This will return an error if there is not an active replay running
     fn game(&self) -> impl Future<Output = Result<types::Game, Error>> + Send {
-        self.replay("game", "GET", None::<()>)
+        self.replay("/replay/game", "GET", None::<()>)
     }
 
     /// Information about particle visibility.
@@ -33,7 +33,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// # Errors
     /// This will return an error if there is not an active replay running
     fn get_particles(&self) -> impl Future<Output = Result<HashMap<String, bool>, Error>> + Send {
-        self.replay("particles", "GET", None::<()>)
+        self.replay("/replay/particles", "GET", None::<()>)
     }
 
     /// Allows modifying the currently visible particles.
@@ -45,7 +45,7 @@ pub trait ReplayClient: in_game::GameClient {
         &self,
         body: impl Borrow<HashMap<String, bool>> + Send,
     ) -> impl Future<Output = Result<HashMap<String, bool>, Error>> + Send {
-        async move { self.replay("particles", "POST", Some(body.borrow())).await }
+        async move { self.replay("/replay/particles", "POST", Some(body.borrow())).await }
     }
 
     /// Returns the current replay playback state such as pause and current time.
@@ -53,7 +53,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// # Errors
     /// This will return an error if there is not an active replay running
     fn get_playback(&self) -> impl Future<Output = Result<Playback, Error>> + Send {
-        self.replay("playback", "GET", None::<()>)
+        self.replay("/replay/playback", "GET", None::<()>)
     }
 
     /// Allows modifying the playback state such as play / pause and the game time to seek to. All values are optional.
@@ -64,7 +64,7 @@ pub trait ReplayClient: in_game::GameClient {
         &self,
         body: impl Borrow<Playback> + Send,
     ) -> impl Future<Output = Result<Playback, Error>> + Send {
-        async move { self.replay("playback", "POST", Some(body.borrow())).await }
+        async move { self.replay("/replay/playback", "POST", Some(body.borrow())).await }
     }
 
     /// Returns the current status of video recording. Poll this resource for progress on the output.
@@ -72,7 +72,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// # Errors
     /// This will return an error if there is not an active replay running
     fn get_recording(&self) -> impl Future<Output = Result<RecordingState, Error>> + Send {
-        self.replay("recording", "GET", None::<()>)
+        self.replay("/replay/recording", "GET", None::<()>)
     }
 
     /// Post to begin a recording specifying the codec and output filepath. Subsequent GET requests to this resource will update the status.
@@ -83,7 +83,7 @@ pub trait ReplayClient: in_game::GameClient {
         &self,
         body: impl Borrow<RecordingState> + Send,
     ) -> impl Future<Output = Result<RecordingState, Error>> + Send {
-        async move { self.replay("recording", "POST", Some(body.borrow())).await }
+        async move { self.replay("/replay/recording", "POST", Some(body.borrow())).await }
     }
 
     /// Returns the current render properties.
@@ -91,7 +91,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// # Errors
     /// This will return an error if there is not an active replay running
     fn get_render(&self) -> impl Future<Output = Result<Render, Error>> + Send {
-        self.replay("render", "GET", None::<()>)
+        self.replay("/replay/render", "GET", None::<()>)
     }
 
     /// Allows modifying the current render properties. All values are optional.
@@ -102,7 +102,7 @@ pub trait ReplayClient: in_game::GameClient {
         &self,
         body: impl Borrow<Render> + Send,
     ) -> impl Future<Output = Result<Render, Error>> + Send {
-        async move { self.replay("render", "POST", Some(body.borrow())).await }
+        async move { self.replay("/replay/render", "POST", Some(body.borrow())).await }
     }
 
     /// Returns the sequence currently being applied.
@@ -110,7 +110,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// # Errors
     /// This will return an error if there is not an active replay running
     fn get_sequence(&self) -> impl Future<Output = Result<Sequence, Error>> + Send {
-        self.replay("sequence", "GET", None::<()>)
+        self.replay("/replay/sequence", "GET", None::<()>)
     }
 
     /// Post to apply a sequence of keyframes that the replay should play. Post an empty object to remove the sequence.
@@ -121,7 +121,7 @@ pub trait ReplayClient: in_game::GameClient {
         &self,
         body: Option<impl Borrow<Sequence> + Serialize + Send + Sync>,
     ) -> impl Future<Output = Result<Sequence, Error>> + Send {
-        async move { self.replay("sequence", "POST", Some(body.borrow())).await }
+        async move { self.replay("/replay/sequence", "POST", Some(body.borrow())).await }
     }
 }
 

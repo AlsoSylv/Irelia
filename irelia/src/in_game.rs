@@ -229,7 +229,7 @@ mod sealed {
         /// This will return an error if there is not an active replay running
         fn replay<R>(
             &self,
-            endpoint: &str,
+            endpoint: &'static str,
             method: &'static str,
             body: Option<impl serde::Serialize + Send>,
         ) -> impl Future<Output = Result<R, Error>> + Send
@@ -239,11 +239,9 @@ mod sealed {
             async move {
                 use hyper::body::Buf;
 
-                let endpoint = format!("/replay/{endpoint}");
-
                 let buffer = self
                     .request_client()
-                    .request_template(URL, &endpoint, method, body, None)
+                    .request_template(URL, endpoint, method, body, None)
                     .await?;
 
                 Ok(rmp_serde::from_read(buffer.aggregate().reader())?)

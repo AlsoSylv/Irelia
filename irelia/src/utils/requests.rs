@@ -1,17 +1,22 @@
 use crate::Error;
+use std::fmt::Debug;
+use std::future::Future;
 use std::io::BufWriter;
 use std::io::Write;
 use std::net::SocketAddrV4;
+use std::pin::Pin;
 
 use http_body_util::{BodyExt, Collected, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use hyper::http::uri::Scheme;
 use hyper::http::HeaderValue;
+use hyper::rt::Executor;
 use hyper::{Request, Response, Uri};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use serde::Serialize;
 
 use super::setup_tls::connector;
@@ -33,10 +38,19 @@ pub struct RequestClient {
     client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
 }
 
+type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
 impl RequestClient {
     #[must_use]
     /// Creates a client to be passed to the LCU and in game structs
     pub fn new() -> Self {
+        Self::new_with_executor(TokioExecutor::new())
+    }
+
+    #[must_use]
+    pub fn new_with_executor<E: Executor<BoxFuture> + Clone + Send + Sync + 'static>(
+        exec: E,
+    ) -> Self {
         // Get a client config using the riotgames.pem file
         let tls = connector();
         // Set up an HTTPS only client, with just the client config
@@ -46,7 +60,7 @@ impl RequestClient {
             .enable_http1()
             .build();
         // Make the new client
-        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https);
+        let client = Client::builder(exec).build(https);
 
         Self { client }
     }
