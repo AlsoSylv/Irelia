@@ -98,7 +98,7 @@ where
         .values()
         .find(|process| {
             client = process.name() == client_process_name;
-            client | (process.name() == game_process_name)
+            client || (process.name() == game_process_name)
         })
         .ok_or(NOT_RUNNING)?;
 
