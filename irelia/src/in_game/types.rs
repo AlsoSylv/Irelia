@@ -123,7 +123,6 @@ impl<'de> DeserializeTrait<'de> for RiotId {
     {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]
-        #[allow(clippy::struct_field_names)]
         struct TmpRiotId {
             riot_id: Box<str>,
         }
@@ -1515,7 +1514,7 @@ mod option_slice {
     use serde::{Deserialize, Deserializer, Serializer};
 
     // Serde requires it to be this way
-    #[allow(clippy::ref_option)]
+    #[allow(clippy::ref_option_ref)]
     pub fn serialize<S: Serializer>(
         slice: &Option<Box<[String]>>,
         serializer: S,

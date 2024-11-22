@@ -17,6 +17,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::future::Future;
 
+#[allow(clippy::module_name_repetitions)]
 pub trait ReplayClient: in_game::GameClient {
     /// Information about the game client process.
     ///
