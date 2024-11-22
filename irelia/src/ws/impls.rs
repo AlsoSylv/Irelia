@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, RwLock, TryLockError};
+use std::{
+    ops::ControlFlow,
+    sync::{Arc, Mutex, RwLock, TryLockError},
+};
 
 use super::{types::Event, Subscriber};
 
@@ -16,9 +19,11 @@ where
                 let t = &mut *guard;
                 t.on_subscribe(event_kind, request_code);
             }
-            Err(TryLockError::Poisoned(poisoned)) => {
-                panic!("Poisoned {poisoned:?}")
-            }
+            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+                super::PoisonBehavior::Clear => self.clear_poison(),
+                super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
+                super::PoisonBehavior::Panic => panic!("{poisoned}"),
+            },
             Err(TryLockError::WouldBlock) => {}
         }
     }
@@ -29,9 +34,12 @@ where
                 let t = &mut *guard;
                 t.on_event(event, continues);
             }
-            Err(TryLockError::Poisoned(poisoned)) => {
-                panic!("Poisoned {poisoned:?}")
-            }
+            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+                super::PoisonBehavior::Clear => self.clear_poison(),
+                super::PoisonBehavior::Ignore => {}
+                super::PoisonBehavior::Break => *continues = false,
+                super::PoisonBehavior::Panic => panic!("{poisoned}"),
+            },
             Err(TryLockError::WouldBlock) => {}
         }
     }
@@ -42,9 +50,11 @@ where
                 let t = &mut *guard;
                 t.on_unsubscribe(event_kind);
             }
-            Err(TryLockError::Poisoned(poisoned)) => {
-                panic!("Poisoned {poisoned:?}")
-            }
+            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+                super::PoisonBehavior::Clear => self.clear_poison(),
+                super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
+                super::PoisonBehavior::Panic => panic!("{poisoned}"),
+            },
             Err(TryLockError::WouldBlock) => {}
         }
     }
@@ -64,9 +74,11 @@ where
                 let t = &mut *guard;
                 t.on_subscribe(event_kind, request_code);
             }
-            Err(TryLockError::Poisoned(poisoned)) => {
-                panic!("Poisoned {poisoned:?}")
-            }
+            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+                super::PoisonBehavior::Clear => self.clear_poison(),
+                super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
+                super::PoisonBehavior::Panic => panic!("{poisoned}"),
+            },
             Err(TryLockError::WouldBlock) => {}
         }
     }
@@ -77,9 +89,12 @@ where
                 let t = &mut *guard;
                 t.on_event(event, continues);
             }
-            Err(TryLockError::Poisoned(poisoned)) => {
-                panic!("Poisoned {poisoned:?}")
-            }
+            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+                super::PoisonBehavior::Clear => self.clear_poison(),
+                super::PoisonBehavior::Ignore => {}
+                super::PoisonBehavior::Break => *continues = false,
+                super::PoisonBehavior::Panic => panic!("{poisoned}"),
+            },
             Err(TryLockError::WouldBlock) => {}
         }
     }
@@ -90,9 +105,11 @@ where
                 let t = &mut *guard;
                 t.on_unsubscribe(event_kind);
             }
-            Err(TryLockError::Poisoned(poisoned)) => {
-                panic!("Poisoned {poisoned:?}")
-            }
+            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+                super::PoisonBehavior::Clear => self.clear_poison(),
+                super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
+                super::PoisonBehavior::Panic => panic!("{poisoned}"),
+            },
             Err(TryLockError::WouldBlock) => {}
         }
     }
@@ -108,14 +125,12 @@ where
     }
 }
 
+/// Trait for return values of closures
+///
+/// Default implementions for `()`, `bool`, `Option`, `Result`, and `ControlFlow` exist
+/// The implementation for `Result` and `ControlFlow` inverts the value on `Err` and `Break` respectively
 pub trait Returns {
     fn val(self) -> bool;
-}
-
-impl Returns for bool {
-    fn val(self) -> bool {
-        self
-    }
 }
 
 impl Returns for () {
@@ -124,14 +139,47 @@ impl Returns for () {
     }
 }
 
-impl Returns for Result<(), ()> {
+impl Returns for bool {
     fn val(self) -> bool {
-        self.is_ok()
+        self
     }
 }
 
-impl Returns for Option<()> {
+impl<T> Returns for Option<T>
+where
+    T: Returns,
+{
     fn val(self) -> bool {
-        self.is_some()
+        if let Some(v) = self {
+            v.val()
+        } else {
+            false
+        }
+    }
+}
+
+impl<T, U> Returns for Result<T, U>
+where
+    T: Returns,
+    U: Returns,
+{
+    fn val(self) -> bool {
+        match self {
+            Ok(t) => t.val(),
+            Err(u) => !u.val(),
+        }
+    }
+}
+
+impl<T, U> Returns for ControlFlow<T, U>
+where
+    T: Returns,
+    U: Returns,
+{
+    fn val(self) -> bool {
+        match self {
+            ControlFlow::Continue(t) => t.val(),
+            ControlFlow::Break(u) => u.val(),
+        }
     }
 }

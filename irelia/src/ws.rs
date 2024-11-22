@@ -40,7 +40,7 @@ pub struct LcuWebSocket {
 pub struct SubscriberID(usize);
 
 enum ChannelMessage {
-    Subscribe(RequestType, EventKind, Box<dyn Subscriber>),
+    Subscribe(RequestType, EventKind, Box<dyn Subscriber + Send>),
     Unsubscribe(SubscriberID, EventKind),
     Abort,
 }
@@ -52,8 +52,28 @@ pub enum Flow {
     Continue,
 }
 
+/// Behavior if a Mutex subscriber is poisoned
+pub enum PoisonBehavior {
+    /// Panics with the poison error
+    Panic,
+    /// Breaks the event loop if poisoned when `on_event` is called 
+    /// Ignores otherwise waiting for `on_event` to be called
+    Break,
+    /// Ignores it and moves on
+    Ignore,
+    /// Clears the poison
+    Clear,
+}
+
 /// trait for a subscriber to an endpoint for the websocket
-pub trait Subscriber: Send {
+pub trait Subscriber {
+    /// Defines what to do if the mutex gets poisoned
+    /// By default, the subscriber will panic, bringing the connection with it
+    /// This only matters if the subscriber is a mutex, otherwise this is never called
+    fn on_poison(&self) -> PoisonBehavior {
+        PoisonBehavior::Panic
+    }
+
     /// Callback run when the subscriber is added
     /// Default behavior is to do nothing
     fn on_subscribe(&mut self, _event_kind: &EventKind, _request_code: &RequestType) {}
@@ -151,7 +171,7 @@ impl LcuWebSocket {
     pub fn subscribe(
         &mut self,
         event_kind: EventKind,
-        subscriber: impl Subscriber + 'static,
+        subscriber: impl Subscriber + Send + 'static,
     ) -> Option<SubscriberID> {
         let (next_id, returned) = self.id_free_list.get_mut(&event_kind);
 
