@@ -61,7 +61,7 @@ version = "0.1"
 optional = true
 
 [dependencies.sysinfo]
-version = "0.32"
+version = "0.33"
 optional = true
 default-features = false
 features = ["system"]
@@ -72,12 +72,12 @@ default-features = false
 optional = true
 
 [dependencies.tungstenite]
-version = "0.24"
+version = "0.26"
 features = ["__rustls-tls"]
 optional = true
 
 [dependencies.hashlink]
-version = "0.9"
+version = "0.10"
 optional = true
 features = ["serde_impl"]
 

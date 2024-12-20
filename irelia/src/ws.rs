@@ -56,7 +56,7 @@ pub enum Flow {
 pub enum PoisonBehavior {
     /// Panics with the poison error
     Panic,
-    /// Breaks the event loop if poisoned when `on_event` is called 
+    /// Breaks the event loop if poisoned when `on_event` is called
     /// Ignores otherwise waiting for `on_event` to be called
     Break,
     /// Ignores it and moves on
@@ -282,7 +282,7 @@ fn event_loop(
                         if subscribers.is_empty() {
                             let endpoint_str = event_kind.to_string();
 
-                            let command = format!("[{}, \"{endpoint_str}\"]", code as u8);
+                            let command = format!("[{}, \"{endpoint_str}\"]", code as u8).into();
 
                             ws_message = Some(Message::Text(command));
                         }
@@ -310,7 +310,7 @@ fn event_loop(
                                 "[{}, \"{}\"]",
                                 RequestType::Unsubscribe as u8,
                                 event_kind.to_string()
-                            );
+                            ).into();
 
                             ws_message = Some(Message::Text(unsub));
                         }

@@ -137,26 +137,30 @@ impl<'de> DeserializeTrait<'de> for EventKind {
             where
                 E: Error,
             {
-                let (event_kind, callback) = if let Some((idx, _)) = v.match_indices('_').next() {
-                    (&v[0..idx], Some(&v[(idx + 1)..]))
-                } else {
-                    (v, None)
-                };
-                let mut event_kind = EventKind::from_str(event_kind);
+                let mut event_kind = v;
+                let mut callback = None;
 
-                if let Some(endpoint) = callback {
-                    let callback = if let EventKind::JsonApiEvent { callback } = &mut event_kind {
-                        callback
-                    } else if let EventKind::LcdsEvent { callback } = &mut event_kind {
-                        callback
-                    } else {
-                        unreachable!()
-                    };
-
-                    *callback = Some(endpoint.to_string().into());
+                if let Some(idx) = v.find('_') {
+                    event_kind = &v[0..idx];
+                    callback = Some(&v[idx + 1..]);
                 }
 
-                Ok(event_kind)
+                let event_kind = EventKind::from_str(event_kind);
+
+                if let Some(endpoint) = callback {
+                    let endpoint = endpoint.to_string();
+
+                    if matches!(event_kind, EventKind::JsonApiEvent { callback: None }) {
+                        Ok(EventKind::json_api_event_callback(endpoint))
+                    } else if matches!(event_kind, EventKind::LcdsEvent { callback: None }) {
+                        Ok(EventKind::lcds_event_callback(endpoint))
+                    } else {
+                        // It is not possible for it to not match either case
+                        unreachable!()
+                    }
+                } else {
+                    Ok(event_kind)
+                }
             }
         }
 

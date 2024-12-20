@@ -22,7 +22,8 @@ pub fn connector() -> &'static rustls::ClientConfig {
     &RUSTLS_CLIENT_CONFIG
 }
 
-#[test]
-fn test_connector() {
-    connector();
-}
+// This is literally not needed anymore, the function can no longer error or panic
+// #[test]
+// fn test_connector() {
+//     connector();
+// }

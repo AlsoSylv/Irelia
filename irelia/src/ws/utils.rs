@@ -38,27 +38,29 @@ impl<V: Default> EventMap<V> {
             EventKind::JsonApiEvent {
                 callback: Some(callback),
             } => {
-                let mut key = callback.replace('/', "_");
-                if &key[0..1] == "_" {
-                    key.remove(0);
+                let key = callback.replace('/', "_");
+                let key = normalize_key(&key);
+
+                // The goal here is the avoid panicing, this type is only used inside irelia, so this type of stuff is okay
+                if !self.json_api_event_callback.contains_key(key) {
+                    self.json_api_event_callback.insert(key.to_string(), V::default());
                 }
 
-                self.json_api_event_callback.get_mut(&key).unwrap()
+                self.json_api_event_callback.get_mut(key).unwrap()
             }
             EventKind::LcdsEvent { callback: None } => &mut self.lcds_event,
             EventKind::LcdsEvent {
                 callback: Some(callback),
             } => {
-                let mut key = callback.replace('/', "_");
-                if &key[0..1] == "_" {
-                    key.remove(0);
+                let key = callback.replace('/', "_");
+                let key = normalize_key(&key);
+
+                // The goal here is the avoid panicing, this type is only used inside irelia, so this type of stuff is okay
+                if !self.lcds_event_callback.contains_key(key) {
+                    self.lcds_event_callback.insert(key.to_string(), V::default());
                 }
 
-                if !self.lcds_event_callback.contains_key(&key) {
-                    self.lcds_event_callback.insert(key.clone(), V::default());
-                }
-
-                self.lcds_event_callback.get_mut(&key).unwrap()
+                self.lcds_event_callback.get_mut(key).unwrap()
             }
             EventKind::Log => &mut self.log,
             EventKind::RegionLocaleChanged => &mut self.region_locale_changed,
@@ -80,23 +82,19 @@ impl<V> Index<&EventKind> for EventMap<V> {
             EventKind::JsonApiEvent {
                 callback: Some(callback),
             } => {
-                let mut key = callback.replace('/', "_");
-                if &key[0..1] == "_" {
-                    key.remove(0);
-                }
+                let key = callback.replace('/', "_");
+                let key = normalize_key(&key);
 
-                &self.json_api_event_callback[&key]
+                &self.json_api_event_callback[key]
             }
             EventKind::LcdsEvent { callback: None } => &self.lcds_event,
             EventKind::LcdsEvent {
                 callback: Some(callback),
             } => {
-                let mut key = callback.replace('/', "_");
-                if &key[0..1] == "_" {
-                    key.remove(0);
-                }
+                let key = callback.replace('/', "_");
+                let key = normalize_key(&key);
 
-                &self.lcds_event_callback[&key]
+                &self.lcds_event_callback[key]
             }
             EventKind::Log => &self.log,
             EventKind::RegionLocaleChanged => &self.region_locale_changed,
@@ -104,5 +102,14 @@ impl<V> Index<&EventKind> for EventMap<V> {
             EventKind::ServiceProxyMethodEvent => &self.service_proxy_method_event,
             EventKind::ServiceProxyUuidEvent => &self.service_proxy_uuid_event,
         }
+    }
+}
+
+fn normalize_key(key: &str) -> &str {
+    // If it starts with an underscore, it needs to be removed, this can be done easily with a range index 
+    if key.starts_with('_') {
+        &key[1..]
+    } else {
+        key
     }
 }

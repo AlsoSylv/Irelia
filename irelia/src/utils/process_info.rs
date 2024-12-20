@@ -68,6 +68,7 @@ where
     T: FromStr,
 {
     const RIOT_PREFIX: &[u8] = b"riot:";
+    const BASIC_PREFIX: &[u8] = b"Basic ";
 
     // If we always read the lock file, we never need to get the command line of the process
     let cmd = if force_lock_file {
@@ -76,7 +77,7 @@ where
         sysinfo::UpdateKind::OnlyIfNotSet
     };
     // No matter what, the path to the process is required
-    let refresh_kind = ProcessRefreshKind::new()
+    let refresh_kind = ProcessRefreshKind::nothing()
         .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
         .with_cmd(cmd);
 
@@ -84,7 +85,7 @@ where
     let system = System::new_with_specifics(
         // This creates a new instance of `system` every time, so this only
         //  needs to be updated if it's not set
-        RefreshKind::new().with_processes(refresh_kind),
+        RefreshKind::nothing().with_processes(refresh_kind),
     );
 
     // Is the client running, or is it the game?
@@ -196,15 +197,15 @@ where
     let auth_header_len = pre_encoded_buffer_len.div_ceil(3) * 4;
     // 27 / 3 * 4 = 36 + 6 for the "Basic " prefix
     let auth_header_buffer: &mut [u8] = if auth_header_len > 36 {
-        &mut vec![b'='; auth_header_len + 6].into_boxed_slice()
+        &mut vec![b'='; auth_header_len + BASIC_PREFIX.len()].into_boxed_slice()
     } else {
-        &mut [b'='; 36 + 6]
+        &mut [b'='; 36 + BASIC_PREFIX.len()]
     };
 
-    auth_header_buffer[..6].copy_from_slice(b"Basic ");
+    auth_header_buffer[..BASIC_PREFIX.len()].copy_from_slice(BASIC_PREFIX);
 
     // The auth header has to be base64 encoded, so that's happens here
-    ENCODER.internal_encode(buffer, &mut auth_header_buffer[6..]);
+    ENCODER.internal_encode(buffer, &mut auth_header_buffer[BASIC_PREFIX.len()..]);
 
     let port: u16 = port.parse().map_err(|err: ParseIntError| {
         Error::new_string(ErrorKind::PortNotFound, err.to_string())
@@ -330,7 +331,7 @@ mod tests {
     #[test]
     fn test_process_args() {
         // No matter what, the path to the process is required
-        let refresh_kind = ProcessRefreshKind::new()
+        let refresh_kind = ProcessRefreshKind::nothing()
             .with_cwd(sysinfo::UpdateKind::OnlyIfNotSet)
             .with_root(sysinfo::UpdateKind::OnlyIfNotSet)
             .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
@@ -340,7 +341,7 @@ mod tests {
         let system = System::new_with_specifics(
             // This creates a new instance of `system` every time, so this only
             //  needs to be updated if it's not set
-            RefreshKind::new().with_processes(refresh_kind),
+            RefreshKind::nothing().with_processes(refresh_kind),
         );
 
         let process = system
