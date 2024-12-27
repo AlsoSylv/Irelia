@@ -13,13 +13,9 @@ use hyper::http::uri::Scheme;
 use hyper::http::HeaderValue;
 use hyper::rt::Executor;
 use hyper::{Request, Response, Uri};
-use hyper_rustls::HttpsConnector;
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use serde::Serialize;
-
-use super::setup_tls::connector;
 
 /// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
 ///
@@ -35,7 +31,7 @@ use super::setup_tls::connector;
 /// ```
 #[derive(Clone, Debug)]
 pub struct RequestClient {
-    client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
+    client: Client<crate::tls::Connector, Full<Bytes>>,
 }
 
 type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -51,14 +47,7 @@ impl RequestClient {
     pub fn new_with_executor<E: Executor<BoxFuture> + Clone + Send + Sync + 'static>(
         exec: E,
     ) -> Self {
-        // Get a client config using the riotgames.pem file
-        let tls = connector();
-        // Set up an HTTPS only client, with just the client config
-        let https = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(tls.clone())
-            .https_only()
-            .enable_http1()
-            .build();
+        let https = crate::tls::https_connector();
         // Make the new client
         let client = Client::builder(exec).build(https);
 

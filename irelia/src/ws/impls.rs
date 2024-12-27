@@ -127,7 +127,7 @@ where
 
 /// Trait for return values of closures
 ///
-/// Default implementions for `()`, `bool`, `Option`, `Result`, and `ControlFlow` exist
+/// Default implementations for `()`, `bool`, `Option`, `Result`, and `ControlFlow` exist
 /// The implementation for `Result` and `ControlFlow` inverts the value on `Err` and `Break` respectively
 pub trait Returns {
     fn val(self) -> bool;

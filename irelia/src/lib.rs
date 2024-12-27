@@ -16,6 +16,8 @@ pub mod in_game;
 pub mod replay;
 #[cfg(feature = "rest")]
 pub mod rest;
+#[cfg(any(feature = "rest", feature = "ws", feature = "in_game"))]
+pub(crate) mod tls;
 pub(crate) mod utils;
 #[cfg(feature = "ws")]
 pub mod ws;
@@ -30,21 +32,26 @@ pub use utils::requests::RequestClient;
 
 #[cfg(any(feature = "rest", feature = "in_game"))]
 mod error {
-    use crate::process_info;
-
     /// Errors that can be produced by the LCU API
     ///
     /// This contains errors from `serde_json`, `hyper` and `tungstenite`
     #[derive(Debug)]
     pub enum Error {
+        /// http error, re-exported by hyper
         HyperHttpError(hyper::http::Error),
+        /// Client error from `hyper_util`
         HyperClientError(hyper_util::client::legacy::Error),
+        /// Hyper error
         HyperError(hyper::Error),
+        /// Error with the request, contains a status code
         RequestError(hyper::StatusCode),
+        /// Encode error
         RmpSerdeEncode(rmp_serde::encode::Error),
+        /// Decode error
         RmpSerdeDecode(rmp_serde::decode::Error),
+        /// Error getting process info (only possible with the `rest` feature enabled)
         #[cfg(feature = "rest")]
-        ProcessInfoError(process_info::Error),
+        ProcessInfoError(crate::process_info::Error),
     }
 
     impl From<hyper::http::Error> for Error {
@@ -78,25 +85,24 @@ mod error {
     }
 
     #[cfg(feature = "rest")]
-    impl From<process_info::Error> for Error {
-        fn from(value: process_info::Error) -> Self {
+    impl From<crate::process_info::Error> for Error {
+        fn from(value: crate::process_info::Error) -> Self {
             Self::ProcessInfoError(value)
         }
     }
 
     impl std::fmt::Display for Error {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let error: std::borrow::Cow<'_, str> = match self {
-                Self::HyperHttpError(err) => err.to_string().into(),
-                Self::HyperError(err) => err.to_string().into(),
-                Self::HyperClientError(err) => err.to_string().into(),
-                Self::RequestError(code) => code.as_str().into(),
+            match self {
+                Self::HyperHttpError(err) => err.fmt(f),
+                Self::HyperError(err) => err.fmt(f),
+                Self::HyperClientError(err) => err.fmt(f),
+                Self::RequestError(code) => f.write_str(code.as_str()),
                 #[cfg(feature = "rest")]
-                Self::ProcessInfoError(err) => err.reason().into(),
-                Self::RmpSerdeEncode(err) => err.to_string().into(),
-                Self::RmpSerdeDecode(err) => err.to_string().into(),
-            };
-            f.write_str(&error)
+                Self::ProcessInfoError(err) => f.write_str(err.reason()),
+                Self::RmpSerdeEncode(err) => err.fmt(f),
+                Self::RmpSerdeDecode(err) => err.fmt(f),
+            }
         }
     }
 

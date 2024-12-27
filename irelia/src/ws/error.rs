@@ -12,14 +12,12 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let string = match self {
-            Self::Tungstenite(e) => e.to_string(),
-            Self::ProcessInfo(e) => e.to_string(),
-            Self::SerdeJson(e) => e.to_string(),
-            Self::Io(e) => e.to_string(),
-        };
-
-        f.write_str(&string)
+        match self {
+            Self::Tungstenite(e) => e.fmt(f),
+            Self::ProcessInfo(e) => e.fmt(f),
+            Self::SerdeJson(e) => e.fmt(f),
+            Self::Io(e) => e.fmt(f),
+        }
     }
 }
 

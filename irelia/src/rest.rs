@@ -114,10 +114,7 @@ impl LcuClient {
     pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
         let (addr, pass): (_, Result<HeaderValue, _>) =
             get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
-        self.reconnect_with_credentials(
-            addr,
-            pass.map_err(|e| Error::HyperHttpError(hyper::http::Error::from(e)))?,
-        );
+        self.reconnect_with_credentials(addr, pass?);
         Ok(())
     }
 

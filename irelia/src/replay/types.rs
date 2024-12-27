@@ -19,6 +19,7 @@ mod sealed {
     impl KeyFrameValue for bool {}
 }
 
+/// Video container
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AVContainer {
@@ -28,6 +29,7 @@ pub enum AVContainer {
     PngAndDepth,
 }
 
+/// `ColorValue` from the API, all channels use floats
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ColorValue {
     /// Red channel value (0-255)
@@ -118,6 +120,13 @@ pub enum HudCameraMode {
 /// or they use the same `EasingType`, and take place at the same time
 ///
 /// As for ordering, keyframes are ordered based on time
+///
+/// Supported `KeyFrameValue`'s are:
+/// - `String`
+/// - `ColorValue`
+/// - `Vector3f`
+/// - `f64`
+/// - `bool`
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct KeyFrameT<T: KeyFrameValue> {
     pub blend: EasingType,
@@ -359,6 +368,7 @@ pub struct Render {
     pub camera_mode: HudCameraMode,
 }
 
+/// Sequence of `KeyFrames` to be executed, controls settings, FOV, offsets, etc
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
@@ -477,6 +487,7 @@ impl Sequence {
     }
 }
 
+/// Basic Vec3 for the API, all fields are floats
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector3f {
     pub x: f64,

@@ -2,6 +2,7 @@
 //!
 //! All types are all generated from the official JSON snippets
 
+/// Types returned by the in game API
 pub mod types;
 
 use self::types::{

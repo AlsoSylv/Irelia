@@ -95,6 +95,14 @@
       "InhibRespawned": "Barracks_T2_L1"
     },
     {
+      "Assisters": [],
+      "EventID": 120,
+      "EventName": "TurretKilled",
+      "EventTime": 677.7825317382812,
+      "KillerName": "Cris Noyak",
+      "TurretKilled": "Turret_T2_C_01_A"
+    },
+    {
       "EventID": 144,
       "EventName": "GameEnd",
       "EventTime": 2236.1298828125,

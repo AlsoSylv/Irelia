@@ -6,26 +6,24 @@ pub mod types;
 mod utils;
 
 use impls::Returns;
-use rustls::pki_types::ServerName;
-use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use std::{ops::ControlFlow, sync::Arc, thread};
+use std::{ops::ControlFlow, thread};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::util::NonBlockingResult;
-use tungstenite::{client::IntoClientRequest, Connector, Message, WebSocket};
+use tungstenite::{client::IntoClientRequest, Message, WebSocket};
 
+use crate::utils::process_info::get_running_client;
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
-use crate::utils::{process_info::get_running_client, setup_tls::connector};
 use crate::ws::types::{Event, EventKind, RequestType};
 use crate::ws::utils::EventMap;
 
 pub use error::Error as WebSocketError;
 
 /// Type alias for the websocket stream type
-pub type WebSocketStream = WebSocket<MaybeTlsStream<StreamOwned<ClientConnection, TcpStream>>>;
+pub type WebSocketStream = WebSocket<MaybeTlsStream<TcpStream>>;
 
 /// Struct representing a connection to the LCU websocket
 pub struct LcuWebSocket {
@@ -52,7 +50,8 @@ pub enum Flow {
     Continue,
 }
 
-/// Behavior if a Mutex subscriber is poisoned
+/// Behavior if a `Mutex` subscriber is poisoned
+/// This is ignored if the subscriber is not wrapped in a `Mutex` or `RwLock`
 pub enum PoisonBehavior {
     /// Panics with the poison error
     Panic,
@@ -103,16 +102,23 @@ pub trait ErrorHandler: Send {
     fn on_connect(&mut self, socket: &mut WebSocketStream) -> Result<(), WebSocketError> {
         match socket.get_ref() {
             MaybeTlsStream::Plain(_) => unimplemented!("The stream is always encrypted"),
+            #[cfg(feature = "rustls")]
             MaybeTlsStream::Rustls(stream_owned) => {
-                stream_owned.sock.sock.set_nonblocking(true)?;
+                stream_owned.sock.set_nonblocking(true)?;
             }
-            _ => unimplemented!("NativeTls is not supported"),
+            #[cfg(feature = "nativetls")]
+            MaybeTlsStream::NativeTls(tls_stream) => {
+                tls_stream.get_ref().set_nonblocking(true)?;
+            }
+            _ => {
+                unimplemented!("There are no other cases")
+            }
         }
 
         Ok(())
     }
 
-    /// Callback run when the websocket connection timesout without
+    /// Callback run when the websocket connection times out without
     /// receiving a message, default behavior is to sleep for half a second
     fn on_timeout(&mut self) {
         thread::sleep(Duration::from_millis(500));
@@ -150,7 +156,7 @@ impl LcuWebSocket {
         let (ws_sender, ws_receiver) = std::sync::mpsc::channel::<ChannelMessage>();
 
         let handle = thread::spawn(move || {
-            let tls = Arc::new(connector().clone());
+            let tls = crate::tls::connector();
 
             let mut error_handler = error_handler;
             let ws_receiver = ws_receiver;
@@ -250,7 +256,7 @@ impl LcuWebSocket {
     }
 }
 
-// Workaround for lifetime issues with closures
+/// Workaround for closures isues, makes sure they're in the proper shape to be used as a subscriber
 pub fn force<R: Returns, F: FnMut(&Event) -> R + Send>(f: F) -> F {
     f
 }
@@ -260,7 +266,7 @@ type SubscriberMap = EventMap<Vec<Option<Box<dyn Subscriber>>>>;
 fn event_loop(
     error_handler: &mut impl ErrorHandler,
     receiver: &Receiver<ChannelMessage>,
-    tls: &Arc<ClientConfig>,
+    tls: &crate::tls::TlsType,
 ) {
     // The stare of the websocket
     let mut maybe_stream: Option<WebSocketStream> = None;
@@ -310,7 +316,8 @@ fn event_loop(
                                 "[{}, \"{}\"]",
                                 RequestType::Unsubscribe as u8,
                                 event_kind.to_string()
-                            ).into();
+                            )
+                            .into();
 
                             ws_message = Some(Message::Text(unsub));
                         }
@@ -390,13 +397,12 @@ fn receive_message(
 }
 
 fn connect(
-    tls: &Arc<ClientConfig>,
+    tls: &crate::tls::TlsType,
     error_handler: &mut impl ErrorHandler,
 ) -> Result<WebSocketStream, WebSocketError> {
     const TIMEOUT: Duration = Duration::from_millis(100);
 
     let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
-    let addr = SocketAddr::V4(addr);
 
     let str_req = format!("wss://{addr}");
 
@@ -404,18 +410,13 @@ fn connect(
 
     request.headers_mut().insert("Authorization", auth?);
 
-    let tcp_stream = TcpStream::connect_timeout(&addr, TIMEOUT)?;
-
-    let addr = ServerName::IpAddress(addr.ip().into());
-
-    let client_connection = ClientConnection::new(tls.clone(), addr).unwrap();
-    let rustls_stream = StreamOwned::new(client_connection, tcp_stream);
+    let tcp_stream = TcpStream::connect_timeout(&SocketAddr::V4(addr), TIMEOUT)?;
 
     let (mut stream, _) = tungstenite::client_tls_with_config(
         request.clone(),
-        rustls_stream,
+        tcp_stream,
         None,
-        Some(Connector::Rustls(tls.clone())),
+        Some(crate::tls::wrap_connector(tls)),
     )
     .expect("The TLS handshake should never fail");
 

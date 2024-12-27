@@ -27,8 +27,10 @@ pub const GAME_PROCESS_NAME: &str = "League of Legends";
 pub(crate) const ENCODER: Encoder = Encoder::new();
 
 #[cfg(all(docsrs, target_os = "linux"))]
+/// Constant for the game process name, `League of Legends.exe` on Windows and `League of Legends` on MacOS
 pub const GAME_PROCESS_NAME: &str = "";
 #[cfg(all(docsrs, target_os = "linux"))]
+/// Constant for the client process name, `LeagueClientUx.exe` on Windows and `LeagueClientUx` on MacOS
 pub const CLIENT_PROCESS_NAME: &str = "";
 
 const NOT_RUNNING: Error = Error::new(

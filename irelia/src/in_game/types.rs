@@ -17,6 +17,8 @@ use serde_derive::Serialize;
 use std::fmt::Formatter;
 use time::Duration;
 
+/// Data for the entire game, this includes all events so far, `GameData`, and all players in the game.
+/// If the game is in spectator, there is no active player
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllGameData {
@@ -51,24 +53,29 @@ fn deserialize_active_player<'de, D: Deserializer<'de>>(
 }
 
 impl AllGameData {
+    /// Gets the active player, is `None` if the game is a replay or in spectator
     #[must_use]
     pub const fn active_player(&self) -> Option<&ActivePlayer> {
         self.active_player.as_ref()
     }
+    /// All players in the current game. This varies based on the game mode (10 in summoners rift or aram, 16 in arena, etc.)
     #[must_use]
     pub const fn all_players(&self) -> &[AllPlayer] {
         &self.all_players
     }
+    /// All events that have taken place in the game so far.
     #[must_use]
     pub const fn events(&self) -> &Events {
         &self.events
     }
+    /// Current game data, such as game mode and map
     #[must_use]
     pub const fn game_data(&self) -> &GameData {
         &self.game_data
     }
 }
 
+/// Currently active player. This is only available in live games.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivePlayer {
@@ -200,6 +207,7 @@ impl ActivePlayer {
     }
 }
 
+/// Struct containing current abilities (passive, q, w, e, r)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Abilities {
@@ -233,6 +241,7 @@ impl Abilities {
     }
 }
 
+/// Basic info about an ability, such as it's name, ID, and raw description
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityInfo {
@@ -261,6 +270,7 @@ impl AbilityInfo {
     }
 }
 
+/// Abilitiy info and ability level
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ability {
@@ -280,6 +290,8 @@ impl Ability {
     }
 }
 
+/// Current champion stats, such as AP, armor, attack range, haste, speed, etc.
+/// This struct is entirely `f64`'s and the `AbilityResource` enum
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChampionStats {
@@ -444,6 +456,7 @@ impl ChampionStats {
     }
 }
 
+/// Contains rune data, include keystone, primary tree, secondaryy tree, all six runes, and all three stat runes
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Runes {
@@ -477,6 +490,7 @@ impl Runes {
     }
 }
 
+/// Contains name, ID, and raw description
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rune {
@@ -506,6 +520,7 @@ impl Rune {
     }
 }
 
+/// Contains id and raw description
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatRune {
@@ -525,6 +540,8 @@ impl StatRune {
     }
 }
 
+/// Data on people other than the current player.
+/// This data is more limited, containing things like level, alive status, position, and scores
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllPlayer {
@@ -550,6 +567,7 @@ pub struct AllPlayer {
     raw_skin_name: Option<Box<str>>,
 }
 
+/// enum for player position such as `Top`, `Mid`, `Support`, `None`, and `Unknown` if the case was added after the type was written
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Position {
@@ -653,6 +671,7 @@ impl AllPlayer {
     }
 }
 
+/// Kills, deaths, assists, CS, and ward score
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores {
@@ -693,6 +712,7 @@ impl Scores {
     }
 }
 
+/// Player summoner spells, this can either be indexed like an array, or using getters
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpells {
@@ -723,6 +743,7 @@ impl core::ops::Index<usize> for SummonerSpells {
     }
 }
 
+/// Player summoner spell, only contains name and description
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummonerSpell {
@@ -746,6 +767,7 @@ impl SummonerSpell {
     }
 }
 
+/// Item stats such as name, id, price, and slot
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
@@ -803,6 +825,7 @@ impl Item {
     }
 }
 
+/// Array of events
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Events {
@@ -810,6 +833,7 @@ pub struct Events {
 }
 
 impl Events {
+    /// Number of dragons killed in the game
     #[must_use]
     pub fn dragons_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
@@ -819,18 +843,21 @@ impl Events {
             ))
         })
     }
+    /// Whether or not herald has been killed
     #[must_use]
     pub fn harold_killed(&self) -> bool {
         self.events
             .iter()
             .any(|event| matches!(event.event_details, EventDetails::HeraldKill(_)))
     }
+    /// Rough number of grubs killed, unfortonetly the API only adds 1 event if the enemy kills them all, and one event for every grub your team kills
     #[must_use]
     pub fn grub_groups_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
             acc + u8::from(matches!(event.event_details, EventDetails::HordeKill(_)))
         })
     }
+    /// Number of barons killed
     #[must_use]
     pub fn barons_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
@@ -839,6 +866,7 @@ impl Events {
     }
 }
 
+/// Contains the event id, time, and details
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Event {
@@ -850,6 +878,7 @@ pub struct Event {
     event_details: EventDetails,
 }
 
+/// Event details, such as the event (obviously) which is used as the tag, and additonal details specific to that event, ie: `DragonType`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all_fields = "PascalCase")]
 #[serde(tag = "EventName")]
@@ -904,6 +933,7 @@ pub enum EventDetails {
     Unknown(Value),
 }
 
+/// Type of the dragon killed by an event, either Fire, Earth, Water, Elder, etc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DragonType {
     Fire,
@@ -1222,12 +1252,14 @@ impl SerializeTrait for Structure {
     }
 }
 
+/// Whether the structure is a turret or an inhibitor
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructureType {
     Turret,
     Barracks,
 }
 
+/// If it's a top, mid, or bottom, or nexus turret
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lane {
     Top,
@@ -1235,6 +1267,7 @@ pub enum Lane {
     Bot,
 }
 
+/// Whether the turret is outer, middle, inner, or upper or lower nexus
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructurePlace {
     Outer,
@@ -1244,6 +1277,7 @@ pub enum StructurePlace {
     BotNexus,
 }
 
+/// Kill info, contains the killers name and the name of anyone who assisted
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct KillInfo {
@@ -1263,6 +1297,7 @@ impl KillInfo {
     }
 }
 
+/// A monster kill, equivalent to `KillInfo` with the `stolen` field added
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct MonsterKill {
@@ -1294,6 +1329,7 @@ impl Event {
     }
 }
 
+/// Contains basic game data, such as mode, time, name, number, and terrain
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameData {
@@ -1305,6 +1341,7 @@ pub struct GameData {
     map_terrain: MapTerrain,
 }
 
+/// Current game mode, game modes which are dead at the time of writing, or were added after, would fall under "Other"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum GameMode {
@@ -1339,6 +1376,7 @@ pub enum GameMode {
     Other(Box<str>),
 }
 
+/// Map name, such as Tutorial, Summoners Rift, etc. This is translated manually from "Map3", "Map10", etc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum MapName {
@@ -1365,6 +1403,7 @@ pub enum MapName {
     Other(Box<str>),
 }
 
+/// Map terrain, should be equivalent to the currently available dragon soul
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MapTerrain {
     Default,
@@ -1514,21 +1553,17 @@ mod option_slice {
     use serde::{Deserialize, Deserializer, Serializer};
 
     // Serde requires it to be this way
-    #[allow(clippy::ref_option_ref)]
+    #[allow(clippy::ref_option)]
     pub fn serialize<S: Serializer>(
         slice: &Option<Box<[String]>>,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        let mut len = None;
+        let len = slice.as_ref().map_or(0, |a| a.len());
 
-        if let Some(slice) = &slice {
-            len = Some(slice.len());
-        }
-
-        let mut seq = serializer.serialize_seq(len)?;
+        let mut seq = serializer.serialize_seq(Some(len))?;
 
         if let Some(slice) = slice {
-            for player in slice.as_ref() {
+            for player in slice {
                 seq.serialize_element(player)?;
             }
         }
@@ -1578,6 +1613,8 @@ mod tests {
         println!("{json:#}");
 
         // Test that it goes back into the proper format
-        let _: Events = serde_json::from_str(&json).unwrap();
+        let new_events: Events = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(events, new_events);
     }
 }

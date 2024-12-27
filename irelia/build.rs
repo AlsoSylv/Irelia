@@ -1,11 +1,12 @@
-use quote::quote;
-use std::env;
-use std::ops::Deref;
-use std::path::Path;
-
 const RIOT_PEM: &[u8] = include_bytes!("src/riotgames.pem");
 
+#[cfg(feature = "rustls")]
 fn main() {
+    use quote::quote;
+    use std::env;
+    use std::ops::Deref;
+    use std::path::Path;
+
     let Ok(Some((pem, _))) = rustls_pemfile::read_one_from_slice(RIOT_PEM) else {
         panic!("Failed to decode pem file, this should never happen");
     };
@@ -55,3 +56,40 @@ fn main() {
 
     std::fs::write(&path, tokens).unwrap();
 }
+
+#[cfg(feature = "nativetls")]
+fn main() {
+    use std::env;
+    use std::path::Path;
+
+    use quote::quote;
+
+    let Ok(decoded) = native_tls::Certificate::from_pem(RIOT_PEM) else {
+        panic!("Failed to decode pem file, this should never happen");
+    };
+
+    let Ok(der) = decoded.to_der() else {
+        panic!("Failed to convert to der")
+    };
+
+    let tokens = quote! {
+        pub(super) mod cert {
+            pub const PEM_FILE: &[u8] = &[#(#der),*];
+        }
+    };
+
+    let tokens = if cfg!(debug_assertions) {
+        prettyplease::unparse(&syn::parse2(tokens).unwrap())
+    } else {
+        tokens.to_string()
+    };
+
+    let out_dir = env::var_os("OUT_DIR").unwrap();
+
+    let path = Path::new(&out_dir).join("riot_games_const_pem.rs");
+
+    std::fs::write(&path, tokens).unwrap();
+}
+
+#[cfg(not(any(feature = "nativetls", feature = "rustls")))]
+fn main() {}
