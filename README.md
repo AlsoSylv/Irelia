@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-irelia = "0.7"
+irelia = "0.9"
 ```
 
 ### Cargo Features
@@ -21,31 +21,31 @@ This crate is designed with modularity in mind, and as such API support has been
 
 By default, everything but the replay feature is enabled
 
-- `["full"]` - enables support for all APIs
+- `["full"]` - enables support for all APIs avaiable in the client by default (enabled by default)
 - `["ws"]` - enables support for the LCU websocket
 - `["in_game"]` - enables support for the native in game API
-- `["batched"]` - enabled the batched request system
-- `["replay"]` - enables the replay API interface
+- `["replay"]` - enables the replay API interface (disabled by default)
 
 ### Making a request to the LCU
 
 ---
 Making a request to the LCU with irelia is simple
+
 ```rust
 use irelia::{Error, RequestClient, rest::LcuClient};
 use serde_json::Value;
 
 #[tokio::main]
 async fn main() {
-    let request_client = RequestClient::new();
-    let lcu_client = LcuClient::new(false).unwrap();
-    
-    let json: Result<Option<Value>, Error> = lcu_client.get("/endpoint", &request_client).await;
+    let lcu_client = irelia::rest::LcuClient::connect().unwrap();
+
+    let current_summoner: Value = lcu_client
+        .get("/lol-summoner/v1/current-summoner")
+        .await
+        .unwrap();
+
+    println!("{current_summoner}");
 }
 ```
-
-### Examples
-
----
 
 Up-to-date examples can always be found [here](irelia/examples)
