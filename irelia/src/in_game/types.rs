@@ -15,6 +15,7 @@ use serde::{
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::fmt::Formatter;
+use std::num::NonZero;
 use time::Duration;
 
 /// Data for the entire game, this includes all events so far, `GameData`, and all players in the game.
@@ -991,6 +992,8 @@ pub struct Structure {
     /// <img src="https://raw.githubusercontent.com/AlsoSylv/Irelia/master/irelia/src/in_game/StructureNames.png" />
     /// </div>
     place: u8,
+    /// ???
+    remainder: Option<NonZero<usize>>,
 }
 
 impl Structure {
@@ -1038,6 +1041,7 @@ impl Structure {
     }
 
     #[must_use]
+    /// Updated as of patch 15.1
     /// <h1>Inhibitors: </h1>
     /// The place of inhibitors is always 1
     ///
@@ -1045,20 +1049,13 @@ impl Structure {
     /// The place of turrets is map dependent
     ///
     /// <h2> Summoners Rift: </h2>
-    /// <h3> Side Lanes: </h3>
+    /// <h3> Lanes: </h3>
     /// <ul>
     ///     <li> Outermost Turret - 3 </li>
     ///     <li> Middle Turret - 2 </li>
     ///     <li> Inhibitor Turret - 1 </li>
     /// </ul>
-    /// <h3> Mid-Lane: </h3>
-    /// <ul>
-    ///     <li> Outermost Turret - 5 </li>
-    ///     <li> Middle Turret - 4 </li>
-    ///     <li> Inhibitor Turret - 3 </li>
-    ///     <li> Top Nexus Turret - 2 </li>   
-    ///     <li> Bot Nexus Turret - 1 </li>
-    /// </ul>
+    /// <h3> Nexus towers always have place 4 </h3>
     ///
     /// <h2> Nexus Blitz: </h2>
     /// <ul>
@@ -1105,11 +1102,11 @@ impl Structure {
         match map {
             MapName::SummonersRift | MapName::TutorialMap => {
                 match (self.place, self.lane == Lane::Mid) {
-                    (5, true) | (3, false) => StructurePlace::Outer,
-                    (4, true) | (2, false) => StructurePlace::Middle,
-                    (3, true) | (1, false) => StructurePlace::Inner,
-                    (2, true) => StructurePlace::TopNexus,
-                    (1, true) => StructurePlace::BotNexus,
+                    (3, false) => StructurePlace::Outer,
+                    (2, false) => StructurePlace::Middle,
+                    (1, false) => StructurePlace::Inner,
+                    (5, true) => StructurePlace::TopNexus,
+                    (4, true) => StructurePlace::BotNexus,
                     _ => unreachable!("Side lanes have three turrets, while mid has five"),
                 }
                 .into()
@@ -1137,6 +1134,12 @@ impl Structure {
             ),
         }
     }
+
+    /// I wish I knew what this was for...
+    /// Only appears in summoners rift
+    pub fn remainder(&self) -> Option<NonZero<usize>> {
+        self.remainder
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for Structure {
@@ -1146,17 +1149,17 @@ impl<'de> serde::Deserialize<'de> for Structure {
     {
         fn determine_structure_team(team: &str) -> TeamID {
             match team {
-                "T1" => TeamID::Order,
-                "T2" => TeamID::Chaos,
-                team => unreachable!("Expected T1 or T2, found: {:?}", team),
+                "T1" | "T100" => TeamID::Order,
+                "T2" | "T200" => TeamID::Chaos,
+                team => unreachable!("Expected T1 | T100 or T2 | T200, found: {:?}", team),
             }
         }
 
-        fn determine_structure_lane(lane: u8) -> Lane {
+        fn determine_structure_lane(lane: &str) -> Lane {
             match lane {
-                b'L' => Lane::Top,
-                b'C' => Lane::Mid,
-                b'R' => Lane::Bot,
+                "L" | "L2" => Lane::Top,
+                "C" | "L1" => Lane::Mid,
+                "R" | "L0" => Lane::Bot,
                 unrecognized => unreachable!("{}", unrecognized),
             }
         }
@@ -1164,7 +1167,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
         fn determine_structure_type(ty: &str) -> StructureType {
             match ty {
                 "Turret" => StructureType::Turret,
-                "Barracks" => StructureType::Barracks,
+                "Barracks" | "Inhib" => StructureType::Barracks,
                 unrecognized => unreachable!("{}", unrecognized),
             }
         }
@@ -1198,23 +1201,29 @@ impl<'de> serde::Deserialize<'de> for Structure {
 
                 let structure_type = determine_structure_type(structure_type);
                 // This is always a single byte
-                let lane = determine_structure_lane(lane.as_bytes()[0]);
+                let lane = determine_structure_lane(lane);
                 let team_id = determine_structure_team(team);
 
                 let place = if structure_type == StructureType::Turret {
-                    let place = split
+                    let place = &split
                         .next()
-                        .expect("The fourth string in the split is the place");
+                        .expect("The fourth string in the split is the place")[1..];
+
                     place.parse().expect("This is always a number")
                 } else {
+                    // This is so we can grab the remainder if it exists
+                    let _ = split.next();
                     1
                 };
+
+                let remainder = split.next().map(|inner| inner.parse().unwrap());
 
                 Ok(Structure {
                     structure_type,
                     team_id,
                     lane,
                     place,
+                    remainder,
                 })
             }
         }
