@@ -3,27 +3,36 @@
 extern crate irelia;
 extern crate tokio;
 
-use irelia::replay::types::{HudCameraMode, Vector3f};
 use irelia::replay::ReplayClient;
 use irelia::RequestClient;
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
+    let mut args = std::env::args();
+    
+    if args.len() < 1 {
+        println!("Please enter a summoner name");
+        return;
+    }
+
+    let name = {
+        let mut name = args.next().unwrap();
+
+        for arg in args {
+            name = format!("{name} {arg}")
+        }
+
+        name
+    };
+
     let replay_client = RequestClient::new();
 
     let mut renderer = replay_client.get_render().await.unwrap();
 
     println!("{renderer:?}");
 
-    renderer.camera_mode = HudCameraMode::Fps;
-    renderer.selection_offset = Vector3f {
-        x: 0.0,
-        y: 1911.85,
-        z: -1200.0,
-    };
-    renderer.camera_attached = true;
-    renderer.selection_name = "Example".into();
+    renderer.follow(name);
 
     let renderer = replay_client.post_render(&renderer).await.unwrap();
 

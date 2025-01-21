@@ -18,7 +18,7 @@ async fn main() {
     println!("{current_summoner:?}");
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentSummoner {
     pub account_id: i64,

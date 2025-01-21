@@ -368,6 +368,19 @@ pub struct Render {
     pub camera_mode: HudCameraMode,
 }
 
+impl Render {
+    pub fn follow(&mut self, selection_name: String) {
+        self.camera_mode = HudCameraMode::Fps;
+        self.selection_offset = Vector3f {
+            x: 0.0,
+            y: 1911.85,
+            z: -1200.0,
+        };
+        self.camera_attached = true;
+        self.selection_name = selection_name;
+    }
+}
+
 /// Sequence of `KeyFrames` to be executed, controls settings, FOV, offsets, etc
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

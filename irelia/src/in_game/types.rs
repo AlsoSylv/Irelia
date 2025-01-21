@@ -571,6 +571,7 @@ pub struct AllPlayer {
 /// enum for player position such as `Top`, `Mid`, `Support`, `None`, and `Unknown` if the case was added after the type was written
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum Position {
     Top,
     Jungle,
@@ -883,6 +884,7 @@ pub struct Event {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all_fields = "PascalCase")]
 #[serde(tag = "EventName")]
+#[non_exhaustive]
 pub enum EventDetails {
     GameStart,
     MinionsSpawning,
@@ -936,6 +938,7 @@ pub enum EventDetails {
 
 /// Type of the dragon killed by an event, either Fire, Earth, Water, Elder, etc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum DragonType {
     Fire,
     Earth,
@@ -1200,6 +1203,13 @@ impl<'de> serde::Deserialize<'de> for Structure {
                     .expect("The third string in the split is the lane");
 
                 let structure_type = determine_structure_type(structure_type);
+
+                let lane = if structure_type == StructureType::Barracks {
+                    &lane[0..1]
+                } else {
+                    lane
+                };
+
                 // This is always a single byte
                 let lane = determine_structure_lane(lane);
                 let team_id = determine_structure_team(team);
@@ -1216,7 +1226,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
                     1
                 };
 
-                let remainder = split.next().map(|inner| inner.parse().unwrap());
+                let remainder = split.next().map(|inner| inner.parse().ok()).flatten();
 
                 Ok(Structure {
                     structure_type,
@@ -1263,6 +1273,7 @@ impl SerializeTrait for Structure {
 
 /// Whether the structure is a turret or an inhibitor
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StructureType {
     Turret,
     Barracks,
@@ -1270,6 +1281,7 @@ pub enum StructureType {
 
 /// If it's a top, mid, or bottom, or nexus turret
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Lane {
     Top,
     Mid,
@@ -1278,6 +1290,7 @@ pub enum Lane {
 
 /// Whether the turret is outer, middle, inner, or upper or lower nexus
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StructurePlace {
     Outer,
     Middle,
@@ -1353,6 +1366,7 @@ pub struct GameData {
 /// Current game mode, game modes which are dead at the time of writing, or were added after, would fall under "Other"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum GameMode {
     #[serde(rename = "CLASSIC")]
     SummonersRift,
@@ -1379,6 +1393,8 @@ pub enum GameMode {
     Arena,
     #[serde(rename = "STRAWBERRY")]
     Swarn,
+    #[serde(rename = "SWIFTPLAY")]
+    SwiftPlay,
     /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/gameModes.json>
     /// However, this may not be up-to-date
     #[serde(untagged)]
@@ -1388,6 +1404,7 @@ pub enum GameMode {
 /// Map name, such as Tutorial, Summoners Rift, etc. This is translated manually from "Map3", "Map10", etc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[non_exhaustive]
 pub enum MapName {
     #[serde(rename = "Map3")]
     TutorialMap,
@@ -1414,6 +1431,7 @@ pub enum MapName {
 
 /// Map terrain, should be equivalent to the currently available dragon soul
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum MapTerrain {
     Default,
     Infernal,
@@ -1449,6 +1467,7 @@ impl GameData {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 /// Enum representation of different team IDs
 pub enum TeamID {
     All,
@@ -1461,6 +1480,7 @@ pub enum TeamID {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 /// Ability Resource
 pub enum AbilityResource {
     Mana,
@@ -1542,7 +1562,7 @@ mod fixed_option_array {
             where
                 A: SeqAccess<'a>,
             {
-                let mut arr: [Option<Item>; 7] = std::array::from_fn(|_| None);
+                let mut arr: [Option<Item>; 7] = [const { None }; 7];
 
                 while let Some(item) = seq.next_element::<Item>()? {
                     let tmp = item.slot;

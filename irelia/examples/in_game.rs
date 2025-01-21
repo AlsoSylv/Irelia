@@ -7,9 +7,9 @@ async fn main() {
 
     let in_game_client = irelia::RequestClient::new();
 
-    let active_player = in_game_client.active_player().await.unwrap();
+    // let active_player = in_game_client.active_player().await.unwrap();
 
-    println!("{active_player:?}");
+    // println!("{active_player:?}");
 
     let all_game_data = in_game_client.all_game_data().await;
 
