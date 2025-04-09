@@ -468,10 +468,10 @@ impl ChampionStats {
 #[serde(rename_all = "camelCase")]
 pub struct Runes {
     keystone: Option<Rune>,
-    primary_rune_tree: Option<Rune>,
-    secondary_rune_tree: Option<Rune>,
-    general_runes: Option<[Rune; 6]>,
-    stat_runes: Option<[StatRune; 3]>,
+    primary_tree: Option<Rune>,
+    secondary_tree: Option<Rune>,
+    general: Option<[Rune; 6]>,
+    stat_stones: Option<[StatRune; 3]>,
 }
 
 impl Runes {
@@ -480,20 +480,20 @@ impl Runes {
         &self.keystone
     }
     #[must_use]
-    pub const fn primary_rune_tree(&self) -> &Option<Rune> {
-        &self.primary_rune_tree
+    pub const fn primary_tree(&self) -> &Option<Rune> {
+        &self.primary_tree
     }
     #[must_use]
-    pub const fn secondary_rune_tree(&self) -> &Option<Rune> {
-        &self.secondary_rune_tree
+    pub const fn secondary_tree(&self) -> &Option<Rune> {
+        &self.secondary_tree
     }
     #[must_use]
-    pub const fn general_runes(&self) -> Option<&[Rune; 6]> {
-        self.general_runes.as_ref()
+    pub const fn general(&self) -> Option<&[Rune; 6]> {
+        self.general.as_ref()
     }
     #[must_use]
-    pub const fn stat_runes(&self) -> Option<&[StatRune; 3]> {
-        self.stat_runes.as_ref()
+    pub const fn stat_stones(&self) -> Option<&[StatRune; 3]> {
+        self.stat_stones.as_ref()
     }
 }
 
@@ -785,7 +785,7 @@ pub struct Item {
     count: u8,
     display_name: Box<str>,
     #[serde(rename = "itemID")]
-    item_id: u32,
+    id: u32,
     // This price never goes over 8000
     price: u16,
     raw_description: Box<str>,
@@ -812,8 +812,8 @@ impl Item {
         &self.display_name
     }
     #[must_use]
-    pub const fn item_id(&self) -> u32 {
-        self.item_id
+    pub const fn id(&self) -> u32 {
+        self.id
     }
     #[must_use]
     pub const fn price(&self) -> u16 {
@@ -846,7 +846,7 @@ impl Events {
     pub fn dragons_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
             acc + u8::from(matches!(
-                event.event_details,
+                event.details,
                 EventDetails::DragonKill { .. }
             ))
         })
@@ -856,20 +856,20 @@ impl Events {
     pub fn harold_killed(&self) -> bool {
         self.events
             .iter()
-            .any(|event| matches!(event.event_details, EventDetails::HeraldKill(_)))
+            .any(|event| matches!(event.details, EventDetails::HeraldKill(_)))
     }
     /// Rough number of grubs killed, unfortonetly the API only adds 1 event if the enemy kills them all, and one event for every grub your team kills
     #[must_use]
     pub fn grub_groups_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
-            acc + u8::from(matches!(event.event_details, EventDetails::HordeKill(_)))
+            acc + u8::from(matches!(event.details, EventDetails::HordeKill(_)))
         })
     }
     /// Number of barons killed
     #[must_use]
     pub fn barons_killed(&self) -> u8 {
         self.events.iter().fold(0, |acc, event| {
-            acc + u8::from(matches!(event.event_details, EventDetails::BaronKill(_)))
+            acc + u8::from(matches!(event.details, EventDetails::BaronKill(_)))
         })
     }
 }
@@ -879,11 +879,11 @@ impl Events {
 #[serde(rename_all = "PascalCase")]
 pub struct Event {
     #[serde(rename = "EventID")]
-    event_id: i64,
+    id: u64,
     #[serde(with = "duration")]
-    event_time: Duration,
+    time: Duration,
     #[serde(flatten)]
-    event_details: EventDetails,
+    details: EventDetails,
 }
 
 /// Event details, such as the event (obviously) which is used as the tag, and additonal details specific to that event, ie: `DragonType`
@@ -962,7 +962,7 @@ pub enum DragonType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Structure {
     /// This is either `StructureType::Turret` or `StructureType::Barracks` aka inhibitor
-    structure_type: StructureType,
+    ty: StructureType,
     /// Blue side is `TeamID::Order`,
     /// Red side is `TeamID::Chaos`
     team_id: TeamID,
@@ -1010,19 +1010,19 @@ impl Structure {
     #[must_use]
     /// Returns true if the structure is a turret and false otherwise
     pub fn is_turret(&self) -> bool {
-        self.structure_type == StructureType::Turret
+        self.ty == StructureType::Turret
     }
 
     #[must_use]
     /// Returns true if the structure is an inhibitor and false otherwise
     pub fn is_inhibitor(&self) -> bool {
-        self.structure_type == StructureType::Barracks
+        self.ty == StructureType::Barracks
     }
 
     #[must_use]
     /// Either Turret or Barracks (aka inhibitor)
     pub const fn structure_type(&self) -> &StructureType {
-        &self.structure_type
+        &self.ty
     }
 
     #[must_use]
@@ -1237,7 +1237,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
                 let remainder = split.next().and_then(|inner| inner.parse().ok());
 
                 Ok(Structure {
-                    structure_type,
+                    ty: structure_type,
                     team_id,
                     lane,
                     place,
@@ -1269,7 +1269,7 @@ impl SerializeTrait for Structure {
 
         let place = self.place;
 
-        let str = if self.structure_type == StructureType::Barracks {
+        let str = if self.ty == StructureType::Barracks {
             format!("Barracks_{team}_{lane}1")
         } else {
             format!("Turret_{team}_{lane}_0{place}_A")
@@ -1350,12 +1350,16 @@ impl MonsterKill {
 
 impl Event {
     #[must_use]
-    pub const fn event_id(&self) -> i64 {
-        self.event_id
+    pub const fn id(&self) -> u64 {
+        self.id
     }
     #[must_use]
-    pub const fn event_time(&self) -> Duration {
-        self.event_time
+    pub const fn time(&self) -> Duration {
+        self.time
+    }
+    #[must_use]
+    pub const fn details(&self) -> &EventDetails {
+        &self.details
     }
 }
 

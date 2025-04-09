@@ -255,7 +255,7 @@ fn read_lock_file<'a>(
 pub struct Error {
     kind: ErrorKind,
     message: std::borrow::Cow<'static, str>,
-    lock_file_error: bool,
+    lock_file: bool,
 }
 
 impl Display for Error {
@@ -271,7 +271,7 @@ impl Error {
         Self {
             kind,
             message: std::borrow::Cow::Borrowed(message),
-            lock_file_error: false,
+            lock_file: false,
         }
     }
 
@@ -279,18 +279,18 @@ impl Error {
         Self {
             kind,
             message: std::borrow::Cow::Owned(message),
-            lock_file_error: false,
+            lock_file: false,
         }
     }
 
     const fn set_lockfile_error(mut self, lock_fie_error: bool) -> Self {
-        self.lock_file_error = lock_fie_error;
+        self.lock_file = lock_fie_error;
         self
     }
 
     #[must_use]
     pub const fn is_lockfile_error(&self) -> bool {
-        self.lock_file_error
+        self.lock_file
     }
 
     #[must_use]
@@ -325,7 +325,7 @@ impl From<std::io::Error> for Error {
         Self {
             kind: ErrorKind::Io(value.kind()),
             message: value.to_string().into(),
-            lock_file_error: true,
+            lock_file: true,
         }
     }
 }

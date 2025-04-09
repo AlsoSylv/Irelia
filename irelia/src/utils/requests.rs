@@ -83,9 +83,13 @@ pub trait RequestClientTrait: Sync {
     }
 
     fn socket_addr_to_str(buffer: &mut [u8; 21], url: SocketAddrV4) -> &str {
-        let _ = write!(buffer.as_mut_slice(), "{url}");
+        let written = {
+            let mut writer = std::io::BufWriter::new(buffer.as_mut_slice());
+            let _ = write!(&mut writer, "{url}");
+            writer.buffer().len()
+        };
 
-        std::str::from_utf8(buffer).unwrap()
+        std::str::from_utf8(&buffer[..written]).unwrap()
     }
 
     /// Encodes the request into a specified format
@@ -97,15 +101,13 @@ pub trait RequestClientTrait: Sync {
         format: RequestFmt,
     ) -> Result<Option<Vec<u8>>, crate::error::SerdeError> {
         if let Some(body) = body {
-            return match format {
-                RequestFmt::Json => todo!(),
-                RequestFmt::MsgPack => rmp_serde::to_vec_named(&body),
-            }
-            .map(Option::Some)
-            .map_err(From::from);
+            Ok(Some(match format {
+                RequestFmt::Json => serde_json::to_vec(&body)?,
+                RequestFmt::MsgPack => rmp_serde::to_vec_named(&body)?,
+            }))
+        } else {
+            Ok(None)
         }
-
-        Ok(None)
     }
 }
 
@@ -421,8 +423,8 @@ impl RequestFmt {
     #[must_use]
     pub fn mime(&self) -> &'static str {
         match self {
-            RequestFmt::Json => todo!(),
-            RequestFmt::MsgPack => todo!(),
+            RequestFmt::Json => "application/json",
+            RequestFmt::MsgPack => "application/x-msgpack",
         }
     }
 }
