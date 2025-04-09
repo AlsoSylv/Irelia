@@ -772,6 +772,9 @@
 			"BaronKill": {
 				"$ref": "#/components/schemas/MonsterKillInfo"
 			},
+			"AtakhanKill": {
+				"$ref": "#/components/schemas/MonsterKillInfo"
+			},
 			"InhibKilled": {
 				"properties": {
 					"InhibKilled": {

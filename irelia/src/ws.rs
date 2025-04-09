@@ -13,7 +13,7 @@ use std::time::Duration;
 use std::{ops::ControlFlow, thread};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::util::NonBlockingResult;
-use tungstenite::{client::IntoClientRequest, Message, WebSocket};
+use tungstenite::{Message, WebSocket, client::IntoClientRequest};
 
 use crate::utils::process_info::get_running_client;
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
@@ -102,11 +102,11 @@ pub trait ErrorHandler: Send {
     fn on_connect(&mut self, socket: &mut WebSocketStream) -> Result<(), WebSocketError> {
         match socket.get_ref() {
             MaybeTlsStream::Plain(_) => unimplemented!("The stream is always encrypted"),
-            #[cfg(feature = "rustls")]
+            #[cfg(feature = "ws_rustls")]
             MaybeTlsStream::Rustls(stream_owned) => {
                 stream_owned.sock.set_nonblocking(true)?;
             }
-            #[cfg(feature = "nativetls")]
+            #[cfg(feature = "ws_nativetls")]
             MaybeTlsStream::NativeTls(tls_stream) => {
                 tls_stream.get_ref().set_nonblocking(true)?;
             }
@@ -136,7 +136,6 @@ impl ErrorHandler for DefaultErrorHandler {
 }
 
 impl Default for LcuWebSocket {
-    #[must_use]
     /// Creates a new connection to the LCU websocket using the default error handler
     fn default() -> Self {
         Self::new()
@@ -336,7 +335,7 @@ fn event_loop(
                 if abort {
                     break;
                 }
-            };
+            }
 
             // Else if the `control_flow` is still to continue, we take out next message
             if control_flow == ControlFlow::Continue(Flow::Continue) {
@@ -402,7 +401,7 @@ fn connect(
 ) -> Result<WebSocketStream, WebSocketError> {
     const TIMEOUT: Duration = Duration::from_millis(100);
 
-    let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false)?;
+    let (addr, auth) = get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, false, None)?;
 
     let str_req = format!("wss://{addr}");
 

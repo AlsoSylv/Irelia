@@ -4,13 +4,13 @@ extern crate irelia;
 extern crate tokio;
 
 use irelia::replay::ReplayClient;
-use irelia::RequestClient;
+use irelia::requests;
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     let mut args = std::env::args();
-    
+
     if args.len() < 1 {
         println!("Please enter a summoner name");
         return;
@@ -26,7 +26,7 @@ async fn main() {
         name
     };
 
-    let replay_client = RequestClient::new();
+    let replay_client = requests::new();
 
     let mut renderer = replay_client.get_render().await.unwrap();
 

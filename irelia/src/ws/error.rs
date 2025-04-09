@@ -1,10 +1,10 @@
-use hyper::header::InvalidHeaderValue;
+use http::header::InvalidHeaderValue;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 /// Enum of possible errors that will be passed to the `ErrorHandler`
 pub enum Error {
-    Tungstenite(tungstenite::Error),
+    Tungstenite(Box<tungstenite::Error>),
     ProcessInfo(crate::process_info::Error),
     SerdeJson(serde_json::Error),
     Io(std::io::Error),
@@ -31,7 +31,7 @@ impl From<std::io::Error> for Error {
 
 impl From<tungstenite::Error> for Error {
     fn from(value: tungstenite::Error) -> Self {
-        Self::Tungstenite(value)
+        Self::Tungstenite(Box::new(value))
     }
 }
 
@@ -49,8 +49,8 @@ impl From<crate::process_info::Error> for Error {
 
 impl From<InvalidHeaderValue> for Error {
     fn from(value: InvalidHeaderValue) -> Self {
-        Self::Tungstenite(tungstenite::Error::HttpFormat(
+        Self::Tungstenite(Box::new(tungstenite::Error::HttpFormat(
             tungstenite::http::Error::from(value),
-        ))
+        )))
     }
 }

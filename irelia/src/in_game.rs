@@ -5,14 +5,14 @@
 /// Types returned by the in game API
 pub mod types;
 
+use types::ActivePlayerOrNull;
+
 use self::types::{
     Abilities, ActivePlayer, AllGameData, AllPlayer, Events, GameData, Item, Runes, Scores,
     SummonerSpells, TeamID,
 };
+use crate::Error;
 use crate::in_game::sealed::GameClientInternal;
-use crate::{Error, RequestClient};
-use hyper::body::Incoming;
-use hyper::Response;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
@@ -32,9 +32,15 @@ pub trait GameClient: GameClientInternal {
     fn head(
         &self,
         endpoint: &str,
-    ) -> impl Future<Output = Result<Response<Incoming>, Error>> + Send {
-        self.request_client()
-            .raw_request_template(URL, endpoint, "HEAD", None, None)
+    ) -> impl Future<Output = Result<Self::Response, Error<Self::Error>>> + Send {
+        self.socketv4_raw_request_template(
+            URL,
+            endpoint,
+            "HEAD",
+            None,
+            None,
+            crate::requests::RequestFmt::MsgPack,
+        )
     }
 
     //noinspection SpellCheckingInspection
@@ -44,7 +50,9 @@ pub trait GameClient: GameClientInternal {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    fn all_game_data(&self) -> impl Future<Output = Result<AllGameData, Error>> + Send {
+    fn all_game_data(
+        &self,
+    ) -> impl Future<Output = Result<AllGameData, Error<Self::Error>>> + Send {
         self.live_client("allgamedata", None)
     }
 
@@ -53,8 +61,14 @@ pub trait GameClient: GameClientInternal {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    fn active_player(&self) -> impl Future<Output = Result<ActivePlayer, Error>> + Send {
-        self.live_client("activeplayer", None)
+    fn active_player(
+        &self,
+    ) -> impl Future<Output = Result<Option<ActivePlayer>, Error<Self::Error>>> + Send {
+        async {
+            let active_player: ActivePlayerOrNull = self.live_client("activeplayer", None).await?;
+
+            Ok(active_player.into_option())
+        }
     }
 
     //noinspection SpellCheckingInspection
@@ -62,7 +76,9 @@ pub trait GameClient: GameClientInternal {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    fn active_player_name(&self) -> impl Future<Output = Result<String, Error>> + Send {
+    fn active_player_name(
+        &self,
+    ) -> impl Future<Output = Result<String, Error<Self::Error>>> + Send {
         self.live_client("activeplayername", None)
     }
 
@@ -71,7 +87,9 @@ pub trait GameClient: GameClientInternal {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    fn active_player_abilities(&self) -> impl Future<Output = Result<Abilities, Error>> + Send {
+    fn active_player_abilities(
+        &self,
+    ) -> impl Future<Output = Result<Abilities, Error<Self::Error>>> + Send {
         self.live_client("activeplayerabilities", None)
     }
 
@@ -80,7 +98,9 @@ pub trait GameClient: GameClientInternal {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    fn active_player_runes(&self) -> impl Future<Output = Result<Runes, Error>> + Send {
+    fn active_player_runes(
+        &self,
+    ) -> impl Future<Output = Result<Runes, Error<Self::Error>>> + Send {
         self.live_client("activeplayerrunes", None)
     }
 
@@ -92,7 +112,7 @@ pub trait GameClient: GameClientInternal {
     fn player_list(
         &self,
         team: Option<TeamID>,
-    ) -> impl Future<Output = Result<Box<[AllPlayer]>, Error>> + Send {
+    ) -> impl Future<Output = Result<Box<[AllPlayer]>, Error<Self::Error>>> + Send {
         let endpoint = team.map_or_else(
             || "playerlist",
             |team| match team {
@@ -115,7 +135,7 @@ pub trait GameClient: GameClientInternal {
     fn player_scores(
         &self,
         summoner: impl AsRef<str> + Send,
-    ) -> impl Future<Output = Result<Scores, Error>> + Send {
+    ) -> impl Future<Output = Result<Scores, Error<Self::Error>>> + Send {
         async move {
             self.live_client("playerscores", Some(summoner.as_ref()))
                 .await
@@ -130,7 +150,7 @@ pub trait GameClient: GameClientInternal {
     fn player_summoner_spells(
         &self,
         riot_id: impl AsRef<str> + Send,
-    ) -> impl Future<Output = Result<SummonerSpells, Error>> + Send {
+    ) -> impl Future<Output = Result<SummonerSpells, Error<Self::Error>>> + Send {
         async move {
             self.live_client("playersummonerspells", Some(riot_id.as_ref()))
                 .await
@@ -145,7 +165,7 @@ pub trait GameClient: GameClientInternal {
     fn player_main_runes(
         &self,
         riot_id: impl AsRef<str> + Send,
-    ) -> impl Future<Output = Result<Runes, Error>> + Send {
+    ) -> impl Future<Output = Result<Runes, Error<Self::Error>>> + Send {
         async move {
             self.live_client("playermainrunes", Some(riot_id.as_ref()))
                 .await
@@ -160,7 +180,7 @@ pub trait GameClient: GameClientInternal {
     fn player_items(
         &self,
         riot_id: impl AsRef<str> + Send,
-    ) -> impl Future<Output = Result<Box<[Item]>, Error>> + Send {
+    ) -> impl Future<Output = Result<Box<[Item]>, Error<Self::Error>>> + Send {
         async move {
             self.live_client("playeritems", Some(riot_id.as_ref()))
                 .await
@@ -175,7 +195,7 @@ pub trait GameClient: GameClientInternal {
     fn event_data(
         &self,
         event_id: Option<i32>,
-    ) -> impl Future<Output = Result<Events, Error>> + Send {
+    ) -> impl Future<Output = Result<Events, Error<Self::Error>>> + Send {
         let event_id = event_id.map_or(String::new(), |id| format!("?eventID={id}"));
         let endpoint = format!("eventdata{event_id}");
         async move { self.live_client(&endpoint, None).await }
@@ -186,39 +206,44 @@ pub trait GameClient: GameClientInternal {
     ///
     /// # Errors
     /// This will return an error if the game API is not running
-    fn game_stats(&self) -> impl Future<Output = Result<GameData, Error>> + Send {
+    fn game_stats(&self) -> impl Future<Output = Result<GameData, Error<Self::Error>>> + Send {
         self.live_client("gamestats", None)
     }
 }
 
 mod sealed {
     use super::URL;
-    use crate::{Error, RequestClient};
+    use crate::{Error, utils::requests::RequestClientTrait};
     use serde::de::DeserializeOwned;
     use std::future::Future;
 
-    pub trait GameClientInternal: Sync {
-        fn request_client(&self) -> &RequestClient;
-
+    pub trait GameClientInternal: RequestClientTrait + Sync {
         fn live_client<R: DeserializeOwned>(
             &self,
             endpoint: &str,
             riot_id: Option<&str>,
-        ) -> impl Future<Output = Result<R, Error>> + Send {
+        ) -> impl Future<Output = Result<R, Error<Self::Error>>> + Send {
             async move {
-                use hyper::body::Buf;
-
                 let endpoint = riot_id.map_or_else(
                     || format!("/liveclientdata/{endpoint}"),
                     |riot_id| format!("/liveclientdata/{endpoint}?riotId={riot_id}"),
                 );
 
                 let buf = self
-                    .request_client()
-                    .request_template(URL, &endpoint, "GET", None::<()>, None)
+                    .socketv4_request_template(
+                        URL,
+                        &endpoint,
+                        "GET",
+                        None,
+                        None,
+                        crate::requests::RequestFmt::MsgPack,
+                    )
                     .await?;
 
-                Ok(rmp_serde::from_read(buf.aggregate().reader())?)
+                Ok(Self::decode_response_bytes(
+                    buf,
+                    crate::requests::RequestFmt::MsgPack,
+                )?)
             }
         }
 
@@ -233,28 +258,38 @@ mod sealed {
             endpoint: &'static str,
             method: &'static str,
             body: Option<impl serde::Serialize + Send>,
-        ) -> impl Future<Output = Result<R, Error>> + Send
+        ) -> impl Future<Output = Result<R, Error<Self::Error>>> + Send
         where
             R: DeserializeOwned,
         {
             async move {
-                use hyper::body::Buf;
+                let body = Self::encode_body(body, crate::requests::RequestFmt::MsgPack)?;
 
                 let buffer = self
-                    .request_client()
-                    .request_template(URL, endpoint, method, body, None)
+                    .socketv4_request_template(
+                        URL,
+                        endpoint,
+                        method,
+                        body,
+                        None,
+                        crate::requests::RequestFmt::MsgPack,
+                    )
                     .await?;
 
-                Ok(rmp_serde::from_read(buffer.aggregate().reader())?)
+                Ok(Self::decode_response_bytes(
+                    buffer,
+                    crate::requests::RequestFmt::MsgPack,
+                )?)
             }
         }
     }
 
-    impl GameClientInternal for RequestClient {
-        fn request_client(&self) -> &RequestClient {
-            self
-        }
+    impl<T> GameClientInternal for T
+    where
+        T: RequestClientTrait + Sync,
+        Self: Sync,
+    {
     }
 }
 
-impl GameClient for RequestClient {}
+impl<T> GameClient for T where T: GameClientInternal {}

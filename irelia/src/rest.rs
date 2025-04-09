@@ -7,52 +7,21 @@
 pub mod types;
 
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
-use crate::{utils::process_info::get_running_client, Error, RequestClient};
-use hyper::http::HeaderValue;
-use serde::de::DeserializeOwned;
+use crate::utils::requests::RequestClientTrait;
+use crate::{Error, utils::process_info::get_running_client};
+use http::HeaderValue;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::net::SocketAddrV4;
 
 /// Struct representing a connection to the LCU
-pub struct LcuClient {
-    request_client: RequestClient,
+pub struct LcuClient<T: RequestClientTrait> {
+    request_client: T,
     url: SocketAddrV4,
     auth_header: HeaderValue,
 }
 
-impl LcuClient {
-    /// Attempts to create a connection to the LCU, errors if it fails
-    /// to spin up the child process, or fails to get data from the client.
-    ///
-    /// # Errors
-    /// This will return an error if the LCU API is not running, this can include
-    /// the client being down, the lock file being unable to be opened, or the LCU
-    /// not running at all
-    pub fn connect() -> Result<Self, Error> {
-        Self::connect_force_lockfile(false)
-    }
-
-    /// Attempts to create a connection to the LCU, errors if it fails
-    /// to spin up the child process, or fails to get data from the client.
-    ///
-    /// `force_lock_file` will read the lock file regardless of whether the client
-    /// or the game is running at the time
-    ///
-    /// # Errors
-    /// This will return an error if the LCU API is not running, this can include
-    /// the client being down, the lock file being unable to be opened, or the LCU
-    /// not running at all
-    pub fn connect_force_lockfile(force_lock_file: bool) -> Result<Self, Error> {
-        let (addr, pass) =
-            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
-
-        Ok(Self::new_with_credentials_with_request_client(
-            addr,
-            pass?,
-            &RequestClient::new(),
-        ))
-    }
-
+impl<T: RequestClientTrait + Clone> LcuClient<T> {
     /// Attempts to create a connection to the LCU, errors if it fails
     /// to spin up the child process, or fails to get data from the client.
     ///
@@ -62,7 +31,7 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running, this can include
     /// the client being down, the lock file being unable to be opened, or the LCU
     /// not running at all
-    pub fn connect_with_request_client(request_client: &RequestClient) -> Result<Self, Error> {
+    pub fn connect_with_request_client(request_client: &T) -> Result<Self, Error<T::Error>> {
         Self::connect_with_request_client_force_lockfile(false, request_client)
     }
 
@@ -79,10 +48,14 @@ impl LcuClient {
     /// not running at all
     pub fn connect_with_request_client_force_lockfile(
         force_lock_file: bool,
-        request_client: &RequestClient,
-    ) -> Result<Self, Error> {
-        let (addr, pass) =
-            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
+        request_client: &T,
+    ) -> Result<Self, Error<T::Error>> {
+        let (addr, pass) = get_running_client(
+            CLIENT_PROCESS_NAME,
+            GAME_PROCESS_NAME,
+            force_lock_file,
+            None,
+        )?;
 
         Ok(Self::new_with_credentials_with_request_client(
             addr,
@@ -97,7 +70,7 @@ impl LcuClient {
     pub fn new_with_credentials_with_request_client(
         url: SocketAddrV4,
         auth_header: HeaderValue,
-        request_client: &RequestClient,
+        request_client: &T,
     ) -> Self {
         Self {
             url,
@@ -111,9 +84,13 @@ impl LcuClient {
     /// # Errors
     /// This will return an error if the lock file is inaccessible, or if
     /// the LCU is not running
-    pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error> {
-        let (addr, pass): (_, Result<HeaderValue, _>) =
-            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, force_lock_file)?;
+    pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error<T::Error>> {
+        let (addr, pass) = get_running_client(
+            CLIENT_PROCESS_NAME,
+            GAME_PROCESS_NAME,
+            force_lock_file,
+            None,
+        )?;
         self.reconnect_with_credentials(addr, pass?);
         Ok(())
     }
@@ -143,7 +120,7 @@ impl LcuClient {
     pub async fn delete<R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-    ) -> Result<R, Error> {
+    ) -> Result<R, Error<T::Error>> {
         self.lcu_request(endpoint.as_ref(), "DELETE", None::<()>)
             .await
     }
@@ -160,7 +137,7 @@ impl LcuClient {
     pub async fn get<R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-    ) -> Result<R, Error> {
+    ) -> Result<R, Error<T::Error>> {
         self.lcu_request(endpoint.as_ref(), "GET", None::<()>).await
     }
 
@@ -171,14 +148,15 @@ impl LcuClient {
     pub async fn head(
         &self,
         endpoint: impl AsRef<str> + Send,
-    ) -> Result<hyper::Response<hyper::body::Incoming>, Error> {
+    ) -> Result<T::Response, Error<T::Error>> {
         self.request_client
-            .raw_request_template(
+            .socketv4_raw_request_template(
                 self.url,
                 endpoint.as_ref(),
                 "HEAD",
                 None,
                 Some(&self.auth_header),
+                crate::requests::RequestFmt::MsgPack,
             )
             .await
     }
@@ -187,11 +165,11 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn patch<T: Serialize + Send, R: DeserializeOwned>(
+    pub async fn patch<B: Serialize + Send, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-        body: T,
-    ) -> Result<R, Error> {
+        body: B,
+    ) -> Result<R, Error<T::Error>> {
         self.lcu_request(endpoint.as_ref(), "PATCH", Some(body))
             .await
     }
@@ -200,11 +178,11 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn post<T: Serialize + Send, R: DeserializeOwned>(
+    pub async fn post<B: Serialize + Send, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-        body: T,
-    ) -> Result<R, Error> {
+        body: B,
+    ) -> Result<R, Error<T::Error>> {
         self.lcu_request(endpoint.as_ref(), "POST", Some(body))
             .await
     }
@@ -213,11 +191,11 @@ impl LcuClient {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
-    pub async fn put<T: Serialize + Send, R: DeserializeOwned>(
+    pub async fn put<B: Serialize + Send, R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-        body: T,
-    ) -> Result<R, Error> {
+        body: B,
+    ) -> Result<R, Error<T::Error>> {
         self.lcu_request(endpoint.as_ref(), "PUT", Some(body)).await
     }
 
@@ -228,20 +206,28 @@ impl LcuClient {
     /// This will return an error if the LCU API is not running, or the provided type or body is invalid
     ///
     /// If the response body is empty, this will return an unexpected EOF error
-    pub async fn lcu_request<T: Serialize + Send, R: DeserializeOwned>(
+    pub async fn lcu_request<B: Serialize + Send, R: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
-        body: Option<T>,
-    ) -> Result<R, Error> {
-        use hyper::body::Buf;
-
+        body: Option<B>,
+    ) -> Result<R, Error<T::Error>> {
         let buf = self
             .request_client
-            .request_template(self.url, endpoint, method, body, Some(&self.auth_header))
+            .socketv4_request_template(
+                self.url,
+                endpoint,
+                method,
+                T::encode_body(body, crate::requests::RequestFmt::MsgPack)?,
+                Some(&self.auth_header),
+                crate::requests::RequestFmt::MsgPack,
+            )
             .await?;
 
-        Ok(rmp_serde::from_read(buf.aggregate().reader())?)
+        Ok(T::decode_response_bytes(
+            buf,
+            crate::requests::RequestFmt::MsgPack,
+        )?)
     }
 }
 

@@ -1,8 +1,8 @@
 [package]
 name = "irelia"
-version = "0.9.2"
-edition = "2021"
-rust-version = "1.83.0"
+version = "0.10.0"
+edition = "2024"
+rust-version = "1.85.0"
 description = "A Rust wrapper around the native LoL APIs"
 license = "MIT"
 repository = "https://github.com/AlsoSylv/Irelia"
@@ -32,6 +32,9 @@ irelia_encoder = { path = "../encoder", version = "0.1" }
 # Rustls related
 rustls = { version = "0.23", default-features = false, optional = true }
 hyper-rustls = { version = "0.27", default-features = false, optional = true, features = ["http1", "ring"] }
+http = { version = "1.2.0", default-features = false, optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["__rustls"], optional = true }
+bytes = { version = "1.10.0", default-features = false, optional = true }
 
 [dependencies.hyper]
 version = "1.5"
@@ -87,7 +90,9 @@ features = ["sync", "rt", "macros", "rt-multi-thread"]
 [features]
 default = [
     "full",
-    "rustls"
+    "__hyper",
+    "__hyper_rustls",
+    "ws_rustls"
     ]
 
 full = [
@@ -98,17 +103,11 @@ full = [
 
 rest = [
     "dep:serde_derive",
-    "dep:hyper", 
-    "dep:hyper-util",
-    "dep:http-body-util",
     "dep:sysinfo",
     "dep:hashlink"
     ]
 
 in_game = [
-    "dep:hyper",
-    "dep:hyper-util",
-    "dep:http-body-util",
     "dep:serde_derive",
     "dep:time",
     ]
@@ -119,6 +118,10 @@ ws = [
     "dep:serde_derive",
     "dep:serde_json"
     ]
+
+ws_nativetls = ["tungstenite/native-tls"]
+
+ws_rustls = ["tungstenite/__rustls-tls"]
 
 replay = [
     "in_game",
@@ -131,17 +134,42 @@ rest_schema = [
     "hyper-rustls/rustls-native-certs",
     ]
 
-rustls = [
-    "tungstenite/__rustls-tls",
+__hyper = [
+    "dep:hyper", 
+    "dep:hyper-util",
+    "dep:http-body-util",
+    "http"
+]
+
+__hyper_rustls = [
     "dep:rustls",
     "dep:hyper-rustls",
-    ]
+]
 
-nativetls = [
-    "tungstenite/native-tls", 
+__hyper_nativetls = [
     "dep:hyper-tls",
     "dep:native-tls",
-    ]
+]
+
+__reqwest = [
+    "dep:reqwest",
+    "http"
+]
+
+__reqwest_rustls = [
+    "dep:rustls",
+    "reqwest/__rustls",
+]
+
+__reqwest_nativetls = [
+    "dep:native-tls",
+    "reqwest/native-tls",
+]
+
+http = [
+    "dep:bytes",
+    "dep:http",
+]
 
 encoder_nightly = ["irelia_encoder/nightly"]
 encoder_simd = ["irelia_encoder/simd"]

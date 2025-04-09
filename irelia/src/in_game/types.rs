@@ -30,27 +30,33 @@ pub struct AllGameData {
     game_data: GameData,
 }
 
-fn deserialize_active_player<'de, D: Deserializer<'de>>(
+#[derive(Deserialize)]
+#[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
+pub(super) enum ActivePlayerOrNull {
+    ActivePlayer(Option<ActivePlayer>),
+    Error {
+        #[serde(rename = "error")]
+        // This error will always be "This feature is not supported in spectator mode", so it can be ignored
+        _error: IgnoredAny,
+    },
+}
+
+impl ActivePlayerOrNull {
+    pub(super) fn into_option(self) -> Option<ActivePlayer> {
+        match self {
+            ActivePlayerOrNull::ActivePlayer(player) => player,
+            ActivePlayerOrNull::Error { .. } => None,
+        }
+    }
+}
+
+pub(super) fn deserialize_active_player<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<ActivePlayer>, D::Error> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    #[allow(clippy::large_enum_variant)]
-    enum ActivePlayerOrNull {
-        ActivePlayer(Option<ActivePlayer>),
-        Error {
-            #[serde(rename = "error")]
-            // This error will always be "This feature is not supported in spectator mode", so it can be ignored
-            _error: IgnoredAny,
-        },
-    }
-
     let maybe_player = ActivePlayerOrNull::deserialize(deserializer)?;
 
-    Ok(match maybe_player {
-        ActivePlayerOrNull::ActivePlayer(player) => player,
-        ActivePlayerOrNull::Error { .. } => None,
-    })
+    Ok(maybe_player.into_option())
 }
 
 impl AllGameData {
@@ -84,7 +90,7 @@ pub struct ActivePlayer {
     champion_stats: ChampionStats,
     current_gold: f64,
     full_runes: Runes,
-    level: u8,
+    level: Option<NonZero<u8>>,
     #[serde(flatten)]
     riot_id: RiotId,
 }
@@ -187,7 +193,7 @@ impl ActivePlayer {
         &self.full_runes
     }
     #[must_use]
-    pub const fn level(&self) -> u8 {
+    pub const fn level(&self) -> Option<NonZero<u8>> {
         self.level
     }
     #[must_use]
@@ -461,24 +467,24 @@ impl ChampionStats {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Runes {
-    keystone: Rune,
-    primary_rune_tree: Rune,
-    secondary_rune_tree: Rune,
+    keystone: Option<Rune>,
+    primary_rune_tree: Option<Rune>,
+    secondary_rune_tree: Option<Rune>,
     general_runes: Option<[Rune; 6]>,
     stat_runes: Option<[StatRune; 3]>,
 }
 
 impl Runes {
     #[must_use]
-    pub const fn keystone(&self) -> &Rune {
+    pub const fn keystone(&self) -> &Option<Rune> {
         &self.keystone
     }
     #[must_use]
-    pub const fn primary_rune_tree(&self) -> &Rune {
+    pub const fn primary_rune_tree(&self) -> &Option<Rune> {
         &self.primary_rune_tree
     }
     #[must_use]
-    pub const fn secondary_rune_tree(&self) -> &Rune {
+    pub const fn secondary_rune_tree(&self) -> &Option<Rune> {
         &self.secondary_rune_tree
     }
     #[must_use]
@@ -921,6 +927,7 @@ pub enum EventDetails {
     HordeKill(MonsterKill),
     HeraldKill(MonsterKill),
     BaronKill(MonsterKill),
+    AtakhanKill(MonsterKill),
     InhibKilled {
         #[serde(flatten)]
         kill_info: KillInfo,
@@ -1138,6 +1145,7 @@ impl Structure {
         }
     }
 
+    #[must_use]
     /// I wish I knew what this was for...
     /// Only appears in summoners rift
     pub fn remainder(&self) -> Option<NonZero<usize>> {
@@ -1226,7 +1234,7 @@ impl<'de> serde::Deserialize<'de> for Structure {
                     1
                 };
 
-                let remainder = split.next().map(|inner| inner.parse().ok()).flatten();
+                let remainder = split.next().and_then(|inner| inner.parse().ok());
 
                 Ok(Structure {
                     structure_type,
@@ -1364,41 +1372,109 @@ pub struct GameData {
 }
 
 /// Current game mode, game modes which are dead at the time of writing, or were added after, would fall under "Other"
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum GameMode {
-    #[serde(rename = "CLASSIC")]
     SummonersRift,
-    #[serde(rename = "ODIN", alias = "CREPE")]
-    Aram,
+    Aram {
+        piltover: bool,
+    },
     Tutorial,
-    #[serde(rename = "TUTORIAL_MODULE_1")]
     /// Part 1 of the tutorial
     Tutorial1,
-    #[serde(rename = "TUTORIAL_MODULE_2")]
     /// Part 2 of the tutorial
     Tutorial2,
-    #[serde(rename = "TUTORIAL_MODULE_3")]
     /// Part 3 of the tutorial
     Tutorial3,
     Urf,
     PracticeTool,
     OneForAll,
-    #[serde(alias = "GAMEMODEX")]
     NexusBlitz,
-    #[serde(rename = "ULTBOOK")]
     UltimateSpellbook,
-    #[serde(rename = "CHERRY")]
     Arena,
-    #[serde(rename = "STRAWBERRY")]
-    Swarn,
-    #[serde(rename = "SWIFTPLAY")]
+    Swarm,
     SwiftPlay,
     /// If this variant pops up, see the riot docs at <https://static.developer.riotgames.com/docs/lol/gameModes.json>
     /// However, this may not be up-to-date
-    #[serde(untagged)]
     Other(Box<str>),
+}
+
+impl<'de> serde::Deserialize<'de> for GameMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct GameModeVisitor;
+
+        impl Visitor<'_> for GameModeVisitor {
+            type Value = GameMode;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("A string with the gamemode name")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(match v {
+                    "CLASSIC" => GameMode::SummonersRift,
+                    "ODIN" => GameMode::Aram { piltover: false },
+                    "CREPE" => GameMode::Aram { piltover: true },
+                    "TUTORIAL" => GameMode::Tutorial,
+                    "TUTORIAL_MODULE_1" => GameMode::Tutorial1,
+                    "TUTORIAL_MODULE_2" => GameMode::Tutorial2,
+                    "TUTORIAL_MODULE_3" => GameMode::Tutorial3,
+                    "URF" => GameMode::Urf,
+                    "PRACTICETOOL" => GameMode::PracticeTool,
+                    "ONEFORALL" => GameMode::OneForAll,
+                    "GAMEMODEX" => GameMode::NexusBlitz,
+                    "ULTBOOK" => GameMode::UltimateSpellbook,
+                    "CHERRY" => GameMode::Arena,
+                    "STRAWBERRY" => GameMode::Swarm,
+                    "SWIFTPLAY" => GameMode::SwiftPlay,
+                    _ => GameMode::Other(v.into()),
+                })
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                self.visit_str(&v)
+            }
+        }
+
+        deserializer.deserialize_string(GameModeVisitor)
+    }
+}
+
+impl serde::Serialize for GameMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let name = match self {
+            GameMode::SummonersRift => "CLASSIC",
+            GameMode::Aram { piltover: false } => "ODIN",
+            GameMode::Aram { piltover: true } => "CREPE",
+            GameMode::Tutorial => "TUTORIAL",
+            GameMode::Tutorial1 => "TUTORIAL_MODULE_1",
+            GameMode::Tutorial2 => "TUTORIAL_MODULE_2",
+            GameMode::Tutorial3 => "TUTORIAL_MODULE_3",
+            GameMode::NexusBlitz => "GAMEMODEX",
+            GameMode::UltimateSpellbook => "ULTBOOK",
+            GameMode::Arena => "CHERRY",
+            GameMode::Swarm => "STRAWBERRY",
+            GameMode::SwiftPlay => "SWIFTPLAY",
+            GameMode::Other(other) => other,
+            GameMode::Urf => "URF",
+            GameMode::PracticeTool => "PRACTICETOOL",
+            GameMode::OneForAll => "ONEFORALL",
+        };
+
+        serializer.serialize_str(name)
+    }
 }
 
 /// Map name, such as Tutorial, Summoners Rift, etc. This is translated manually from "Map3", "Map10", etc.

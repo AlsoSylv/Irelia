@@ -229,7 +229,7 @@ impl EventKind {
 #[cfg(test)]
 mod test {
     use super::{Event, EventData, EventKind, RequestType};
-    use serde_json::{json, Map, Value};
+    use serde_json::{Map, Value, json};
 
     #[test]
     fn test_deserialize() {

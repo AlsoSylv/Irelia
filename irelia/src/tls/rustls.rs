@@ -7,7 +7,7 @@ include!(concat!(env!("OUT_DIR"), "/riot_games_const_pem.rs"));
 //noinspection SpellCheckingInspection
 /// Setups up the TLS connector, this is outside the hyper client as
 /// It is required inside the websocket implementation
-fn connector_internal() -> rustls::ClientConfig {
+pub(crate) fn connector_internal() -> rustls::ClientConfig {
     // Create a new empty cert store
     let roots = rustls::RootCertStore {
         roots: vec![cert::DECODED_CERT],
@@ -38,10 +38,10 @@ mod ws {
     }
 }
 
-#[cfg(any(feature = "rest", feature = "in_game"))]
+#[cfg(feature = "__hyper_rustls")]
 pub use http::*;
 
-#[cfg(any(feature = "rest", feature = "in_game"))]
+#[cfg(feature = "__hyper_rustls")]
 mod http {
     use hyper_util::client::legacy::connect;
 

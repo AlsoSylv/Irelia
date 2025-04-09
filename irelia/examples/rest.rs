@@ -8,7 +8,9 @@ use serde_derive::{Deserialize, Serialize};
 
 #[tokio::main]
 async fn main() {
-    let lcu_client = irelia::rest::LcuClient::connect().unwrap();
+    let client = irelia::requests::new();
+
+    let lcu_client = irelia::rest::LcuClient::connect_with_request_client(&client).unwrap();
 
     let current_summoner: CurrentSummoner = lcu_client
         .get("/lol-summoner/v1/current-summoner")

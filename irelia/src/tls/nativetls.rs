@@ -5,7 +5,7 @@ include!(concat!(env!("OUT_DIR"), "/riot_games_const_pem.rs"));
 static NATIVE_TLS_CERTIFICATE: LazyLock<native_tls::TlsConnector> =
     LazyLock::new(connector_internal);
 
-fn connector_internal() -> native_tls::TlsConnector {
+pub(crate) fn connector_internal() -> native_tls::TlsConnector {
     // This was turned into a der in the build script, so if this fails something is horribly wrong
     let cert = native_tls::Certificate::from_der(cert::PEM_FILE).unwrap();
 
@@ -36,10 +36,10 @@ mod ws {
     }
 }
 
-#[cfg(any(feature = "rest", feature = "in_game", feature = "replay"))]
+#[cfg(feature = "__hyper_nativetls")]
 pub use http::*;
 
-#[cfg(any(feature = "rest", feature = "in_game", feature = "replay"))]
+#[cfg(feature = "__hyper_nativetls")]
 mod http {
     use hyper_util::client::legacy::connect;
 

@@ -1,137 +1,428 @@
-use crate::Error;
-use std::fmt::Debug;
-use std::future::Future;
-use std::io::BufWriter;
 use std::io::Write;
 use std::net::SocketAddrV4;
-use std::pin::Pin;
 
-use http_body_util::{BodyExt, Collected, Full};
-use hyper::body::{Bytes, Incoming};
-use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
-use hyper::http::uri::Scheme;
-use hyper::http::HeaderValue;
-use hyper::rt::Executor;
-use hyper::{Request, Response, Uri};
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
-use serde::Serialize;
+use crate::Error;
+use crate::error::HttpError;
 
-/// Struct that represents any connection to the in game or rest APIs, this client has to be constructed and then passed to the clients
-///
-/// # Example
-/// ```rs
-/// use irelia::{RequestClient, rest::LCUClient};
-///
-/// fn main() {
-///     let client = RequestClient::new();
-///
-///     let lcu_client = LCUClient::new();
-/// }
-/// ```
-#[derive(Clone, Debug)]
-pub struct RequestClient {
-    client: Client<crate::tls::Connector, Full<Bytes>>,
+use http::HeaderValue;
+use serde::{Deserialize, Serialize};
+
+const LONGEST_SOCKET_ADDR: usize = "255.255.255.255:65535".len();
+
+pub trait RequestClientTrait: Sync {
+    type Response: Send;
+
+    type ResponseBytes: Send;
+
+    type Error: Send + HttpError;
+
+    fn raw_request_template(
+        &self,
+        url: &str,
+        endpoint: &str,
+        method: &str,
+        body: Option<Vec<u8>>,
+        auth_header: Option<&HeaderValue>,
+        format: RequestFmt,
+    ) -> impl std::future::Future<Output = Result<Self::Response, Error<Self::Error>>> + Send;
+
+    fn request_template(
+        &self,
+        url: &str,
+        endpoint: &str,
+        method: &str,
+        body: Option<Vec<u8>>,
+        auth_header: Option<&HeaderValue>,
+        format: RequestFmt,
+    ) -> impl std::future::Future<Output = Result<Self::ResponseBytes, Error<Self::Error>>> + Send;
+
+    /// Decodes the bytes from a request, which are in the specified format
+    ///
+    /// # Errors
+    /// The decoder returned an error of some sort
+    fn decode_response_bytes<R: for<'a> Deserialize<'a>>(
+        bytes: Self::ResponseBytes,
+        format: RequestFmt,
+    ) -> Result<R, crate::error::SerdeError>;
+
+    fn socketv4_raw_request_template(
+        &self,
+        url: SocketAddrV4,
+        endpoint: &str,
+        method: &str,
+        body: Option<Vec<u8>>,
+        auth_header: Option<&HeaderValue>,
+        format: RequestFmt,
+    ) -> impl std::future::Future<Output = Result<Self::Response, Error<Self::Error>>> + Send {
+        async move {
+            let mut buffer = [0; LONGEST_SOCKET_ADDR];
+            let url = Self::socket_addr_to_str(&mut buffer, url);
+
+            self.raw_request_template(url, endpoint, method, body, auth_header, format)
+                .await
+        }
+    }
+
+    fn socketv4_request_template(
+        &self,
+        url: SocketAddrV4,
+        endpoint: &str,
+        method: &str,
+        body: Option<Vec<u8>>,
+        auth_header: Option<&HeaderValue>,
+        format: RequestFmt,
+    ) -> impl std::future::Future<Output = Result<Self::ResponseBytes, Error<Self::Error>>> + Send
+    {
+        async move {
+            let mut buffer = [0; LONGEST_SOCKET_ADDR];
+            let url = Self::socket_addr_to_str(&mut buffer, url);
+
+            self.request_template(url, endpoint, method, body, auth_header, format)
+                .await
+        }
+    }
+
+    fn socket_addr_to_str(buffer: &mut [u8; 21], url: SocketAddrV4) -> &str {
+        let _ = write!(buffer.as_mut_slice(), "{url}");
+
+        std::str::from_utf8(buffer).unwrap()
+    }
+
+    /// Encodes the request into a specified format
+    ///
+    /// # Errors
+    /// The decoder returned an error of some sort
+    fn encode_body<T: Serialize + Send>(
+        body: Option<T>,
+        format: RequestFmt,
+    ) -> Result<Option<Vec<u8>>, crate::error::SerdeError> {
+        if let Some(body) = body {
+            return match format {
+                RequestFmt::Json => todo!(),
+                RequestFmt::MsgPack => rmp_serde::to_vec_named(&body),
+            }
+            .map(Option::Some)
+            .map_err(From::from);
+        }
+
+        Ok(None)
+    }
 }
 
-type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+#[cfg(all(feature = "__hyper", not(feature = "__reqwest")))]
+pub use hyper_client::*;
 
-impl RequestClient {
+#[cfg(all(feature = "__hyper", not(feature = "__reqwest")))]
+mod hyper_client {
+    use std::fmt::Display;
+    use std::future::Future;
+    use std::pin::Pin;
+
+    use bytes::Bytes;
+    use http::HeaderValue;
+    use http::uri::Scheme;
+    use http_body_util::{BodyExt, Collected, Full};
+    use hyper::body::Incoming;
+    use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+    use hyper::rt::Executor;
+    use hyper::{Request, Response, Uri};
+    use hyper_util::client::legacy::Client;
+    use hyper_util::rt::TokioExecutor;
+    use serde::Deserialize;
+
+    use crate::Error;
+    use crate::error::HttpError;
+
+    use super::{RequestClientTrait, RequestFmt};
+
+    type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    pub type RequestClientType = Client<crate::tls::Connector, Full<Bytes>>;
+
     #[must_use]
-    /// Creates a client to be passed to the LCU and in game structs
-    pub fn new() -> Self {
-        Self::new_with_executor(TokioExecutor::new())
+    pub fn new() -> RequestClientType {
+        new_with_executor(TokioExecutor::new())
     }
 
     #[must_use]
     pub fn new_with_executor<E: Executor<BoxFuture> + Clone + Send + Sync + 'static>(
         exec: E,
-    ) -> Self {
+    ) -> RequestClientType {
         let https = crate::tls::https_connector();
-        // Make the new client
-        let client = Client::builder(exec).build(https);
 
-        Self { client }
+        Client::builder(exec).build(https)
     }
 
-    /// returns a raw hyper response, URIs always use HTTPS,
-    ///
-    /// # Errors
-    /// if the body is invalid JSON, otherwise in any way hyper would normally
-    pub(crate) async fn raw_request_template(
-        &self,
-        url: SocketAddrV4,
-        endpoint: &str,
-        method: &str,
-        body: Option<Full<Bytes>>,
-        auth_header: Option<&HeaderValue>,
-    ) -> Result<Response<Incoming>, Error> {
-        const MINE: &str = "application/x-msgpack";
-        const LONGEST_SOCKET_ADDR: usize = "255.255.255.255:65535".len();
-
-        let mut buffer = [0; LONGEST_SOCKET_ADDR];
-        let mut buf_writer = BufWriter::new(buffer.as_mut_slice());
-
-        // The socket addr is IpV4, so this is guaranteed to fit by the type system
-        let _ = write!(&mut buf_writer, "{url}");
-
-        // Build the URI, always in https format
-        let built_uri = Uri::builder()
-            .scheme(Scheme::HTTPS)
-            .authority(buf_writer.buffer())
-            .path_and_query(endpoint)
-            .build()?;
-
-        // Build the new request
-        let mut builder = Request::builder()
-            .method(method)
-            .uri(built_uri)
-            .header(CONTENT_TYPE, MINE)
-            .header(ACCEPT, MINE);
-
-        // Add the auth header, if provided
-        if let Some(header) = auth_header {
-            builder = builder.header(AUTHORIZATION, header);
-        };
-
-        let body = body.unwrap_or_default();
-
-        // Add the body to finalize
-        let request = builder.body(body)?;
-
-        // Return the incoming request
-        Ok(self.client.request(request).await?)
+    #[non_exhaustive]
+    #[derive(Debug)]
+    pub enum HyperError {
+        /// http error, re-exported by hyper
+        HttpError(hyper::http::Error),
+        /// Client error from `hyper_util`
+        ClientError(hyper_util::client::legacy::Error),
+        /// Hyper error
+        Error(hyper::Error),
     }
 
-    /// Makes a request, collects the bytes, and returns the buf
-    pub(crate) async fn request_template<T: Serialize + Send>(
-        &self,
-        url: SocketAddrV4,
-        endpoint: &str,
-        method: &str,
-        body: Option<T>,
-        auth_header: Option<&HeaderValue>,
-    ) -> Result<Collected<Bytes>, Error> {
-        let body = body
-            .map(|body| rmp_serde::to_vec_named(&body).map(Full::from))
-            .transpose()?;
+    impl Display for HyperError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                HyperError::HttpError(error) => std::fmt::Display::fmt(error, f),
+                HyperError::ClientError(error) => std::fmt::Display::fmt(error, f),
+                HyperError::Error(error) => std::fmt::Display::fmt(error, f),
+            }
+        }
+    }
 
-        let response = self
-            .raw_request_template(url, endpoint, method, body, auth_header)
-            .await?;
+    impl From<hyper::http::Error> for Error<HyperError> {
+        fn from(value: hyper::http::Error) -> Self {
+            HyperError::HttpError(value).into()
+        }
+    }
 
-        if !response.status().is_success() {
-            return Err(Error::RequestError(response.status()));
+    impl From<hyper_util::client::legacy::Error> for Error<HyperError> {
+        fn from(value: hyper_util::client::legacy::Error) -> Self {
+            HyperError::ClientError(value).into()
+        }
+    }
+
+    impl From<hyper::Error> for Error<HyperError> {
+        fn from(value: hyper::Error) -> Self {
+            HyperError::Error(value).into()
+        }
+    }
+
+    impl std::error::Error for HyperError {}
+
+    impl HttpError for HyperError {
+        fn invalid_header_value(invalid_header_value: hyper::header::InvalidHeaderValue) -> Self {
+            Self::HttpError(hyper::http::Error::from(invalid_header_value))
+        }
+    }
+
+    impl RequestClientTrait for RequestClientType {
+        type Response = Response<Incoming>;
+
+        type ResponseBytes = Collected<Bytes>;
+
+        type Error = HyperError;
+
+        async fn raw_request_template(
+            &self,
+            url: &str,
+            endpoint: &str,
+            method: &str,
+            body: Option<Vec<u8>>,
+            auth_header: Option<&HeaderValue>,
+            format: RequestFmt,
+        ) -> Result<Self::Response, Error<Self::Error>> {
+            // Build the URI, always in https format
+            let built_uri = Uri::builder()
+                .scheme(Scheme::HTTPS)
+                .authority(url)
+                .path_and_query(endpoint)
+                .build()
+                .unwrap();
+
+            // Build the new request
+            let mut builder = Request::builder()
+                .method(method)
+                .uri(built_uri)
+                .header(CONTENT_TYPE, format.mime())
+                .header(ACCEPT, format.mime());
+
+            // Add the auth header, if provided
+            if let Some(header) = auth_header {
+                builder = builder.header(AUTHORIZATION, header);
+            }
+
+            let body = body.unwrap_or_default();
+
+            // Add the body to finalize
+            let request = builder.body(Full::from(body)).unwrap();
+            // Return the incoming request
+            Ok(self.request(request).await.unwrap())
         }
 
-        let body = response.collect().await?;
+        async fn request_template(
+            &self,
+            url: &str,
+            endpoint: &str,
+            method: &str,
+            body: Option<Vec<u8>>,
+            auth_header: Option<&HeaderValue>,
+            format: RequestFmt,
+        ) -> Result<Self::ResponseBytes, Error<Self::Error>> {
+            let response = self
+                .raw_request_template(url, endpoint, method, body, auth_header, format)
+                .await?;
 
-        Ok(body)
+            if !response.status().is_success() {
+                return Err(Error::RequestError(response.status()));
+            }
+
+            let body = response.collect().await?;
+
+            Ok(body)
+        }
+
+        fn decode_response_bytes<R: for<'a> Deserialize<'a>>(
+            bytes: Self::ResponseBytes,
+            format: RequestFmt,
+        ) -> Result<R, crate::error::SerdeError> {
+            use bytes::Buf;
+
+            let reader = bytes.aggregate().reader();
+
+            Ok(match format {
+                RequestFmt::Json => serde_json::from_reader(reader)?,
+                RequestFmt::MsgPack => rmp_serde::decode::from_read(reader)?,
+            })
+        }
     }
 }
 
-impl Default for RequestClient {
-    fn default() -> Self {
-        Self::new()
+#[cfg(all(feature = "__reqwest", not(feature = "__hyper")))]
+pub use reqwest_client::*;
+
+#[cfg(all(feature = "__reqwest", not(feature = "__hyper")))]
+mod reqwest_client {
+    use std::fmt::Display;
+
+    use bytes::Bytes;
+    use http::{
+        HeaderValue,
+        header::{ACCEPT, CONTENT_TYPE},
+    };
+    use reqwest::Client;
+    use serde::Deserialize;
+
+    use crate::{Error, error::SerdeError};
+
+    use super::{RequestClientTrait, RequestFmt};
+
+    pub type RequestClientType = Client;
+
+    /// # Panics
+    /// panics if the cert is invalid (this should never happen)
+    #[must_use]
+    pub fn new() -> RequestClientType {
+        let cert = crate::tls::connector_internal();
+
+        RequestClientType::builder()
+            .tls_built_in_root_certs(false)
+            .use_preconfigured_tls(cert)
+            .build()
+            .unwrap()
+    }
+
+    #[non_exhaustive]
+    #[derive(Debug)]
+    pub enum ReqwestError {
+        Error(reqwest::Error),
+        InvalidHeaderValue(reqwest::header::InvalidHeaderValue),
+    }
+
+    impl Display for ReqwestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ReqwestError::Error(error) => std::fmt::Display::fmt(error, f),
+                ReqwestError::InvalidHeaderValue(invalid_header_value) => {
+                    f.write_str(&invalid_header_value.to_string())
+                }
+            }
+        }
+    }
+
+    impl std::error::Error for ReqwestError {}
+    impl crate::error::HttpError for ReqwestError {
+        fn invalid_header_value(invalid_header_value: http::header::InvalidHeaderValue) -> Self {
+            Self::InvalidHeaderValue(invalid_header_value)
+        }
+    }
+
+    impl From<reqwest::Error> for Error<ReqwestError> {
+        fn from(value: reqwest::Error) -> Self {
+            Self::HttpError(ReqwestError::Error(value))
+        }
+    }
+
+    impl RequestClientTrait for reqwest::Client {
+        type Response = reqwest::Response;
+
+        type ResponseBytes = Bytes;
+
+        type Error = ReqwestError;
+
+        async fn raw_request_template(
+            &self,
+            url: &str,
+            endpoint: &str,
+            method: &str,
+            body: Option<Vec<u8>>,
+            auth_header: Option<&HeaderValue>,
+            format: RequestFmt,
+        ) -> Result<Self::Response, Error<Self::Error>> {
+            let method = reqwest::Method::from_bytes(method.as_bytes()).unwrap();
+            let url = format!("{url}{endpoint}");
+            let mut request = self
+                .request(method, url)
+                .header(CONTENT_TYPE, format.mime())
+                .header(ACCEPT, format.mime());
+
+            if let Some(body) = body {
+                request = request.body(body);
+            }
+
+            if let Some(auth_header) = auth_header {
+                request = request.header(reqwest::header::AUTHORIZATION, auth_header);
+            }
+
+            Ok(request.send().await?)
+        }
+
+        async fn request_template(
+            &self,
+            url: &str,
+            endpoint: &str,
+            method: &str,
+            body: Option<Vec<u8>>,
+            auth_header: Option<&HeaderValue>,
+            format: RequestFmt,
+        ) -> Result<Self::ResponseBytes, Error<Self::Error>> {
+            let response = self
+                .raw_request_template(url, endpoint, method, body, auth_header, format)
+                .await?;
+
+            Ok(response.bytes().await?)
+        }
+
+        fn decode_response_bytes<R: for<'a> Deserialize<'a>>(
+            bytes: Self::ResponseBytes,
+            format: RequestFmt,
+        ) -> Result<R, SerdeError> {
+            Ok(match format {
+                RequestFmt::Json => serde_json::from_slice(&bytes)?,
+                RequestFmt::MsgPack => rmp_serde::from_slice(&bytes)?,
+            })
+        }
+    }
+}
+
+#[cfg(all(feature = "__hyper", feature = "__reqwest"))]
+compile_error!("Cannot use hyper and reqwest at the same time as a backend!");
+
+pub enum RequestFmt {
+    Json,
+    MsgPack,
+}
+
+impl RequestFmt {
+    #[must_use]
+    pub fn mime(&self) -> &'static str {
+        match self {
+            RequestFmt::Json => todo!(),
+            RequestFmt::MsgPack => todo!(),
+        }
     }
 }

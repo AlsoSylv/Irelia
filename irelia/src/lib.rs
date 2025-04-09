@@ -23,104 +23,130 @@ pub(crate) mod utils;
 pub mod ws;
 #[cfg(any(feature = "ws", feature = "rest"))]
 pub use utils::process_info;
+#[cfg(any(feature = "rest", feature = "in_game"))]
+pub use utils::requests;
+
+pub(crate) use error::Error;
 
 #[cfg(any(feature = "rest", feature = "in_game"))]
-pub use error::Error;
+pub mod error {
+    use http::header::InvalidHeaderValue;
 
-#[cfg(any(feature = "rest", feature = "in_game"))]
-pub use utils::requests::RequestClient;
+    pub trait HttpError: std::error::Error {
+        fn invalid_header_value(invalid_header_value: InvalidHeaderValue) -> Self;
+    }
 
-#[cfg(any(feature = "rest", feature = "in_game"))]
-mod error {
     /// Errors that can be produced by the LCU API
     ///
     /// This contains errors from `serde_json`, `hyper` and `tungstenite`
     #[derive(Debug)]
-    pub enum Error {
-        /// http error, re-exported by hyper
-        HyperHttpError(hyper::http::Error),
-        /// Client error from `hyper_util`
-        HyperClientError(hyper_util::client::legacy::Error),
-        /// Hyper error
-        HyperError(hyper::Error),
+    pub enum Error<E: HttpError> {
+        HttpError(E),
         /// Error with the request, contains a status code
-        RequestError(hyper::StatusCode),
+        RequestError(http::StatusCode),
         /// Encode error
         RmpSerdeEncode(rmp_serde::encode::Error),
         /// Decode error
         RmpSerdeDecode(rmp_serde::decode::Error),
+        SerdeJsonError(serde_json::Error),
         /// Error getting process info (only possible with the `rest` feature enabled)
         #[cfg(feature = "rest")]
         ProcessInfoError(crate::process_info::Error),
     }
 
-    impl From<hyper::http::Error> for Error {
-        fn from(value: hyper::http::Error) -> Self {
-            Self::HyperHttpError(value)
+    pub enum SerdeError {
+        RmpEncode(rmp_serde::encode::Error),
+        RmpDecode(rmp_serde::decode::Error),
+        Json(serde_json::Error),
+    }
+
+    impl From<rmp_serde::encode::Error> for SerdeError {
+        fn from(value: rmp_serde::encode::Error) -> Self {
+            Self::RmpEncode(value)
         }
     }
 
-    impl From<hyper_util::client::legacy::Error> for Error {
-        fn from(value: hyper_util::client::legacy::Error) -> Self {
-            Self::HyperClientError(value)
+    impl From<rmp_serde::decode::Error> for SerdeError {
+        fn from(value: rmp_serde::decode::Error) -> Self {
+            Self::RmpDecode(value)
         }
     }
 
-    impl From<hyper::Error> for Error {
-        fn from(value: hyper::Error) -> Self {
-            Self::HyperError(value)
+    impl From<serde_json::Error> for SerdeError {
+        fn from(value: serde_json::Error) -> Self {
+            Self::Json(value)
         }
     }
 
-    impl From<rmp_serde::encode::Error> for Error {
+    impl<E: HttpError> From<SerdeError> for Error<E> {
+        fn from(value: SerdeError) -> Self {
+            match value {
+                SerdeError::Json(err) => Self::SerdeJsonError(err),
+                SerdeError::RmpDecode(err) => Self::RmpSerdeDecode(err),
+                SerdeError::RmpEncode(err) => Self::RmpSerdeEncode(err),
+            }
+        }
+    }
+
+    impl<E: HttpError> From<InvalidHeaderValue> for Error<E> {
+        fn from(value: InvalidHeaderValue) -> Self {
+            Error::HttpError(E::invalid_header_value(value))
+        }
+    }
+
+    impl<E: HttpError> From<E> for Error<E> {
+        fn from(value: E) -> Self {
+            Self::HttpError(value)
+        }
+    }
+
+    impl<E: HttpError> From<rmp_serde::encode::Error> for Error<E> {
         fn from(value: rmp_serde::encode::Error) -> Self {
             Self::RmpSerdeEncode(value)
         }
     }
 
-    impl From<rmp_serde::decode::Error> for Error {
+    impl<E: HttpError> From<rmp_serde::decode::Error> for Error<E> {
         fn from(value: rmp_serde::decode::Error) -> Self {
             Self::RmpSerdeDecode(value)
         }
     }
 
+    impl<E: HttpError> From<serde_json::Error> for Error<E> {
+        fn from(value: serde_json::Error) -> Self {
+            Self::SerdeJsonError(value)
+        }
+    }
+
     #[cfg(feature = "rest")]
-    impl From<crate::process_info::Error> for Error {
+    impl<E: HttpError> From<crate::process_info::Error> for Error<E> {
         fn from(value: crate::process_info::Error) -> Self {
             Self::ProcessInfoError(value)
         }
     }
 
-    impl std::fmt::Display for Error {
+    impl<E: HttpError> std::fmt::Display for Error<E> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                Self::HyperHttpError(err) => err.fmt(f),
-                Self::HyperError(err) => err.fmt(f),
-                Self::HyperClientError(err) => err.fmt(f),
+                Self::HttpError(e) => std::fmt::Display::fmt(e, f),
                 Self::RequestError(code) => f.write_str(code.as_str()),
                 #[cfg(feature = "rest")]
                 Self::ProcessInfoError(err) => f.write_str(err.reason()),
                 Self::RmpSerdeEncode(err) => err.fmt(f),
                 Self::RmpSerdeDecode(err) => err.fmt(f),
+                Self::SerdeJsonError(err) => err.fmt(f),
             }
         }
     }
 
-    impl std::error::Error for Error {}
+    impl<E: HttpError> std::error::Error for Error<E> {}
 
-    impl serde::Serialize for Error {
+    impl<E: HttpError> serde::Serialize for Error<E> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
         {
             serializer.serialize_str(&self.to_string())
-        }
-    }
-
-    #[cfg(feature = "rest")]
-    impl From<hyper::header::InvalidHeaderValue> for Error {
-        fn from(value: hyper::header::InvalidHeaderValue) -> Self {
-            Self::HyperHttpError(hyper::http::Error::from(value))
         }
     }
 }

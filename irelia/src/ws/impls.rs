@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, RwLock, TryLockError},
 };
 
-use super::{types::Event, Subscriber};
+use super::{Subscriber, types::Event};
 
 impl<T> Subscriber for Arc<Mutex<T>>
 where
@@ -150,11 +150,7 @@ where
     T: Returns,
 {
     fn val(self) -> bool {
-        if let Some(v) = self {
-            v.val()
-        } else {
-            false
-        }
+        if let Some(v) = self { v.val() } else { false }
     }
 }
 

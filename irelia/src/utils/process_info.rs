@@ -9,8 +9,9 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::ParseIntError;
+use std::path::Path;
 use std::str::FromStr;
-use sysinfo::{ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
 
 // Linux is unplayable, the constants here are only defined so the docs build
 #[cfg(target_os = "windows")]
@@ -65,6 +66,7 @@ pub fn get_running_client<T>(
     client_process_name: &str,
     game_process_name: &str,
     force_lock_file: bool,
+    force_directory: Option<&Path>,
 ) -> Result<(SocketAddrV4, Result<T, T::Err>), Error>
 where
     T: FromStr,
@@ -78,10 +80,15 @@ where
     } else {
         sysinfo::UpdateKind::OnlyIfNotSet
     };
+
+    let exe = if force_directory.is_some() {
+        sysinfo::UpdateKind::Never
+    } else {
+        sysinfo::UpdateKind::OnlyIfNotSet
+    };
+
     // No matter what, the path to the process is required
-    let refresh_kind = ProcessRefreshKind::nothing()
-        .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
-        .with_cmd(cmd);
+    let refresh_kind = ProcessRefreshKind::nothing().with_exe(exe).with_cmd(cmd);
 
     // Get the current list of processes
     let system = System::new_with_specifics(
@@ -96,14 +103,19 @@ where
     // Iterate through all the processes, using .values() because
     // We don't need the PID. Look for a process with the same name
     // as the constant for that platform, otherwise return an error.
-    let process = system
-        .processes()
-        .values()
-        .find(|process| {
-            client = process.name() == client_process_name;
-            client || (process.name() == game_process_name)
-        })
-        .ok_or(NOT_RUNNING)?;
+    let process = if force_directory.is_none() {
+        system
+            .processes()
+            .values()
+            .find(|process| {
+                client = process.name() == client_process_name;
+                client || (process.name() == game_process_name)
+            })
+            .ok_or(NOT_RUNNING)?
+    } else {
+        // We will not be using any process in this case, so grab the default idle process
+        system.process(Pid::from_u32(0)).unwrap()
+    };
 
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file = [0; 60];
@@ -135,53 +147,7 @@ where
             scoped_auth.ok_or(AUTH_NOT_FOUND)?,
         ]
     } else {
-        // We have to walk back twice to get the path of the lock file relative to the path of the game
-        // This can only be None on Linux according to the docs, so we should be fine everywhere else
-        let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND)?;
-
-        let mut dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
-        // Sadly, we're relying on how the client structures things here
-        // Walking back a whole folder in order to get the lock file
-        if !client {
-            // If we're looking at the game and not the client, we need to walk back once more
-            dir = dir.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
-        };
-
-        let mut file = std::fs::File::open(dir.join("lockfile"))?;
-        // This len shouldn't be more than a few bytes
-        let len = file
-            .metadata()?
-            .len()
-            .try_into()
-            .expect("This file is always ~60 bytes");
-
-        // Read the file initially
-        let mut read = file.read(&mut lock_file)?;
-
-        // Make sure the entire file was read, though it is so small I can't imagine it wouldn't be
-        while read != len {
-            read += file.read(&mut lock_file[read..])?;
-        }
-
-        // Make sure that we're not over reading into 0's
-        let lock_file = std::str::from_utf8(&lock_file[..len])?;
-
-        // Split the lock file on `:` which separates the different fields
-        // Because lock_file is from a higher scope, we can split the string here
-        // and return two string references later on
-        let mut split = lock_file.split(':');
-
-        [
-            // Get the 3rd field, which should be the port
-            split
-                .nth(2)
-                .ok_or(PORT_NOT_FOUND.set_lockfile_error(true))?,
-            // We moved the cursor, so the fourth element is the very next one
-            // Which should be the auth string
-            split
-                .next()
-                .ok_or(AUTH_NOT_FOUND.set_lockfile_error(true))?,
-        ]
+        read_lock_file(&mut lock_file, client, process, force_directory)?
     };
 
     // Prevent the pre-encoded base64 string from allocating
@@ -221,6 +187,67 @@ where
     // For the LCU API
     let res = T::from_str(auth_header_buffer);
     Ok((addr, res))
+}
+
+fn read_lock_file<'a>(
+    lock_file: &'a mut [u8; 60],
+    client: bool,
+    process: &sysinfo::Process,
+    force_directory: Option<&Path>,
+) -> Result<[&'a str; 2], Error> {
+    let dir = if let Some(path) = force_directory {
+        path
+    } else {
+        // We have to walk back twice to get the path of the lock file relative to the path of the game
+        // This can only be None on Linux according to the docs, so we should be fine everywhere else
+        let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND)?;
+
+        let mut dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
+        // Sadly, we're relying on how the client structures things here
+        // Walking back a whole folder in order to get the lock file
+        if !client {
+            // If we're looking at the game and not the client, we need to walk back once more
+            dir = dir.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
+        }
+
+        dir
+    };
+
+    let mut file = std::fs::File::open(dir.join("lockfile"))?;
+    // This len shouldn't be more than a few bytes
+    let len = file
+        .metadata()?
+        .len()
+        .try_into()
+        .expect("This file is always ~60 bytes");
+
+    // Read the file initially
+    let mut read = file.read(lock_file)?;
+
+    // Make sure the entire file was read, though it is so small I can't imagine it wouldn't be
+    while read != len {
+        read += file.read(&mut lock_file[read..])?;
+    }
+
+    // Make sure that we're not over reading into 0's
+    let lock_file = std::str::from_utf8(&lock_file[..len])?;
+
+    // Split the lock file on `:` which separates the different fields
+    // Because lock_file is from a higher scope, we can split the string here
+    // and return two string references later on
+    let mut split = lock_file.split(':');
+
+    Ok([
+        // Get the 3rd field, which should be the port
+        split
+            .nth(2)
+            .ok_or(PORT_NOT_FOUND.set_lockfile_error(true))?,
+        // We moved the cursor, so the fourth element is the very next one
+        // Which should be the auth string
+        split
+            .next()
+            .ok_or(AUTH_NOT_FOUND.set_lockfile_error(true))?,
+    ])
 }
 
 #[derive(Debug, Clone)]
@@ -317,7 +344,7 @@ impl From<std::str::Utf8Error> for Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_running_client, CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
+    use super::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, get_running_client};
     use hyper::http::HeaderValue;
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
@@ -325,7 +352,7 @@ mod tests {
     #[test]
     fn test_process_info() {
         let (port, pass): (_, Result<HeaderValue, _>) =
-            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, true).unwrap();
+            get_running_client(CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, true, None).unwrap();
         println!("{port} {pass:?}");
     }
 

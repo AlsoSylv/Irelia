@@ -33,7 +33,7 @@ impl<V: Default> EventMap<V> {
 
     #[must_use]
     pub fn get_mut(&mut self, event_kind: &EventKind) -> &mut V {
-        let events = match event_kind {
+        match event_kind {
             EventKind::JsonApiEvent { callback: None } => &mut self.json_api_event,
             EventKind::JsonApiEvent {
                 callback: Some(callback),
@@ -69,9 +69,7 @@ impl<V: Default> EventMap<V> {
             EventKind::ServiceProxyAsyncEvent => &mut self.service_proxy_async_event,
             EventKind::ServiceProxyMethodEvent => &mut self.service_proxy_method_event,
             EventKind::ServiceProxyUuidEvent => &mut self.service_proxy_uuid_event,
-        };
-
-        events
+        }
     }
 }
 

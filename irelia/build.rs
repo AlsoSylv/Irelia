@@ -1,6 +1,10 @@
 const RIOT_PEM: &[u8] = include_bytes!("src/riotgames.pem");
 
-#[cfg(feature = "rustls")]
+#[cfg(any(
+    feature = "__hyper_rustls",
+    feature = "__reqwest_rustls",
+    feature = "ws_rustls"
+))]
 fn main() {
     use quote::quote;
     use std::env;
@@ -57,7 +61,11 @@ fn main() {
     std::fs::write(&path, tokens).unwrap();
 }
 
-#[cfg(feature = "nativetls")]
+#[cfg(any(
+    feature = "__hyper_nativetls",
+    feature = "__reqwest_nativetls",
+    feature = "ws_nativetls"
+))]
 fn main() {
     use std::env;
     use std::path::Path;
@@ -91,5 +99,12 @@ fn main() {
     std::fs::write(&path, tokens).unwrap();
 }
 
-#[cfg(not(any(feature = "nativetls", feature = "rustls")))]
+#[cfg(not(any(
+    feature = "__hyper_rustls",
+    feature = "__reqwest_rustls",
+    feature = "__hyper_nativetls",
+    feature = "__reqwest_nativetls",
+    feature = "ws_rustls",
+    feature = "ws_nativetls",
+)))]
 fn main() {}
