@@ -876,10 +876,10 @@ impl Events {
 
 /// Contains the event id, time, and details
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct Event {
     #[serde(rename = "EventID")]
     id: u64,
+    #[serde(rename = "EventTime")]
     #[serde(with = "duration")]
     time: Duration,
     #[serde(flatten)]
