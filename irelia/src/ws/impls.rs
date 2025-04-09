@@ -1,6 +1,6 @@
 use std::{
     ops::ControlFlow,
-    sync::{Arc, Mutex, RwLock, TryLockError},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use super::{Subscriber, types::Event};
@@ -14,48 +14,45 @@ where
         event_kind: &super::types::EventKind,
         request_code: &super::types::RequestType,
     ) {
-        match self.try_lock() {
+        match self.lock() {
             Ok(mut guard) => {
                 let t = &mut *guard;
                 t.on_subscribe(event_kind, request_code);
             }
-            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+            Err(poisoned) => match self.on_poison() {
                 super::PoisonBehavior::Clear => self.clear_poison(),
                 super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
                 super::PoisonBehavior::Panic => panic!("{poisoned}"),
             },
-            Err(TryLockError::WouldBlock) => {}
         }
     }
 
     fn on_event(&mut self, event: &Event, continues: &mut bool) {
-        match self.try_lock() {
+        match self.lock() {
             Ok(mut guard) => {
                 let t = &mut *guard;
                 t.on_event(event, continues);
             }
-            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+            Err(poisoned) => match self.on_poison() {
                 super::PoisonBehavior::Clear => self.clear_poison(),
                 super::PoisonBehavior::Ignore => {}
                 super::PoisonBehavior::Break => *continues = false,
                 super::PoisonBehavior::Panic => panic!("{poisoned}"),
             },
-            Err(TryLockError::WouldBlock) => {}
         }
     }
 
     fn on_unsubscribe(&mut self, event_kind: &super::types::EventKind) {
-        match self.try_lock() {
+        match self.lock() {
             Ok(mut guard) => {
                 let t = &mut *guard;
                 t.on_unsubscribe(event_kind);
             }
-            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+            Err(poisoned) => match self.on_poison() {
                 super::PoisonBehavior::Clear => self.clear_poison(),
                 super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
                 super::PoisonBehavior::Panic => panic!("{poisoned}"),
             },
-            Err(TryLockError::WouldBlock) => {}
         }
     }
 }
@@ -69,48 +66,45 @@ where
         event_kind: &super::types::EventKind,
         request_code: &super::types::RequestType,
     ) {
-        match self.try_write() {
+        match self.write() {
             Ok(mut guard) => {
                 let t = &mut *guard;
                 t.on_subscribe(event_kind, request_code);
             }
-            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+            Err(poisoned) => match self.on_poison() {
                 super::PoisonBehavior::Clear => self.clear_poison(),
                 super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
                 super::PoisonBehavior::Panic => panic!("{poisoned}"),
             },
-            Err(TryLockError::WouldBlock) => {}
         }
     }
 
     fn on_event(&mut self, event: &Event, continues: &mut bool) {
-        match self.try_write() {
+        match self.write() {
             Ok(mut guard) => {
                 let t = &mut *guard;
                 t.on_event(event, continues);
             }
-            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+            Err(poisoned) => match self.on_poison() {
                 super::PoisonBehavior::Clear => self.clear_poison(),
                 super::PoisonBehavior::Ignore => {}
                 super::PoisonBehavior::Break => *continues = false,
                 super::PoisonBehavior::Panic => panic!("{poisoned}"),
             },
-            Err(TryLockError::WouldBlock) => {}
         }
     }
 
     fn on_unsubscribe(&mut self, event_kind: &super::types::EventKind) {
-        match self.try_write() {
+        match self.write() {
             Ok(mut guard) => {
                 let t = &mut *guard;
                 t.on_unsubscribe(event_kind);
             }
-            Err(TryLockError::Poisoned(poisoned)) => match self.on_poison() {
+            Err(poisoned) => match self.on_poison() {
                 super::PoisonBehavior::Clear => self.clear_poison(),
                 super::PoisonBehavior::Ignore | super::PoisonBehavior::Break => {}
                 super::PoisonBehavior::Panic => panic!("{poisoned}"),
             },
-            Err(TryLockError::WouldBlock) => {}
         }
     }
 }
