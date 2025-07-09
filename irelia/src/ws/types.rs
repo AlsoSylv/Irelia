@@ -233,7 +233,7 @@ mod test {
 
     #[test]
     fn test_deserialize() {
-        let json = json!([5, "OnJsonApiEvent", {
+        let json = json!([5, String::from("OnJsonApiEvent"), {
             "data": {},
             "eventType": "Create",
             "uri": "/Example/Uri"

@@ -6,9 +6,9 @@
 /// This is a list of types pertaining to the LCU, currently only containing the types for the schema.
 pub mod types;
 
+use crate::utils::process_info::get_running_client;
 use crate::utils::process_info::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME};
 use crate::utils::requests::RequestClientTrait;
-use crate::{Error, utils::process_info::get_running_client};
 use http::HeaderValue;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -21,6 +21,33 @@ pub struct LcuClient<T: RequestClientTrait> {
     auth_header: HeaderValue,
 }
 
+impl<T: RequestClientTrait + Clone> Clone for LcuClient<T> {
+    fn clone(&self) -> Self {
+        Self {
+            request_client: self.request_client.clone(),
+            url: self.url.clone(),
+            auth_header: self.auth_header.clone(),
+        }
+    }
+}
+
+#[cfg(any(feature = "__hyper", feature = "__reqwest"))]
+impl LcuClient<crate::requests::RequestClientType> {
+    /// Attempts to create a connection to the LCU, errors if it fails
+    /// to spin up the child process, or fails to get data from the client.
+    ///
+    /// `request_client` will be the client used when creating the `LcuClient` struct
+    ///
+    /// # Errors
+    /// This will return an error if the LCU API is not running, this can include
+    /// the client being down, the lock file being unable to be opened, or the LCU
+    /// not running at all
+    pub fn connect()
+    -> Result<Self, <crate::requests::RequestClientType as RequestClientTrait>::Error> {
+        Self::connect_with_request_client_force_lockfile(false, &crate::requests::new())
+    }
+}
+
 impl<T: RequestClientTrait + Clone> LcuClient<T> {
     /// Attempts to create a connection to the LCU, errors if it fails
     /// to spin up the child process, or fails to get data from the client.
@@ -31,7 +58,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
     /// This will return an error if the LCU API is not running, this can include
     /// the client being down, the lock file being unable to be opened, or the LCU
     /// not running at all
-    pub fn connect_with_request_client(request_client: &T) -> Result<Self, Error<T::Error>> {
+    pub fn connect_with_request_client(request_client: &T) -> Result<Self, T::Error> {
         Self::connect_with_request_client_force_lockfile(false, request_client)
     }
 
@@ -49,7 +76,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
     pub fn connect_with_request_client_force_lockfile(
         force_lock_file: bool,
         request_client: &T,
-    ) -> Result<Self, Error<T::Error>> {
+    ) -> Result<Self, T::Error> {
         let (addr, pass) = get_running_client(
             CLIENT_PROCESS_NAME,
             GAME_PROCESS_NAME,
@@ -84,7 +111,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
     /// # Errors
     /// This will return an error if the lock file is inaccessible, or if
     /// the LCU is not running
-    pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), Error<T::Error>> {
+    pub fn reconnect(&mut self, force_lock_file: bool) -> Result<(), T::Error> {
         let (addr, pass) = get_running_client(
             CLIENT_PROCESS_NAME,
             GAME_PROCESS_NAME,
@@ -113,6 +140,12 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
         &self.auth_header
     }
 
+    #[must_use]
+    /// Returns a reference to the request client being used, so other clients can be constructed from it
+    pub fn request_client(&self) -> &T {
+        &self.request_client
+    }
+
     /// Sends a delete request to the LCU
     ///
     /// # Errors
@@ -120,7 +153,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
     pub async fn delete<R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-    ) -> Result<R, Error<T::Error>> {
+    ) -> Result<R, T::Error> {
         self.lcu_request(endpoint.as_ref(), "DELETE", None::<()>)
             .await
     }
@@ -137,7 +170,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
     pub async fn get<R: DeserializeOwned>(
         &self,
         endpoint: impl AsRef<str> + Send,
-    ) -> Result<R, Error<T::Error>> {
+    ) -> Result<R, T::Error> {
         self.lcu_request(endpoint.as_ref(), "GET", None::<()>).await
     }
 
@@ -145,10 +178,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
     ///
     /// # Errors
     /// This will return an error if the LCU API is not running
-    pub async fn head(
-        &self,
-        endpoint: impl AsRef<str> + Send,
-    ) -> Result<T::Response, Error<T::Error>> {
+    pub async fn head(&self, endpoint: impl AsRef<str> + Send) -> Result<T::Response, T::Error> {
         self.request_client
             .socketv4_raw_request_template(
                 self.url,
@@ -169,7 +199,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
         &self,
         endpoint: impl AsRef<str> + Send,
         body: B,
-    ) -> Result<R, Error<T::Error>> {
+    ) -> Result<R, T::Error> {
         self.lcu_request(endpoint.as_ref(), "PATCH", Some(body))
             .await
     }
@@ -182,7 +212,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
         &self,
         endpoint: impl AsRef<str> + Send,
         body: B,
-    ) -> Result<R, Error<T::Error>> {
+    ) -> Result<R, T::Error> {
         self.lcu_request(endpoint.as_ref(), "POST", Some(body))
             .await
     }
@@ -195,7 +225,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
         &self,
         endpoint: impl AsRef<str> + Send,
         body: B,
-    ) -> Result<R, Error<T::Error>> {
+    ) -> Result<R, T::Error> {
         self.lcu_request(endpoint.as_ref(), "PUT", Some(body)).await
     }
 
@@ -211,7 +241,7 @@ impl<T: RequestClientTrait + Clone> LcuClient<T> {
         endpoint: &str,
         method: &str,
         body: Option<B>,
-    ) -> Result<R, Error<T::Error>> {
+    ) -> Result<R, T::Error> {
         let buf = self
             .request_client
             .socketv4_request_template(

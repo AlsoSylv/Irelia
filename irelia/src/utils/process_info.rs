@@ -11,7 +11,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::ParseIntError;
 use std::path::Path;
 use std::str::FromStr;
-use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 // Linux is unplayable, the constants here are only defined so the docs build
 #[cfg(target_os = "windows")]
@@ -103,51 +103,24 @@ where
     // Iterate through all the processes, using .values() because
     // We don't need the PID. Look for a process with the same name
     // as the constant for that platform, otherwise return an error.
-    let process = if force_directory.is_none() {
-        system
+    let process = if let Some(force_directory) = force_directory {
+        Err(force_directory)
+    } else {
+        Ok(system
             .processes()
             .values()
             .find(|process| {
                 client = process.name() == client_process_name;
                 client || (process.name() == game_process_name)
             })
-            .ok_or(NOT_RUNNING)?
-    } else {
-        // We will not be using any process in this case, so grab the default idle process
-        system.process(Pid::from_u32(0)).unwrap()
+            .ok_or(NOT_RUNNING)?)
     };
 
     // The size of the lock file is typically 53kb, but I am overallocating to stay cautious
     let mut lock_file = [0; 60];
-    let [port, auth] = if client && !force_lock_file {
-        // The port and auth should always be ASCII, as they are a number and a B64 buffer
-        let cmd = process.cmd().iter().filter_map(|os_str| os_str.to_str());
-        // Use a variable in a higher scope to make sure that port and auth get initialized
-        let mut scoped_auth = None;
-        let mut scoped_port = None;
-
-        // Iterate through the command args, updating the scoped values as we go
-        for s in cmd {
-            if scoped_auth.is_some() && scoped_port.is_some() {
-                break;
-            }
-
-            if scoped_auth.is_none() {
-                scoped_auth = s.strip_prefix("--remoting-auth-token=");
-            }
-
-            if scoped_port.is_none() {
-                scoped_port = s.strip_prefix("--app-port=");
-            }
-        }
-
-        // Check that we found a port and auth key, otherwise error
-        [
-            scoped_port.ok_or(PORT_NOT_FOUND)?,
-            scoped_auth.ok_or(AUTH_NOT_FOUND)?,
-        ]
-    } else {
-        read_lock_file(&mut lock_file, client, process, force_directory)?
+    let [port, auth] = match (process, client, force_lock_file) {
+        (Ok(process), true, false) => pull_client_info(process)?,
+        _ => read_lock_file(&mut lock_file, client, &process)?,
     };
 
     // Prevent the pre-encoded base64 string from allocating
@@ -189,28 +162,57 @@ where
     Ok((addr, res))
 }
 
+fn pull_client_info(process: &sysinfo::Process) -> Result<[&str; 2], Error> {
+    // The port and auth should always be ASCII, as they are a number and a B64 buffer
+    let cmd = process.cmd().iter().filter_map(|os_str| os_str.to_str());
+    // Use a variable in a higher scope to make sure that port and auth get initialized
+    let mut scoped_auth = None;
+    let mut scoped_port = None;
+
+    // Iterate through the command args, updating the scoped values as we go
+    for s in cmd {
+        if scoped_auth.is_some() && scoped_port.is_some() {
+            break;
+        }
+
+        if scoped_auth.is_none() {
+            scoped_auth = s.strip_prefix("--remoting-auth-token=");
+        }
+
+        if scoped_port.is_none() {
+            scoped_port = s.strip_prefix("--app-port=");
+        }
+    }
+
+    // Check that we found a port and auth key, otherwise error
+    Ok([
+        scoped_port.ok_or(PORT_NOT_FOUND)?,
+        scoped_auth.ok_or(AUTH_NOT_FOUND)?,
+    ])
+}
+
 fn read_lock_file<'a>(
     lock_file: &'a mut [u8; 60],
     client: bool,
-    process: &sysinfo::Process,
-    force_directory: Option<&Path>,
+    process: &Result<&sysinfo::Process, &Path>,
 ) -> Result<[&'a str; 2], Error> {
-    let dir = if let Some(path) = force_directory {
-        path
-    } else {
-        // We have to walk back twice to get the path of the lock file relative to the path of the game
-        // This can only be None on Linux according to the docs, so we should be fine everywhere else
-        let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND)?;
+    let dir = match process {
+        Err(path) => *path,
+        Ok(process) => {
+            // We have to walk back twice to get the path of the lock file relative to the path of the game
+            // This can only be None on Linux according to the docs, so we should be fine everywhere else
+            let path = process.exe().ok_or(LOCK_FILE_NOT_FOUND)?;
 
-        let mut dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
-        // Sadly, we're relying on how the client structures things here
-        // Walking back a whole folder in order to get the lock file
-        if !client {
-            // If we're looking at the game and not the client, we need to walk back once more
-            dir = dir.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
+            let mut dir = path.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
+            // Sadly, we're relying on how the client structures things here
+            // Walking back a whole folder in order to get the lock file
+            if !client {
+                // If we're looking at the game and not the client, we need to walk back once more
+                dir = dir.parent().ok_or(LOCK_FILE_NOT_FOUND)?;
+            }
+
+            dir
         }
-
-        dir
     };
 
     let mut file = std::fs::File::open(dir.join("lockfile"))?;

@@ -1,20 +1,49 @@
 use std::io::Write;
 use std::net::SocketAddrV4;
 
-use crate::Error;
-use crate::error::HttpError;
-
-use http::HeaderValue;
+use http::{HeaderValue, header::InvalidHeaderValue};
 use serde::{Deserialize, Serialize};
 
 const LONGEST_SOCKET_ADDR: usize = "255.255.255.255:65535".len();
+
+/// This is an intermediary type when encoding/decoding bodies and resposnes
+pub enum SerdeError {
+    RmpEncode(rmp_serde::encode::Error),
+    RmpDecode(rmp_serde::decode::Error),
+    Json(serde_json::Error),
+}
+
+impl From<rmp_serde::encode::Error> for SerdeError {
+    fn from(value: rmp_serde::encode::Error) -> Self {
+        Self::RmpEncode(value)
+    }
+}
+
+impl From<rmp_serde::decode::Error> for SerdeError {
+    fn from(value: rmp_serde::decode::Error) -> Self {
+        Self::RmpDecode(value)
+    }
+}
+
+impl From<serde_json::Error> for SerdeError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Json(value)
+    }
+}
 
 pub trait RequestClientTrait: Sync {
     type Response: Send;
 
     type ResponseBytes: Send;
 
-    type Error: Send + HttpError;
+    #[cfg(feature = "rest")]
+    type Error: Send
+        + From<SerdeError>
+        + From<crate::process_info::Error>
+        + From<InvalidHeaderValue>;
+
+    #[cfg(not(feature = "rest"))]
+    type Error: Send + From<SerdeError> + From<InvalidHeaderValue>;
 
     fn raw_request_template(
         &self,
@@ -24,7 +53,7 @@ pub trait RequestClientTrait: Sync {
         body: Option<Vec<u8>>,
         auth_header: Option<&HeaderValue>,
         format: RequestFmt,
-    ) -> impl std::future::Future<Output = Result<Self::Response, Error<Self::Error>>> + Send;
+    ) -> impl std::future::Future<Output = Result<Self::Response, Self::Error>> + Send;
 
     fn request_template(
         &self,
@@ -34,7 +63,7 @@ pub trait RequestClientTrait: Sync {
         body: Option<Vec<u8>>,
         auth_header: Option<&HeaderValue>,
         format: RequestFmt,
-    ) -> impl std::future::Future<Output = Result<Self::ResponseBytes, Error<Self::Error>>> + Send;
+    ) -> impl std::future::Future<Output = Result<Self::ResponseBytes, Self::Error>> + Send;
 
     /// Decodes the bytes from a request, which are in the specified format
     ///
@@ -43,7 +72,7 @@ pub trait RequestClientTrait: Sync {
     fn decode_response_bytes<R: for<'a> Deserialize<'a>>(
         bytes: Self::ResponseBytes,
         format: RequestFmt,
-    ) -> Result<R, crate::error::SerdeError>;
+    ) -> Result<R, SerdeError>;
 
     fn socketv4_raw_request_template(
         &self,
@@ -53,7 +82,7 @@ pub trait RequestClientTrait: Sync {
         body: Option<Vec<u8>>,
         auth_header: Option<&HeaderValue>,
         format: RequestFmt,
-    ) -> impl std::future::Future<Output = Result<Self::Response, Error<Self::Error>>> + Send {
+    ) -> impl std::future::Future<Output = Result<Self::Response, Self::Error>> + Send {
         async move {
             let mut buffer = [0; LONGEST_SOCKET_ADDR];
             let url = Self::socket_addr_to_str(&mut buffer, url);
@@ -71,8 +100,7 @@ pub trait RequestClientTrait: Sync {
         body: Option<Vec<u8>>,
         auth_header: Option<&HeaderValue>,
         format: RequestFmt,
-    ) -> impl std::future::Future<Output = Result<Self::ResponseBytes, Error<Self::Error>>> + Send
-    {
+    ) -> impl std::future::Future<Output = Result<Self::ResponseBytes, Self::Error>> + Send {
         async move {
             let mut buffer = [0; LONGEST_SOCKET_ADDR];
             let url = Self::socket_addr_to_str(&mut buffer, url);
@@ -99,7 +127,7 @@ pub trait RequestClientTrait: Sync {
     fn encode_body<T: Serialize + Send>(
         body: Option<T>,
         format: RequestFmt,
-    ) -> Result<Option<Vec<u8>>, crate::error::SerdeError> {
+    ) -> Result<Option<Vec<u8>>, SerdeError> {
         if let Some(body) = body {
             Ok(Some(match format {
                 RequestFmt::Json => serde_json::to_vec(&body)?,
@@ -116,7 +144,6 @@ pub use hyper_client::*;
 
 #[cfg(all(feature = "__hyper", not(feature = "__reqwest")))]
 mod hyper_client {
-    use std::fmt::Display;
     use std::future::Future;
     use std::pin::Pin;
 
@@ -131,9 +158,6 @@ mod hyper_client {
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
     use serde::Deserialize;
-
-    use crate::Error;
-    use crate::error::HttpError;
 
     use super::{RequestClientTrait, RequestFmt};
 
@@ -155,59 +179,23 @@ mod hyper_client {
         Client::builder(exec).build(https)
     }
 
-    #[non_exhaustive]
-    #[derive(Debug)]
-    pub enum HyperError {
-        /// http error, re-exported by hyper
-        HttpError(hyper::http::Error),
-        /// Client error from `hyper_util`
-        ClientError(hyper_util::client::legacy::Error),
-        /// Hyper error
-        Error(hyper::Error),
-    }
+    use super::create_error_type;
 
-    impl Display for HyperError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                HyperError::HttpError(error) => std::fmt::Display::fmt(error, f),
-                HyperError::ClientError(error) => std::fmt::Display::fmt(error, f),
-                HyperError::Error(error) => std::fmt::Display::fmt(error, f),
-            }
+    create_error_type!(
+        pub enum Error {
+            #[doc = "Client error from `hyper_util`"]
+            ClientError(hyper_util::client::legacy::Error),
+            #[doc = "Hyper error"]
+            Error(hyper::Error),
         }
-    }
-
-    impl From<hyper::http::Error> for Error<HyperError> {
-        fn from(value: hyper::http::Error) -> Self {
-            HyperError::HttpError(value).into()
-        }
-    }
-
-    impl From<hyper_util::client::legacy::Error> for Error<HyperError> {
-        fn from(value: hyper_util::client::legacy::Error) -> Self {
-            HyperError::ClientError(value).into()
-        }
-    }
-
-    impl From<hyper::Error> for Error<HyperError> {
-        fn from(value: hyper::Error) -> Self {
-            HyperError::Error(value).into()
-        }
-    }
-
-    impl std::error::Error for HyperError {}
-
-    impl HttpError for HyperError {
-        fn invalid_header_value(invalid_header_value: hyper::header::InvalidHeaderValue) -> Self {
-            Self::HttpError(hyper::http::Error::from(invalid_header_value))
-        }
-    }
+    );
 
     impl RequestClientTrait for RequestClientType {
         type Response = Response<Incoming>;
 
         type ResponseBytes = Collected<Bytes>;
 
-        type Error = HyperError;
+        type Error = Error;
 
         async fn raw_request_template(
             &self,
@@ -217,7 +205,7 @@ mod hyper_client {
             body: Option<Vec<u8>>,
             auth_header: Option<&HeaderValue>,
             format: RequestFmt,
-        ) -> Result<Self::Response, Error<Self::Error>> {
+        ) -> Result<Self::Response, Self::Error> {
             // Build the URI, always in https format
             let built_uri = Uri::builder()
                 .scheme(Scheme::HTTPS)
@@ -243,7 +231,7 @@ mod hyper_client {
             // Add the body to finalize
             let request = builder.body(Full::from(body)).unwrap();
             // Return the incoming request
-            Ok(self.request(request).await.unwrap())
+            Ok(self.request(request).await?)
         }
 
         async fn request_template(
@@ -254,13 +242,13 @@ mod hyper_client {
             body: Option<Vec<u8>>,
             auth_header: Option<&HeaderValue>,
             format: RequestFmt,
-        ) -> Result<Self::ResponseBytes, Error<Self::Error>> {
+        ) -> Result<Self::ResponseBytes, Self::Error> {
             let response = self
                 .raw_request_template(url, endpoint, method, body, auth_header, format)
                 .await?;
 
             if !response.status().is_success() {
-                return Err(Error::RequestError(response.status()));
+                return Err(Error::Request(response.status()));
             }
 
             let body = response.collect().await?;
@@ -271,7 +259,7 @@ mod hyper_client {
         fn decode_response_bytes<R: for<'a> Deserialize<'a>>(
             bytes: Self::ResponseBytes,
             format: RequestFmt,
-        ) -> Result<R, crate::error::SerdeError> {
+        ) -> Result<R, super::SerdeError> {
             use bytes::Buf;
 
             let reader = bytes.aggregate().reader();
@@ -289,8 +277,6 @@ pub use reqwest_client::*;
 
 #[cfg(all(feature = "__reqwest", not(feature = "__hyper")))]
 mod reqwest_client {
-    use std::fmt::Display;
-
     use bytes::Bytes;
     use http::{
         HeaderValue,
@@ -298,8 +284,6 @@ mod reqwest_client {
     };
     use reqwest::Client;
     use serde::Deserialize;
-
-    use crate::{Error, error::SerdeError};
 
     use super::{RequestClientTrait, RequestFmt};
 
@@ -318,43 +302,18 @@ mod reqwest_client {
             .unwrap()
     }
 
-    #[non_exhaustive]
-    #[derive(Debug)]
-    pub enum ReqwestError {
-        Error(reqwest::Error),
-        InvalidHeaderValue(reqwest::header::InvalidHeaderValue),
-    }
-
-    impl Display for ReqwestError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                ReqwestError::Error(error) => std::fmt::Display::fmt(error, f),
-                ReqwestError::InvalidHeaderValue(invalid_header_value) => {
-                    f.write_str(&invalid_header_value.to_string())
-                }
-            }
+    super::create_error_type!(
+        pub enum Error {
+            Reqwest(reqwest::Error),
         }
-    }
-
-    impl std::error::Error for ReqwestError {}
-    impl crate::error::HttpError for ReqwestError {
-        fn invalid_header_value(invalid_header_value: http::header::InvalidHeaderValue) -> Self {
-            Self::InvalidHeaderValue(invalid_header_value)
-        }
-    }
-
-    impl From<reqwest::Error> for Error<ReqwestError> {
-        fn from(value: reqwest::Error) -> Self {
-            Self::HttpError(ReqwestError::Error(value))
-        }
-    }
+    );
 
     impl RequestClientTrait for reqwest::Client {
         type Response = reqwest::Response;
 
         type ResponseBytes = Bytes;
 
-        type Error = ReqwestError;
+        type Error = Error;
 
         async fn raw_request_template(
             &self,
@@ -364,7 +323,7 @@ mod reqwest_client {
             body: Option<Vec<u8>>,
             auth_header: Option<&HeaderValue>,
             format: RequestFmt,
-        ) -> Result<Self::Response, Error<Self::Error>> {
+        ) -> Result<Self::Response, Self::Error> {
             let method = reqwest::Method::from_bytes(method.as_bytes()).unwrap();
             let url = format!("{url}{endpoint}");
             let mut request = self
@@ -391,7 +350,7 @@ mod reqwest_client {
             body: Option<Vec<u8>>,
             auth_header: Option<&HeaderValue>,
             format: RequestFmt,
-        ) -> Result<Self::ResponseBytes, Error<Self::Error>> {
+        ) -> Result<Self::ResponseBytes, Self::Error> {
             let response = self
                 .raw_request_template(url, endpoint, method, body, auth_header, format)
                 .await?;
@@ -402,7 +361,7 @@ mod reqwest_client {
         fn decode_response_bytes<R: for<'a> Deserialize<'a>>(
             bytes: Self::ResponseBytes,
             format: RequestFmt,
-        ) -> Result<R, SerdeError> {
+        ) -> Result<R, super::SerdeError> {
             Ok(match format {
                 RequestFmt::Json => serde_json::from_slice(&bytes)?,
                 RequestFmt::MsgPack => rmp_serde::from_slice(&bytes)?,
@@ -428,3 +387,141 @@ impl RequestFmt {
         }
     }
 }
+
+macro_rules! define_create_error_type {
+    ([$_:tt] $(true $(@$cfg_feature_rest:tt)?)?) => {
+       #[macro_export]
+       macro_rules! create_error_type {
+            (
+                $_(#[$enum_meta:meta])*
+                $vis:vis enum $enum_name:ident {
+                    $_(
+                        $_(#[$meta:meta])*
+                        $name:ident($value:ty)
+                    ),+ $_(,)?
+                }
+            ) => {
+                $_(#[$enum_meta])*
+                $vis enum $enum_name {
+                    $_(
+                        $_(#[$meta])*
+                        $name($value),
+                    )*
+                    /// Error with the request, contains a status code
+                    Request(http::StatusCode),
+                    /// This should only be returned when using the rest API if the auth header is invalid
+                    InvalidHeaderValue(http::header::InvalidHeaderValue),
+                    /// This is only returned when the API is configured to use the MSGPack
+                    RmpEncode(rmp_serde::encode::Error),
+                    /// This is only returned when the API is configured to use the MSGPack
+                    RmpDecode(rmp_serde::decode::Error),
+                    /// This is only returned when the API is configured to use the JSON
+                    Json(serde_json::Error),
+                    $($($cfg_feature_rest)?
+                        /// Error getting process info (only possible with the `rest` feature enabled)
+                        ProcessInfo($crate::process_info::Error),
+                    )?
+                }
+
+                $_(impl From<$value> for $enum_name {
+                    fn from(value: $value) -> Self {
+                        Self::$name(value)
+                    }
+                })*
+
+                impl From<rmp_serde::encode::Error> for $enum_name {
+                    fn from(value: rmp_serde::encode::Error) -> Self {
+                        Self::RmpEncode(value)
+                    }
+                }
+
+                impl From<rmp_serde::decode::Error> for $enum_name {
+                    fn from(value: rmp_serde::decode::Error) -> Self {
+                        Self::RmpDecode(value)
+                    }
+                }
+
+                impl From<serde_json::Error> for $enum_name {
+                    fn from(value: serde_json::Error) -> Self {
+                        Self::Json(value)
+                    }
+                }
+
+                impl From<http::header::InvalidHeaderValue> for $enum_name {
+                    fn from(value: http::header::InvalidHeaderValue) -> Self {
+                        Self::InvalidHeaderValue(value)
+                    }
+                }
+
+                $($($cfg_feature_rest)?
+                    impl From<$crate::process_info::Error> for $enum_name {
+                        fn from(value: $crate::process_info::Error) -> Self {
+                            Self::ProcessInfo(value)
+                        }
+                    }
+                )?
+
+                impl std::fmt::Display for $enum_name {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            $_(Self::$name(err) => err.fmt(f),)*
+                            Self::InvalidHeaderValue(err) => err.fmt(f),
+                            Self::Request(code) => f.write_str(code.as_str()),
+                            $($($cfg_feature_rest)?
+                                Self::ProcessInfo(err) => f.write_str(err.reason()),
+                            )?
+                            Self::RmpEncode(err) => err.fmt(f),
+                            Self::RmpDecode(err) => err.fmt(f),
+                            Self::Json(err) => err.fmt(f),
+                        }
+                    }
+                }
+
+                impl From<$crate::requests::SerdeError> for $enum_name {
+                    fn from(value: $crate::requests::SerdeError) -> Self {
+                        match value {
+                            $crate::requests::SerdeError::RmpEncode(err) => Self::RmpEncode(err),
+                            $crate::requests::SerdeError::RmpDecode(err) => Self::RmpDecode(err),
+                            $crate::requests::SerdeError::Json(err) => Self::Json(err),
+                        }
+                    }
+                }
+
+                impl std::fmt::Debug for $enum_name {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            $_(Self::$name(err) => err.fmt(f),)*
+                            Self::InvalidHeaderValue(err) => err.fmt(f),
+                            Self::Request(code) => f.write_str(code.as_str()),
+                            $($($cfg_feature_rest)?
+                                Self::ProcessInfo(err) => f.write_str(err.reason()),
+                            )?
+                            Self::RmpEncode(err) => err.fmt(f),
+                            Self::RmpDecode(err) => err.fmt(f),
+                            Self::Json(err) => err.fmt(f),
+                        }
+                    }
+                }
+
+                impl std::error::Error for $enum_name {}
+
+                impl serde::Serialize for $enum_name {
+                    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                    where
+                        S: serde::Serializer,
+                    {
+                        serializer.serialize_str(&self.to_string())
+                    }
+                }
+            };
+       }
+
+       pub(crate) use create_error_type;
+    }
+}
+
+#[cfg(feature = "rest")]
+define_create_error_type!([$] true);
+
+#[cfg(not(feature = "rest"))]
+define_create_error_type!([$]);

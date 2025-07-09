@@ -13,9 +13,8 @@ pub mod types;
 /// A number of endpoints are also shared
 /// Hence why the replay API enables the `in_game` feature
 pub use super::in_game::URL;
-use crate::in_game::GameClient;
+use crate::in_game::{self, GameClient};
 use crate::replay::types::{Playback, RecordingState, Render, Sequence};
-use crate::{Error, in_game};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::future::Future;
@@ -27,7 +26,7 @@ pub trait ReplayClient: in_game::GameClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    fn game(&self) -> impl Future<Output = Result<types::Game, Error<Self::Error>>> + Send {
+    fn game(&self) -> impl Future<Output = Result<types::Game, Self::Error>> + Send {
         self.replay("/replay/game", "GET", None::<()>)
     }
 
@@ -38,7 +37,7 @@ pub trait ReplayClient: in_game::GameClient {
     /// This will return an error if there is not an active replay running
     fn get_particles(
         &self,
-    ) -> impl Future<Output = Result<HashMap<String, bool>, Error<Self::Error>>> + Send {
+    ) -> impl Future<Output = Result<HashMap<String, bool>, Self::Error>> + Send {
         self.replay("/replay/particles", "GET", None::<()>)
     }
 
@@ -50,7 +49,7 @@ pub trait ReplayClient: in_game::GameClient {
     fn post_particles(
         &self,
         body: impl Borrow<HashMap<String, bool>> + Send,
-    ) -> impl Future<Output = Result<HashMap<String, bool>, Error<Self::Error>>> + Send {
+    ) -> impl Future<Output = Result<HashMap<String, bool>, Self::Error>> + Send {
         async move {
             self.replay("/replay/particles", "POST", Some(body.borrow()))
                 .await
@@ -61,7 +60,7 @@ pub trait ReplayClient: in_game::GameClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    fn get_playback(&self) -> impl Future<Output = Result<Playback, Error<Self::Error>>> + Send {
+    fn get_playback(&self) -> impl Future<Output = Result<Playback, Self::Error>> + Send {
         self.replay("/replay/playback", "GET", None::<()>)
     }
 
@@ -72,7 +71,7 @@ pub trait ReplayClient: in_game::GameClient {
     fn post_playback(
         &self,
         body: impl Borrow<Playback> + Send,
-    ) -> impl Future<Output = Result<Playback, Error<Self::Error>>> + Send {
+    ) -> impl Future<Output = Result<Playback, Self::Error>> + Send {
         async move {
             self.replay("/replay/playback", "POST", Some(body.borrow()))
                 .await
@@ -83,9 +82,7 @@ pub trait ReplayClient: in_game::GameClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    fn get_recording(
-        &self,
-    ) -> impl Future<Output = Result<RecordingState, Error<Self::Error>>> + Send {
+    fn get_recording(&self) -> impl Future<Output = Result<RecordingState, Self::Error>> + Send {
         self.replay("/replay/recording", "GET", None::<()>)
     }
 
@@ -96,7 +93,7 @@ pub trait ReplayClient: in_game::GameClient {
     fn post_recording(
         &self,
         body: impl Borrow<RecordingState> + Send,
-    ) -> impl Future<Output = Result<RecordingState, Error<Self::Error>>> + Send {
+    ) -> impl Future<Output = Result<RecordingState, Self::Error>> + Send {
         async move {
             self.replay("/replay/recording", "POST", Some(body.borrow()))
                 .await
@@ -107,7 +104,7 @@ pub trait ReplayClient: in_game::GameClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    fn get_render(&self) -> impl Future<Output = Result<Render, Error<Self::Error>>> + Send {
+    fn get_render(&self) -> impl Future<Output = Result<Render, Self::Error>> + Send {
         self.replay("/replay/render", "GET", None::<()>)
     }
 
@@ -118,7 +115,7 @@ pub trait ReplayClient: in_game::GameClient {
     fn post_render(
         &self,
         body: impl Borrow<Render> + Send,
-    ) -> impl Future<Output = Result<Render, Error<Self::Error>>> + Send {
+    ) -> impl Future<Output = Result<Render, Self::Error>> + Send {
         async move {
             self.replay("/replay/render", "POST", Some(body.borrow()))
                 .await
@@ -129,7 +126,7 @@ pub trait ReplayClient: in_game::GameClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    fn get_sequence(&self) -> impl Future<Output = Result<Sequence, Error<Self::Error>>> + Send {
+    fn get_sequence(&self) -> impl Future<Output = Result<Sequence, Self::Error>> + Send {
         self.replay("/replay/sequence", "GET", None::<()>)
     }
 
@@ -140,7 +137,7 @@ pub trait ReplayClient: in_game::GameClient {
     fn post_sequence(
         &self,
         body: impl Borrow<Sequence> + Send,
-    ) -> impl Future<Output = Result<Sequence, Error<Self::Error>>> + Send {
+    ) -> impl Future<Output = Result<Sequence, Self::Error>> + Send {
         async move {
             self.replay("/replay/sequence", "POST", Some(body.borrow()))
                 .await
@@ -151,7 +148,7 @@ pub trait ReplayClient: in_game::GameClient {
     ///
     /// # Errors
     /// This will return an error if there is not an active replay running
-    fn reset_sequence(&self) -> impl Future<Output = Result<Sequence, Error<Self::Error>>> + Send {
+    fn reset_sequence(&self) -> impl Future<Output = Result<Sequence, Self::Error>> + Send {
         self.replay("/replay/sequence", "POST", Some(None::<Sequence>))
     }
 }

@@ -37,6 +37,24 @@ pub struct LcuWebSocket {
 /// This is the ID of the subscriber when it's inserted into the list, corresponding to the index it's stored at
 pub struct SubscriberID(usize);
 
+impl SubscriberID {
+    #[doc(hidden)]
+    #[must_use]
+    /// This gets the inner value of the subscriber ID, which is subject to change in the future.
+    /// This should only be used for systems which expose irelia to other languages.
+    pub fn inner(&self) -> usize {
+        self.0
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    /// This converts the inner type to a subscriber ID, which is subject to change in the future.
+    /// This should only be used for systems which expose irelia to other languages.
+    pub fn from_inner(inner: usize) -> Self {
+        Self(inner)
+    }
+}
+
 enum ChannelMessage {
     Subscribe(RequestType, EventKind, Box<dyn Subscriber + Send>),
     Unsubscribe(SubscriberID, EventKind),
