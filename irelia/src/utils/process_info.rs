@@ -347,7 +347,7 @@ impl From<std::str::Utf8Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::{CLIENT_PROCESS_NAME, GAME_PROCESS_NAME, get_running_client};
-    use hyper::http::HeaderValue;
+    use http::HeaderValue;
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
     #[ignore = "This is only needed for testing, and doesn't need to be run all the time"]

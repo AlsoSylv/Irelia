@@ -279,8 +279,7 @@ pub use reqwest_client::*;
 mod reqwest_client {
     use bytes::Bytes;
     use http::{
-        HeaderValue,
-        header::{ACCEPT, CONTENT_TYPE},
+        header::{ACCEPT, CONTENT_TYPE}, HeaderValue
     };
     use reqwest::Client;
     use serde::Deserialize;
@@ -296,7 +295,7 @@ mod reqwest_client {
         let cert = crate::tls::connector_internal();
 
         RequestClientType::builder()
-            .tls_built_in_root_certs(false)
+            .tls_built_in_root_certs(true)
             .use_preconfigured_tls(cert)
             .build()
             .unwrap()
@@ -325,7 +324,7 @@ mod reqwest_client {
             format: RequestFmt,
         ) -> Result<Self::Response, Self::Error> {
             let method = reqwest::Method::from_bytes(method.as_bytes()).unwrap();
-            let url = format!("{url}{endpoint}");
+            let url = format!("https://{url}{endpoint}");
             let mut request = self
                 .request(method, url)
                 .header(CONTENT_TYPE, format.mime())
