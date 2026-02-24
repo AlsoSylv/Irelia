@@ -841,6 +841,11 @@ pub struct Events {
 }
 
 impl Events {
+    #[must_use]
+    pub fn events(&self) -> &[Event] {
+        &self.events
+    }
+
     /// Number of dragons killed in the game
     #[must_use]
     pub fn dragons_killed(&self) -> u8 {
