@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-irelia = "0.9"
+irelia = "0.11"
 ```
 
 ### Cargo Features
@@ -37,15 +37,18 @@ use serde_json::Value;
 
 #[tokio::main]
 async fn main() {
-    let lcu_client = irelia::rest::LcuClient::connect().unwrap();
+    let lcu_client = LcuClient::connect().unwrap();
 
-    let current_summoner: Value = lcu_client
+    let current_summoner: CurrentSummoner = lcu_client
         .get("/lol-summoner/v1/current-summoner")
         .await
         .unwrap();
 
-    println!("{current_summoner}");
+    println!("{current_summoner:?}");
 }
 ```
 
-Up-to-date examples can always be found [here](irelia/examples)
+Up-to-date examples for other APIs can always be found [here](irelia/examples)
+
+---
+### If you like my work and want to support what I do, support me on [Ko-Fi](https://ko-fi.com/cyberite) 💜!

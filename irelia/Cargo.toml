@@ -1,6 +1,6 @@
 [package]
 name = "irelia"
-version = "0.11.1"
+version = "0.11.2"
 edition = "2024"
 rust-version = "1.85.0"
 description = "A Rust wrapper around the native LoL APIs"
@@ -9,7 +9,7 @@ repository = "https://github.com/AlsoSylv/Irelia"
 homepage = "https://github.com/AlsoSylv/Irelia"
 documentation = "https://docs.rs/irelia"
 readme = "../README.md"
-categories = ["api-bindings", "asynchronous", "api-bindings"]
+categories = ["api-bindings", "asynchronous"]
 keywords = ["riot", "league", "league-of-legends", "lcu", "riot-games"]
 
 [[example]]

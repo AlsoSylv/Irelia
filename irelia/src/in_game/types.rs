@@ -1165,8 +1165,8 @@ impl<'de> serde::Deserialize<'de> for Structure {
     {
         fn determine_structure_team(team: &str) -> TeamID {
             match team {
-                "T1" | "T100" => TeamID::Order,
-                "T2" | "T200" => TeamID::Chaos,
+                "T1" | "T100" | "TOrder" => TeamID::Order,
+                "T2" | "T200" | "TChaos" => TeamID::Chaos,
                 team => unreachable!("Expected T1 | T100 or T2 | T200, found: {:?}", team),
             }
         }
