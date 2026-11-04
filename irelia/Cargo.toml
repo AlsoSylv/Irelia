@@ -77,7 +77,7 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 
 [build-dependencies]
 rustls-pemfile = { version = "2.1", default-features = false, features = [] }
-rustls-webpki = { version = "0.102.4", default-features = false  }
+rustls-webpki = { version = "0.103.13", default-features = false }
 native-tls = { version = "0.2.12" }
 quote = "1.0.36"
 prettyplease = "0.2.20"
